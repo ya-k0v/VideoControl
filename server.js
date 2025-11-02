@@ -947,8 +947,10 @@ app.get('/api/devices/:id/converted/:file/:type/:num', async (req, res) => {
       if (prevDevice === device_id) {
         const sockets = deviceSockets.get(device_id);
         if (sockets && sockets.has(socket.id)) {
-          // Уже зарегистрирован - только обновляем время активности
+          // Уже зарегистрирован - сбрасываем на idle и обновляем время активности
           if (socket.data) socket.data.lastPing = Date.now();
+          // Сбрасываем состояние на idle при каждой регистрации (даже повторной)
+          devices[device_id].current = { type: 'idle', file: null, state: 'idle' };
           socket.emit('player/state', devices[device_id].current);
           return;
         }
@@ -972,6 +974,8 @@ app.get('/api/devices/:id/converted/:file/:type/:num', async (req, res) => {
         io.emit('player/online', { device_id });
       }
       
+      // Сбрасываем состояние на idle при новой регистрации (заглушка всегда при старте)
+      devices[device_id].current = { type: 'idle', file: null, state: 'idle' };
       socket.emit('player/state', devices[device_id].current);
     });
     

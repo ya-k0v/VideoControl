@@ -586,7 +586,11 @@ app.get('/api/devices', (req, res) => {
     folder: d.folder, 
     files: d.files, 
     fileNames: d.fileNames || d.files, // Оригинальные имена для отображения
-    current: d.current
+    current: d.current,
+    deviceType: d.deviceType || 'browser',
+    capabilities: d.capabilities || { video: true, audio: true, images: true, pdf: true, pptx: true, streaming: true },
+    platform: d.platform || 'Unknown',
+    lastSeen: d.lastSeen || null
   })));
 });
 
@@ -924,11 +928,26 @@ app.get('/api/devices/:id/converted/:file/:type/:num', async (req, res) => {
         socket.emit('players/onlineSnapshot', snapshot);
       } catch {}
       
-    socket.on('player/register', ({ device_id }) => {
+    socket.on('player/register', ({ device_id, device_type, capabilities, platform }) => {
       if (!device_id || !devices[device_id]) {
         socket.emit('player/reject', { reason: 'unknown_device' });
         return;
       }
+      
+      // Сохраняем тип устройства и возможности
+      const defaultCapabilities = {
+        video: true,
+        audio: true,
+        images: true,
+        pdf: true,
+        pptx: true,
+        streaming: true
+      };
+      
+      devices[device_id].deviceType = device_type || 'browser';
+      devices[device_id].capabilities = capabilities || defaultCapabilities;
+      devices[device_id].platform = platform || 'Unknown';
+      devices[device_id].lastSeen = new Date().toISOString();
       
       // Если этот socket уже был зарегистрирован для другого устройства - очищаем
       const prevDevice = activeConnections.get(socket.id);

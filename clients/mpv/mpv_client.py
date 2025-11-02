@@ -61,6 +61,11 @@ class MPVVideoControlClient:
         self.default_url = f"{server_url}/content/{device_id}/default.mp4"
         self.running = True
         
+        # State для PDF/PPTX навигации
+        self.current_file = None
+        self.current_type = None  # 'video', 'image', 'pdf', 'pptx'
+        self.current_page = 1
+        
         # Event handlers
         self._setup_mpv_events()
         self._setup_socket_events()
@@ -94,13 +99,20 @@ class MPVVideoControlClient:
             reason = event.get('event', {}).get('reason')
             
             if reason == 'eof':  # End of file
-                self._log("📺 Видео закончилось")
+                self._log("📺 Медиа закончилось")
                 
                 if self.is_playing_content:
-                    # Контент закончился - возвращаемся к заглушке
-                    self._log("🔄 Возврат к заглушке...")
-                    self.is_playing_content = False
-                    self._play_placeholder()
+                    # Для статичного контента (image/pdf/pptx) НЕ возвращаемся к заглушке
+                    if self.current_type in ['image', 'pdf', 'pptx']:
+                        self._debug("🖼️  Статичный контент продолжает отображаться")
+                        # Не делаем ничего - изображение остается на экране (loop_file='inf')
+                    else:
+                        # Видео контент закончился - возвращаемся к заглушке
+                        self._log("🔄 Возврат к заглушке...")
+                        self.is_playing_content = False
+                        self.current_type = None
+                        self.current_file = None
+                        self._play_placeholder()
                 else:
                     # Заглушка закончилась - повторяем (хотя MPV loop должен работать)
                     self._debug("🔁 Повтор заглушки...")
@@ -124,8 +136,9 @@ class MPVVideoControlClient:
                 'capabilities': {
                     'video': True,
                     'audio': True,
-                    'images': False,  # MPV фокусируется на видео
-                    'pdf': False,
+                    'images': True,   # MPV может показывать изображения
+                    'pdf': True,      # PDF конвертируется в PNG
+                    'pptx': True,     # PPTX конвертируется в PNG
                     'streaming': True
                 }
             })
@@ -139,12 +152,36 @@ class MPVVideoControlClient:
             """Команда на воспроизведение контента"""
             self._log(f"▶️  Команда PLAY: {data}")
             file = data.get('file')
+            content_type = data.get('type', 'video')
+            page = data.get('page', 1)
             
             if file:
-                # Играем контент
-                content_url = f"{self.server_url}/content/{self.device_id}/{file}"
-                self._log(f"🎬 Загрузка контента: {content_url}")
-                self._play_content(content_url)
+                # Сохраняем текущее состояние
+                self.current_file = file
+                self.current_type = content_type
+                self.current_page = page
+                
+                # Определяем URL в зависимости от типа
+                if content_type == 'pdf':
+                    # PDF конвертирован в PNG - загружаем как изображение
+                    content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{file}/page/{page}"
+                    self._log(f"📄 Загрузка PDF страницы {page}")
+                    self._play_content(content_url, is_static=True)
+                elif content_type == 'pptx':
+                    # PPTX конвертирован в PNG - загружаем как изображение
+                    content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{file}/slide/{page}"
+                    self._log(f"📊 Загрузка PPTX слайда {page}")
+                    self._play_content(content_url, is_static=True)
+                elif content_type == 'image':
+                    # Обычное изображение
+                    content_url = f"{self.server_url}/content/{self.device_id}/{file}"
+                    self._log(f"🖼️  Загрузка изображения")
+                    self._play_content(content_url, is_static=True)
+                else:
+                    # Видео
+                    content_url = f"{self.server_url}/content/{self.device_id}/{file}"
+                    self._log(f"🎬 Загрузка видео")
+                    self._play_content(content_url, is_static=False)
             else:
                 # Resume
                 if self.player.pause:
@@ -186,6 +223,24 @@ class MPVVideoControlClient:
         def on_pong():
             """Ответ на heartbeat"""
             self._debug("💓 Heartbeat OK")
+        
+        @self.sio.on('player/pdfPage')
+        def on_pdf_page(page):
+            """Навигация по страницам PDF"""
+            if self.current_type == 'pdf' and self.current_file:
+                self.current_page = page
+                content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{self.current_file}/page/{page}"
+                self._log(f"📄 PDF страница {page}")
+                self._play_content(content_url, is_static=True)
+        
+        @self.sio.on('player/pptxPage')
+        def on_pptx_page(slide):
+            """Навигация по слайдам PPTX"""
+            if self.current_type == 'pptx' and self.current_file:
+                self.current_page = slide
+                content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{self.current_file}/slide/{slide}"
+                self._log(f"📊 PPTX слайд {slide}")
+                self._play_content(content_url, is_static=True)
     
     def _play_placeholder(self):
         """Воспроизведение заглушки в loop"""
@@ -198,12 +253,24 @@ class MPVVideoControlClient:
         except Exception as e:
             self._log(f"⚠️  Ошибка загрузки заглушки: {e}")
     
-    def _play_content(self, url):
-        """Воспроизведение контента (один раз, затем возврат к заглушке)"""
+    def _play_content(self, url, is_static=False):
+        """
+        Воспроизведение контента
+        
+        Args:
+            url: URL контента
+            is_static: True для изображений/PDF/PPTX (не возвращаться к заглушке)
+        """
         self._log(f"🎬 Запуск контента: {url}")
         
         try:
-            self.player.loop_file = 'no'  # БЕЗ loop для контента
+            if is_static:
+                # Для статичного контента (изображения, PDF, PPTX)
+                self.player.loop_file = 'inf'  # Loop для изображений (иначе моргают)
+            else:
+                # Для видео - без loop
+                self.player.loop_file = 'no'
+            
             self.player.play(url)
             self.is_playing_content = True
         except Exception as e:

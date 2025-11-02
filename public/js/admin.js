@@ -3,6 +3,41 @@ import { initThemeToggle } from './theme.js';
 const socket = io();
 const grid = document.getElementById('grid');
 
+// Иконки для типов устройств
+const DEVICE_ICONS = {
+  'browser': '🌐',
+  'vlc': '🎬',
+  'mpv': '🎥',
+  'android': '📱',
+  'kodi': '📺',
+  'webos': '📺',
+  'tizen': '📺'
+};
+
+// Названия типов
+const DEVICE_TYPE_NAMES = {
+  'browser': 'Browser',
+  'vlc': 'VLC Player',
+  'mpv': 'MPV Player',
+  'android': 'Android TV',
+  'kodi': 'Kodi',
+  'webos': 'WebOS',
+  'tizen': 'Tizen'
+};
+
+// Функция для получения бейджей возможностей
+function getCapabilityBadges(capabilities) {
+  if (!capabilities) return '';
+  
+  const badges = [];
+  if (capabilities.pdf) badges.push('<span style="display:inline-block; background:#3b82f6; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:4px">📄 PDF</span>');
+  if (capabilities.pptx) badges.push('<span style="display:inline-block; background:#f97316; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:4px">📊 PPTX</span>');
+  if (capabilities.images) badges.push('<span style="display:inline-block; background:#10b981; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:4px">🖼️ IMG</span>');
+  if (capabilities.streaming) badges.push('<span style="display:inline-block; background:#8b5cf6; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:4px">📡 Stream</span>');
+  
+  return badges.join('');
+}
+
 // ======== Авторизация (Basic Auth) ========
 const ADMIN_AUTH_KEY = 'adminBasicAuth';
 let adminAuth = sessionStorage.getItem(ADMIN_AUTH_KEY) || null;
@@ -404,7 +439,16 @@ function renderDeviceCard(d) {
           </svg>
         </button>
       </div>
-      <div class="meta" style="margin-top:var(--space-xs); margin-bottom:0">ID: ${d.device_id} • Файлов: ${d.files?.length || 0} • ${readyDevices.has(d.device_id) ? '✓ Готов' : '✗ Не готов'}</div>
+      <div class="meta" style="margin-top:var(--space-xs); margin-bottom:0">
+        ${DEVICE_ICONS[d.deviceType] || '📺'} <strong>${DEVICE_TYPE_NAMES[d.deviceType] || d.deviceType || 'Browser'}</strong>
+        ${d.platform && d.platform !== 'Unknown' ? `• ${d.platform}` : ''}
+        • ID: ${d.device_id}
+        • Файлов: ${d.files?.length || 0}
+        • ${readyDevices.has(d.device_id) ? '✓ Готов' : '✗ Не готов'}
+      </div>
+      <div style="margin-top:var(--space-sm)">
+        ${getCapabilityBadges(d.capabilities)}
+      </div>
     </div>
 
     <div style="display:flex; flex-wrap:wrap; gap:var(--space-sm); align-items:center; margin-top:var(--space-md)">

@@ -55,6 +55,12 @@ class VLCVideoControlClient:
         self.default_url = f"{server_url}/content/{device_id}/default.mp4"
         self.running = True
         
+        # State для PDF/PPTX навигации
+        self.current_file = None
+        self.current_type = None  # 'video', 'image', 'pdf', 'pptx'
+        self.current_page = 1
+        self.total_pages = 1
+        
         # Event handlers
         self._setup_vlc_events()
         self._setup_socket_events()
@@ -97,13 +103,20 @@ class VLCVideoControlClient:
     
     def _on_media_end(self, event):
         """Обработчик окончания видео"""
-        self._log("📺 Видео закончилось")
+        self._log("📺 Медиа закончилось")
         
         if self.is_playing_content:
-            # Контент закончился - возвращаемся к заглушке
-            self._log("🔄 Возврат к заглушке...")
-            self.is_playing_content = False
-            self._play_placeholder()
+            # Для статичного контента (image/pdf/pptx) НЕ возвращаемся к заглушке
+            if self.current_type in ['image', 'pdf', 'pptx']:
+                self._debug("🖼️  Статичный контент продолжает отображаться")
+                # Не делаем ничего - изображение остается на экране
+            else:
+                # Видео контент закончился - возвращаемся к заглушке
+                self._log("🔄 Возврат к заглушке...")
+                self.is_playing_content = False
+                self.current_type = None
+                self.current_file = None
+                self._play_placeholder()
         else:
             # Заглушка закончилась - повторяем заглушку
             self._debug("🔁 Повтор заглушки...")
@@ -130,8 +143,9 @@ class VLCVideoControlClient:
                 'capabilities': {
                     'video': True,
                     'audio': True,
-                    'images': False,  # VLC фокусируется на видео
-                    'pdf': False,
+                    'images': True,   # VLC может показывать изображения
+                    'pdf': True,      # PDF конвертируется в PNG
+                    'pptx': True,     # PPTX конвертируется в PNG
                     'streaming': True
                 }
             })
@@ -145,12 +159,36 @@ class VLCVideoControlClient:
             """Команда на воспроизведение контента"""
             self._log(f"▶️  Команда PLAY: {data}")
             file = data.get('file')
+            content_type = data.get('type', 'video')
+            page = data.get('page', 1)
             
             if file:
-                # Играем контент
-                content_url = f"{self.server_url}/content/{self.device_id}/{file}"
-                self._log(f"🎬 Загрузка контента: {content_url}")
-                self._play_content(content_url)
+                # Сохраняем текущее состояние
+                self.current_file = file
+                self.current_type = content_type
+                self.current_page = page
+                
+                # Определяем URL в зависимости от типа
+                if content_type == 'pdf':
+                    # PDF конвертирован в PNG - загружаем как изображение
+                    content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{file}/page/{page}"
+                    self._log(f"📄 Загрузка PDF страницы {page}: {content_url}")
+                    self._play_content(content_url, duration=0)  # Статичное изображение
+                elif content_type == 'pptx':
+                    # PPTX конвертирован в PNG - загружаем как изображение
+                    content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{file}/slide/{page}"
+                    self._log(f"📊 Загрузка PPTX слайда {page}: {content_url}")
+                    self._play_content(content_url, duration=0)  # Статичное изображение
+                elif content_type == 'image':
+                    # Обычное изображение
+                    content_url = f"{self.server_url}/content/{self.device_id}/{file}"
+                    self._log(f"🖼️  Загрузка изображения: {content_url}")
+                    self._play_content(content_url, duration=0)  # Статичное изображение
+                else:
+                    # Видео
+                    content_url = f"{self.server_url}/content/{self.device_id}/{file}"
+                    self._log(f"🎬 Загрузка видео: {content_url}")
+                    self._play_content(content_url)
             else:
                 # Resume текущего контента
                 if self.player.get_state() == vlc.State.Paused:
@@ -191,6 +229,24 @@ class VLCVideoControlClient:
         def on_pong():
             """Ответ на heartbeat"""
             self._debug("💓 Heartbeat OK")
+        
+        @self.sio.on('player/pdfPage')
+        def on_pdf_page(page):
+            """Навигация по страницам PDF"""
+            if self.current_type == 'pdf' and self.current_file:
+                self.current_page = page
+                content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{self.current_file}/page/{page}"
+                self._log(f"📄 PDF страница {page}")
+                self._play_content(content_url, duration=0)
+        
+        @self.sio.on('player/pptxPage')
+        def on_pptx_page(slide):
+            """Навигация по слайдам PPTX"""
+            if self.current_type == 'pptx' and self.current_file:
+                self.current_page = slide
+                content_url = f"{self.server_url}/api/devices/{self.device_id}/converted/{self.current_file}/slide/{slide}"
+                self._log(f"📊 PPTX слайд {slide}")
+                self._play_content(content_url, duration=0)
     
     def _play_placeholder(self):
         """Воспроизведение заглушки в loop"""
@@ -208,13 +264,21 @@ class VLCVideoControlClient:
         except Exception as e:
             self._log(f"⚠️  Ошибка загрузки заглушки: {e}")
     
-    def _play_content(self, url):
-        """Воспроизведение контента (один раз, затем возврат к заглушке)"""
+    def _play_content(self, url, duration=None):
+        """
+        Воспроизведение контента
+        
+        Args:
+            url: URL контента
+            duration: Длительность в секундах (0 = бесконечно для изображений, None = авто для видео)
+        """
         self._log(f"🎬 Запуск контента: {url}")
         
         try:
             media = self.instance.media_new(url)
-            # Контент БЕЗ loop - после окончания вернемся к заглушке
+            
+            # Для изображений (duration=0) - показываем без loop и не возвращаемся к заглушке
+            # Для видео (duration=None) - после окончания вернемся к заглушке
             
             self.player.set_media(media)
             self.current_media = media

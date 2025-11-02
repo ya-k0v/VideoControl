@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5"/>
+  <title>Speaker - Video Control</title>
+  <link rel="stylesheet" href="/css/app.css"/>
+  <style>
+    /* Speaker-specific adjustments */
+    .speaker-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: var(--space-md);
+      padding: var(--space-md);
+      min-height: 0;
+    }
+    
+    .speaker-main {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: var(--space-md);
+      min-height: 0;
+    }
+    
+    @media (max-width: 1023px) {
+      .speaker-layout {
+        grid-template-columns: 1fr;
+      }
+      
+      .speaker-main {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    @media (max-width: 767px) {
+      .speaker-layout {
+        padding: var(--space-sm);
+        gap: var(--space-sm);
+      }
+      
+      .speaker-main {
+        gap: var(--space-sm);
+      }
+    }
+  </style>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/speaker.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <button id="themeBtn" class="secondary" type="button" aria-label="Переключить тему">Dark</button>
+      <strong class="title">Панель спикера</strong>
+    </div>
+    <div style="flex:1; min-width:0;"></div>
+    <div class="button-group" style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="playBtn" class="primary" type="button">▶ Play</button>
+      <button id="pauseBtn" class="secondary" type="button">⏸ Pause</button>
+      <button id="restartBtn" class="secondary" type="button">⏮ Restart</button>
+      <button id="stopBtn" class="danger" type="button">⏹ Stop</button>
+    </div>
+  </header>
+
+  <main class="speaker-layout">
+    <aside class="sidebar panel">
+      <h3 class="title" style="margin:0 0 var(--space-md) 0;">Устройства</h3>
+      <ul id="tvList" class="list"></ul>
+    </aside>
+    <section class="speaker-main">
+      <div class="panel" style="display:flex; flex-direction:column; min-height:0;">
+        <h3 class="title" style="margin:0 0 var(--space-md) 0;">Файлы</h3>
+        <ul id="fileList" class="list"></ul>
+      </div>
+      <div class="panel" style="display:flex; flex-direction:column; gap:var(--space-md);">
+        <h3 class="title" style="margin:0;">Превью</h3>
+        <div id="filePreview" class="miniPreview" style="flex:1; min-height:0;"></div>
+        <div class="button-group" style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+          <button id="pdfPrevBtn" class="secondary" type="button">◀ Назад</button>
+          <button id="pdfNextBtn" class="secondary" type="button">Вперёд ▶</button>
+          <button id="pdfCloseBtn" class="secondary" type="button">✕ Закрыть</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -483,14 +483,35 @@ body.light .queue li {
   box-sizing: border-box;
 }
 
+/* Стили для элементов списка - обрезка длинных имен */
+#tvList li,
+#fileList li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  word-break: break-all;
+}
+
+
 /* ===== Responsive Design ===== */
 
-/* Mobile-first: Base styles for mobile */
+/* Base styles */
 body {
   display: grid;
   grid-template-rows: auto 1fr;
   height: 100dvh;
   overflow: hidden;
+}
+
+/* Вертикальный режим (< 1024px): разрешаем скролл страницы */
+@media (max-width: 1023px) {
+  body {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
 }
 
 /* Tablet: 768px and up */
@@ -549,91 +570,6 @@ body {
 }
 
 /* ===== Mobile Optimizations ===== */
-@media (max-width: 767px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-sm);
-    padding: var(--space-sm);
-  }
-  
-  .toolbar > *:first-child {
-    margin-right: 0;
-  }
-  
-  .toolbar .button-group {
-    display: flex;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-  }
-  
-  .toolbar .button-group button {
-    flex: 1;
-    min-width: 0;
-  }
-  
-  .layout {
-    padding: var(--space-sm);
-    gap: var(--space-sm);
-  }
-  
-  .card, .panel {
-    padding: var(--space-md);
-  }
-  
-  .sidebar {
-    border-right: none;
-    border-bottom: var(--border);
-    padding-right: 0;
-    padding-bottom: var(--space-md);
-    margin-bottom: var(--space-md);
-  }
-  
-  #tvList {
-    max-height: 300px;
-  }
-  
-  button, .button {
-    padding: var(--space-md);
-    font-size: var(--font-size-base);
-    min-height: 44px; /* Touch-friendly */
-  }
-  
-  .input {
-    padding: var(--space-md);
-    font-size: var(--font-size-base);
-    min-height: 44px;
-  }
-  
-  .item {
-    padding: var(--space-md);
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-sm);
-  }
-  
-  .item .actions {
-    display: flex;
-    gap: var(--space-sm);
-    width: 100%;
-  }
-  
-  .item .actions button {
-    flex: 1;
-  }
-  
-  .tvTile {
-    padding: var(--space-md);
-  }
-  
-  .uploadBox {
-    padding: var(--space-md);
-  }
-  
-  .dropZone {
-    padding: var(--space-lg);
-  }
-}
 
 /* Touch device optimizations */
 @media (pointer: coarse) {
@@ -672,28 +608,41 @@ body {
   min-height: 0;
 }
 
-/* Mobile: одна колонка */
-@media (max-width: 767px) {
-  #grid {
-    grid-template-columns: 1fr;
-  }
+/* Базовый layout (<1024px): всё вертикально */
+#grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-md);
+  padding: var(--space-md);
 }
 
-/* Tablet: две колонки */
-@media (min-width: 768px) {
-  #grid {
-    grid-template-columns: 280px 1fr;
-    gap: var(--space-lg);
-    padding: var(--space-lg);
-  }
+/* Карточки устройств в вертикальном режиме */
+#grid > .card {
+  min-height: 280px;
 }
 
-/* Desktop: три колонки */
+#grid > .card .files {
+  min-height: 200px;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+/* Широкий экран (≥1024px): всё горизонтально */
 @media (min-width: 1024px) {
   #grid {
     grid-template-columns: 280px minmax(380px, 0.85fr) minmax(520px, 1.15fr);
     gap: var(--space-lg);
     padding: var(--space-lg);
+  }
+  
+  /* Сбрасываем ограничения высоты */
+  #grid > .card {
+    min-height: 0;
+  }
+  
+  #grid > .card .files {
+    min-height: 0;
+    max-height: none;
   }
 }
 
@@ -821,16 +770,6 @@ body {
 }
 
 /* ===== Speaker Specific ===== */
-@media (max-width: 767px) {
-  .speaker-layout {
-    grid-template-columns: 1fr !important;
-  }
-  
-  .speaker-main {
-    grid-template-columns: 1fr !important;
-  }
-}
-
 /* ===== Player Specific ===== */
 #unmute.button,
 #unmute {
@@ -849,15 +788,6 @@ body {
 
 #unmute.hidden {
   display: none;
-}
-
-@media (max-width: 767px) {
-  #unmute {
-    right: var(--space-sm);
-    bottom: var(--space-sm);
-    padding: var(--space-md);
-    font-size: var(--font-size-sm);
-  }
 }
 
 /* ===== Utility Classes ===== */

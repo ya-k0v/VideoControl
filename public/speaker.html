@@ -15,9 +15,10 @@
   <link rel="stylesheet" href="/css/app.css"/>
   <style>
     /* Speaker-specific adjustments */
+    /* По умолчанию (<1024px): всё вертикально */
     .speaker-layout {
       display: grid;
-      grid-template-columns: 280px 1fr;
+      grid-template-columns: 1fr;
       gap: var(--space-md);
       padding: var(--space-md);
       min-height: 0;
@@ -25,31 +26,52 @@
     
     .speaker-main {
       display: grid;
-      grid-template-columns: 1fr 360px;
+      grid-template-columns: 1fr;
       gap: var(--space-md);
       min-height: 0;
     }
     
-    @media (max-width: 1023px) {
+    /* Минимальные высоты для вертикального режима */
+    .sidebar {
+      min-height: 280px;
+      max-height: 400px;
+    }
+    
+    #tvList {
+      overflow-y: auto;
+      max-height: 320px;
+      min-height: 220px;
+    }
+    
+    .speaker-main > .panel:first-child {
+      min-height: 280px;
+      max-height: 600px;
+    }
+    
+    .speaker-main > .panel:first-child #fileList {
+      min-height: 220px;
+    }
+    
+    /* Широкий экран (≥1024px): всё горизонтально */
+    @media (min-width: 1024px) {
       .speaker-layout {
-        grid-template-columns: 1fr;
+        grid-template-columns: 280px 1fr;
       }
       
       .speaker-main {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 360px;
+      }
+      
+      /* Сбрасываем ограничения высоты на широких экранах */
+      .sidebar,
+      #tvList,
+      .speaker-main > .panel:first-child,
+      .speaker-main > .panel:first-child #fileList {
+        min-height: 0;
+        max-height: none;
       }
     }
     
-    @media (max-width: 767px) {
-      .speaker-layout {
-        padding: var(--space-sm);
-        gap: var(--space-sm);
-      }
-      
-      .speaker-main {
-        gap: var(--space-sm);
-      }
-    }
   </style>
   <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="/js/speaker.js"></script>
@@ -75,9 +97,9 @@
       <ul id="tvList" class="list"></ul>
     </aside>
     <section class="speaker-main">
-      <div class="panel" style="display:flex; flex-direction:column; min-height:0;">
+      <div class="panel" style="display:flex; flex-direction:column;">
         <h3 class="title" style="margin:0 0 var(--space-md) 0;">Файлы</h3>
-        <ul id="fileList" class="list"></ul>
+        <ul id="fileList" class="list" style="flex:1; overflow-y:auto; min-height:0;"></ul>
       </div>
       <div class="panel" style="display:flex; flex-direction:column; gap:var(--space-md);">
         <h3 class="title" style="margin:0;">Превью</h3>

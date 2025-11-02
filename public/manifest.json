@@ -2,7 +2,6 @@
   "name": "VideoControl Player",
   "short_name": "VideoControl",
   "description": "Video player for VideoControl system - displays content on screens",
-  "start_url": "/player.html",
   "scope": "/",
   "display": "fullscreen",
   "orientation": "landscape",

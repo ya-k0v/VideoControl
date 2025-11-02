@@ -36,8 +36,9 @@ npm start
 - 🔄 **Real-time управление** - управление устройствами через WebSocket
 - ⏸️ **Управление воспроизведением** - Play, Pause, Restart, Stop
 - 🌐 **Автономность плеера** - плеер работает независимо, используя кэш заглушки
-- 🚀 **Оптимизация производительности** - параллельная загрузка видео, кэширование
+- 🚀 **Оптимизация производительности** - Nginx раздача контента, оптимизированная загрузка
 - 🌍 **Поддержка русских символов** - корректное отображение русских букв в именах файлов
+- 🎯 **Нативные клиенты** - VLC (Windows/Linux/macOS) и MPV (Raspberry Pi) клиенты
 
 ## Структура проекта
 
@@ -54,11 +55,24 @@ VideoControl/
 ├── file-names-map.json     # Маппинг имен файлов
 ├── videocontrol.service    # Systemd service для production
 │
-├── nginx/                  # 🆕 Конфигурация Nginx для production
+├── nginx/                  # Конфигурация Nginx для production
 │   ├── videocontrol.conf   # Конфиг Nginx (оптимизированный)
 │   ├── install-nginx.sh    # Скрипт установки Nginx
 │   ├── test-nginx.sh       # Скрипт тестирования
 │   └── README.md           # Документация по Nginx
+│
+├── clients/                # 🆕 Нативные клиенты для разных платформ
+│   ├── README.md           # Общая документация по клиентам
+│   ├── vlc/                # VLC клиент (Windows/Linux/macOS)
+│   │   ├── vlc_client.py   # Python клиент для VLC
+│   │   ├── requirements.txt
+│   │   ├── videocontrol-vlc@.service
+│   │   └── README.md
+│   └── mpv/                # MPV клиент (Raspberry Pi)
+│       ├── mpv_client.py   # Python клиент для MPV
+│       ├── requirements.txt
+│       ├── videocontrol-mpv@.service
+│       └── README.md
 │
 └── public/                 # Публичные файлы (раздаются сервером)
     ├── admin.html          # Панель администратора
@@ -209,6 +223,45 @@ bash test-nginx.sh
 - Поддерживает Range requests для видео seek
 
 **Подробности:** См. [nginx/README.md](nginx/README.md)
+
+### Нативные клиенты (VLC, MPV) 🎬
+
+Помимо браузерного плеера, доступны нативные клиенты для разных платформ:
+
+#### **VLC Client** (Windows/Linux/macOS):
+
+```bash
+cd /vid/videocontrol/clients/vlc
+pip3 install -r requirements.txt
+python3 vlc_client.py --server http://YOUR_SERVER:3000 --device vlc-001
+```
+
+**Подходит для:**
+- Офисные ПК (Windows/Linux/macOS)
+- Конференц-залы
+- Презентационные экраны
+
+#### **MPV Client** (Raspberry Pi):
+
+```bash
+cd /vid/videocontrol/clients/mpv
+pip3 install -r requirements.txt
+python3 mpv_client.py --server http://YOUR_SERVER:3000 --device rpi-001
+```
+
+**Подходит для:**
+- Raspberry Pi (оптимизировано!)
+- Слабые ПК
+- Embedded системы
+
+**Особенности клиентов:**
+- ✅ Автоматическая заглушка (loop default.mp4)
+- ✅ Real-time управление через WebSocket
+- ✅ Автономность при потере связи
+- ✅ Hardware acceleration (MPV на RPi)
+- ✅ Systemd integration для автозапуска
+
+**Подробности:** См. [clients/README.md](clients/README.md)
 
 ## Использование
 
@@ -389,12 +442,18 @@ sudo journalctl -u videocontrol -f
 
 ## Технологии
 
+### Backend & Infrastructure:
 - **Backend**: Node.js, Express.js, Socket.IO
-- **Frontend**: Vanilla JavaScript, HTML5, CSS3
+- **Reverse Proxy**: Nginx (production)
 - **File Upload**: Multer
 - **PDF Processing**: pdf2pic, pdf-lib
 - **PPTX Conversion**: LibreOffice (soffice)
-- **Caching**: Service Worker API
+
+### Frontend & Clients:
+- **Web Frontend**: Vanilla JavaScript, HTML5, CSS3
+- **PWA**: Service Worker API
+- **VLC Client**: Python 3, python-vlc, python-socketio
+- **MPV Client**: Python 3, python-mpv, python-socketio
 
 ## Лицензия
 

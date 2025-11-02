@@ -233,7 +233,7 @@ bash test-nginx.sh
 ```bash
 cd /vid/videocontrol/clients/vlc
 pip3 install -r requirements.txt
-python3 vlc_client.py --server http://YOUR_SERVER:3000 --device vlc-001
+python3 vlc_client.py --server http://YOUR_SERVER --device vlc-001
 ```
 
 **Подходит для:**
@@ -246,13 +246,15 @@ python3 vlc_client.py --server http://YOUR_SERVER:3000 --device vlc-001
 ```bash
 cd /vid/videocontrol/clients/mpv
 pip3 install -r requirements.txt
-python3 mpv_client.py --server http://YOUR_SERVER:3000 --device rpi-001
+python3 mpv_client.py --server http://YOUR_SERVER --device rpi-001
 ```
 
 **Подходит для:**
 - Raspberry Pi (оптимизировано!)
 - Слабые ПК
 - Embedded системы
+
+**⚠️ Важно:** Используйте порт 80 (через Nginx) для production. Порт 3000 только для разработки БЕЗ Nginx.
 
 **Особенности клиентов:**
 - ✅ Автоматическая заглушка (loop default.mp4)

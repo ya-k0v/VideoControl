@@ -277,25 +277,28 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  # Базовое использование
-  python mpv_client.py --server http://192.168.1.100:3000 --device mpv-001
+  # Базовое использование (через Nginx на порту 80)
+  python mpv_client.py --server http://192.168.1.100 --device mpv-001
   
   # С отладкой
-  python mpv_client.py --server http://localhost:3000 --device rpi-test --debug
+  python mpv_client.py --server http://localhost --device rpi-test --debug
   
   # Без hardware декодирования
-  python mpv_client.py --server http://localhost:3000 --device test --no-hwdec
+  python mpv_client.py --server http://localhost --device test --no-hwdec
+  
+  # Напрямую к Node.js (только для разработки БЕЗ Nginx)
+  python mpv_client.py --server http://localhost:3000 --device test --debug
 
 Environment variables:
-  VIDEOCONTROL_SERVER    - URL сервера (по умолчанию: http://localhost:3000)
+  VIDEOCONTROL_SERVER    - URL сервера (по умолчанию: http://localhost)
   VIDEOCONTROL_DEVICE_ID - ID устройства (по умолчанию: mpv-001)
         '''
     )
     
     parser.add_argument(
         '--server', '-s',
-        default=os.getenv('VIDEOCONTROL_SERVER', 'http://localhost:3000'),
-        help='URL сервера VideoControl'
+        default=os.getenv('VIDEOCONTROL_SERVER', 'http://localhost'),
+        help='URL сервера VideoControl (через Nginx на порту 80, или :3000 для прямого подключения)'
     )
     
     parser.add_argument(

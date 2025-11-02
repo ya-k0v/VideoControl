@@ -8,7 +8,7 @@ Type=simple
 User=YOUR_USERNAME
 Group=YOUR_USERNAME
 Environment="DISPLAY=:0"
-Environment="VIDEOCONTROL_SERVER=http://192.168.1.100:3000"
+Environment="VIDEOCONTROL_SERVER=http://192.168.1.100"
 Environment="VIDEOCONTROL_DEVICE_ID=%i"
 WorkingDirectory=/vid/videocontrol/clients/mpv
 ExecStart=/usr/bin/python3 /vid/videocontrol/clients/mpv/mpv_client.py

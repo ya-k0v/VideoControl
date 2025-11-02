@@ -27,7 +27,7 @@
 ```bash
 cd vlc/
 pip3 install -r requirements.txt
-python3 vlc_client.py --server http://YOUR_SERVER:3000 --device YOUR_DEVICE_ID
+python3 vlc_client.py --server http://YOUR_SERVER --device YOUR_DEVICE_ID
 ```
 
 ### MPV Client:
@@ -35,8 +35,10 @@ python3 vlc_client.py --server http://YOUR_SERVER:3000 --device YOUR_DEVICE_ID
 ```bash
 cd mpv/
 pip3 install -r requirements.txt
-python3 mpv_client.py --server http://YOUR_SERVER:3000 --device YOUR_DEVICE_ID
+python3 mpv_client.py --server http://YOUR_SERVER --device YOUR_DEVICE_ID
 ```
+
+**Примечание:** Используйте порт 80 (через Nginx) для production. Порт 3000 только для разработки БЕЗ Nginx.
 
 ## 📊 Сравнение клиентов
 

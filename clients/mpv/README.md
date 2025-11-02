@@ -44,29 +44,32 @@ pip3 install -r requirements.txt
 
 ## 🚀 Запуск
 
-### Ручной запуск:
+### Ручной запуск (через Nginx):
 
 ```bash
-python3 mpv_client.py --server http://192.168.1.100:3000 --device mpv-001
+python3 mpv_client.py --server http://192.168.1.100 --device mpv-001
 ```
 
 ### С параметрами:
 
 ```bash
-# С отладкой
-python3 mpv_client.py --server http://localhost:3000 --device rpi-test --debug
+# С отладкой (через Nginx)
+python3 mpv_client.py --server http://localhost --device rpi-test --debug
 
 # Без hardware декодирования
-python3 mpv_client.py --server http://localhost:3000 --device test --no-hwdec
+python3 mpv_client.py --server http://localhost --device test --no-hwdec
 
 # Без fullscreen
-python3 mpv_client.py --server http://localhost:3000 --device test --no-fullscreen
+python3 mpv_client.py --server http://localhost --device test --no-fullscreen
+
+# Напрямую к Node.js (только для разработки БЕЗ Nginx)
+python3 mpv_client.py --server http://localhost:3000 --device test --debug
 ```
 
 ### Через переменные окружения:
 
 ```bash
-export VIDEOCONTROL_SERVER="http://192.168.1.100:3000"
+export VIDEOCONTROL_SERVER="http://192.168.1.100"
 export VIDEOCONTROL_DEVICE_ID="rpi-tv-001"
 python3 mpv_client.py
 ```
@@ -108,7 +111,7 @@ sudo journalctl -u videocontrol-mpv@rpi-hall-001 -f
 
 | Параметр | Описание | Значение по умолчанию |
 |----------|----------|-----------------------|
-| `--server`, `-s` | URL сервера VideoControl | http://localhost:3000 |
+| `--server`, `-s` | URL сервера VideoControl | http://localhost (порт 80 через Nginx) |
 | `--device`, `-d` | ID устройства | mpv-001 |
 | `--no-fullscreen` | Не запускать fullscreen | false |
 | `--no-hwdec` | Отключить hardware декодирование | false |
@@ -177,7 +180,7 @@ python3 -c "import mpv; print('MPV OK')"
 
 ```bash
 # Проверить что включен hardware декодирование
-python3 mpv_client.py --server http://your-server:3000 --device test --debug
+python3 mpv_client.py --server http://your-server --device test --debug
 
 # Убедиться что gpu_mem >= 256 в /boot/config.txt
 vcgencmd get_mem gpu
@@ -186,10 +189,13 @@ vcgencmd get_mem gpu
 ### Не подключается к серверу
 
 ```bash
-# Проверить доступность сервера
-curl http://192.168.1.100:3000/
+# Проверить доступность сервера через Nginx (порт 80)
+curl http://192.168.1.100/
 
 # Запустить с отладкой
+python3 mpv_client.py --server http://192.168.1.100 --device test --debug
+
+# Или напрямую к Node.js (если Nginx не установлен)
 python3 mpv_client.py --server http://192.168.1.100:3000 --device test --debug
 ```
 

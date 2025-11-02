@@ -28,7 +28,7 @@ if (!device_id || !device_id.trim()) {
   v.setAttribute('webkit-playsinline', '');
   v.autoplay = true;
   v.muted = true;
-  v.preload = 'auto'; // 'auto' - быстрая загрузка для скорейшего начала воспроизведения
+  v.preload = 'metadata'; // 'metadata' - быстрая загрузка метаданных, видео загружается по требованию
   v.controls = false; // лучше убрать управление, если оно не нужно
   v.disablePictureInPicture = true; // если поддерживается, чтобы снизить нагрузку
   
@@ -507,76 +507,25 @@ if (!device_id || !device_id.trim()) {
           playAttempted = false; // Сбрасываем флаги попытки воспроизведения
           playStarted = false;
           
-          // АСИНХРОННАЯ ПРЕДЗАГРУЗКА: Параллельно предзагружаем несколько частей видео
-          // Это ускорит начало воспроизведения и дальнейшую загрузку
-          (async () => {
-            // Сразу устанавливаем src - видео элемент начнет загружать метаданные
-            v.src = fileUrl;
-            v.preload = 'auto';
-            v.muted = true; 
-            v.volume = 0.0;
-            show(v);
-            
-            // АСИНХРОННАЯ ПАРАЛЛЕЛЬНАЯ ПРЕДЗАГРУЗКА: Все запросы выполняются одновременно
-            // Это максимально ускорит загрузку видео
-            const chunkSize = 512 * 1024; // 512KB chunks - оптимальный размер для быстрой загрузки
-            const numChunks = 8; // Загружаем первые 8 чанков параллельно (4MB)
-            
-            // Создаем массив промисов для всех параллельных запросов
-            const preloadPromises = [];
-            
-            for (let i = 0; i < numChunks; i++) {
-              const start = i * chunkSize;
-              const end = (i + 1) * chunkSize - 1;
-              
-              // Каждый fetch запускается НЕЗАВИСИМО и ПАРАЛЛЕЛЬНО с другими
-              const promise = fetch(fileUrl, {
-                headers: { 'Range': `bytes=${start}-${end}` },
-                cache: 'force-cache',
-                // Используем keepalive для повторного использования TCP соединений
-                keepalive: true,
-                // Приоритет - высший для ускорения
-                priority: 'high'
-              }).then(async response => {
-                if (response.ok) {
-                  // Читаем blob чтобы данные попали в HTTP кэш браузера
-                  // Без чтения браузер может не закэшировать данные
-                  try {
-                    await response.blob();
-                    console.log(`[Player] ✓ Preloaded bytes=${start}-${end}`);
-                  } catch (e) {
-                    // Игнорируем ошибки чтения
-                  }
-                }
-                return response;
-              }).catch(error => {
-                // Игнорируем ошибки - не критично для предзагрузки
-                return null;
-              });
-              
-              preloadPromises.push(promise);
-            }
-            
-            // Запускаем ВСЕ запросы ПАРАЛЛЕЛЬНО - не ждем их завершения
-            // Это позволяет браузеру делать несколько запросов одновременно
-            Promise.allSettled(preloadPromises).then(results => {
-              const successful = results.filter(r => r.status === 'fulfilled' && r.value?.ok).length;
-              console.log(`[Player] Preloaded ${successful}/${numChunks} chunks in parallel`);
-            });
-            
-            // Пытаемся запустить воспроизведение сразу
-            // Браузер начнет делать свои Range запросы, которые будут работать параллельно с нашими предзагрузками
-            v.play().then(() => {
-              playStarted = true;
-              playAttempted = true;
-            }).catch(() => {
-              playAttempted = false;
-            });
-            
+          // ОПТИМИЗИРОВАННАЯ ЗАГРУЗКА: простая и быстрая
+          // С Nginx статика раздается максимально быстро, множественные Range запросы не нужны
+          v.src = fileUrl;
+          v.preload = 'metadata'; // Загружаем только метаданные для быстрого старта
+          v.muted = true; 
+          v.volume = 0.0;
+          show(v);
+          
+          // Запускаем воспроизведение сразу
+          v.play().then(() => {
+            playStarted = true;
+            playAttempted = true;
+            // Включаем звук если разрешено
             if (soundUnlocked) {
-              setTimeout(()=>{ v.muted = false; v.volume = 1.0; }, 200);
+              setTimeout(() => { v.muted = false; v.volume = 1.0; }, 200);
             }
-          })();
+          }).catch(() => {
+            playAttempted = false;
+          });
         } else {
           // Если видео уже загружается - просто пытаемся запустить
           v.muted = true; 
@@ -683,7 +632,7 @@ if (!device_id || !device_id.trim()) {
         playAttempted = false;
         playStarted = false;
         v.src = fileUrl;
-        v.preload = 'auto';
+        v.preload = 'metadata'; // Быстрая загрузка метаданных
       }
       
       v.muted = soundUnlocked ? false : true;

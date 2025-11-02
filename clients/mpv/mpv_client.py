@@ -38,11 +38,16 @@ class MPVVideoControlClient:
             reconnection_delay_max=5
         )
         
-        # MPV player
+        # MPV player с оптимизацией для больших файлов
         mpv_kwargs = {
             'input_default_bindings': True,
             'input_vo_keyboard': True,
             'osc': False,  # Отключить on-screen controller
+            # Оптимизация для HTTP streaming больших файлов
+            'cache': 'yes',               # Включить кэш
+            'demuxer_max_bytes': '50M',   # Буфер 50MB (для больших файлов)
+            'demuxer_max_back_bytes': '25M',  # Буфер назад 25MB
+            'stream_buffer_size': '4M',   # Буфер потока 4MB
         }
         
         if fullscreen:

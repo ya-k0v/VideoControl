@@ -38,8 +38,14 @@ class VLCVideoControlClient:
             reconnection_delay_max=5
         )
         
-        # VLC instance
-        vlc_args = ['--no-video-title-show']  # Скрыть название файла
+        # VLC instance с оптимизацией для больших файлов
+        vlc_args = [
+            '--no-video-title-show',  # Скрыть название файла
+            '--http-reconnect',       # Автореконнект при обрыве
+            '--network-caching=2000', # 2 сек кэша (оптимально для HTTP streaming)
+            '--file-caching=2000',    # 2 сек кэша для файлов
+            '--live-caching=2000'     # 2 сек для live streams
+        ]
         if not debug:
             vlc_args.extend(['--quiet', '--no-osd'])  # Тихий режим
         

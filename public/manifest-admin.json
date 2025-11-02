@@ -1,0 +1,21 @@
+{
+  "name": "VideoControl Admin",
+  "short_name": "VC Admin",
+  "description": "Admin panel for VideoControl system - manage devices and content",
+  "start_url": "/admin.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a1a1a",
+  "theme_color": "#3b82f6",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}
+

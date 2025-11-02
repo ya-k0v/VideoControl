@@ -1,0 +1,21 @@
+{
+  "name": "VideoControl Player",
+  "short_name": "VideoControl",
+  "description": "Video player for VideoControl system - displays content on screens",
+  "start_url": "/player.html",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "categories": ["entertainment", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}
+

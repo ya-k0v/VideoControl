@@ -1,0 +1,21 @@
+{
+  "name": "VideoControl Speaker",
+  "short_name": "VC Speaker",
+  "description": "Speaker control panel for VideoControl system - manage presentations",
+  "start_url": "/speaker.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a1a1a",
+  "theme_color": "#3b82f6",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon",
+      "purpose": "any"
+    }
+  ]
+}
+

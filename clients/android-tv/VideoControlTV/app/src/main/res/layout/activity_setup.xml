@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#1e293b">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp">
+
+    <!-- App Icon -->
+    <ImageView
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:src="@drawable/ic_launcher_foreground"
+        android:background="@color/ic_launcher_background"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="VideoControl TV"
+        android:textSize="28sp"
+        android:textColor="#ffffff"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"/>
+
+    <!-- Subtitle -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Настройка подключения"
+        android:textSize="16sp"
+        android:textColor="#94a3b8"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- Server Address Input -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Адрес сервера"
+        android:textSize="14sp"
+        android:textColor="#cbd5e1"
+        android:layout_marginBottom="6dp"/>
+
+    <EditText
+        android:id="@+id/editServerUrl"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="http://192.168.1.100"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:textColorHint="#64748b"
+        android:background="@drawable/edit_text_background"
+        android:padding="12dp"
+        android:inputType="textUri"
+        android:layout_marginBottom="24dp"
+        android:nextFocusDown="@+id/editDeviceId"
+        android:focusable="true"
+        android:focusableInTouchMode="true"/>
+
+    <!-- Device ID Input -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ID устройства"
+        android:textSize="14sp"
+        android:textColor="#cbd5e1"
+        android:layout_marginBottom="6dp"/>
+
+    <EditText
+        android:id="@+id/editDeviceId"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="TV001"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:textColorHint="#64748b"
+        android:background="@drawable/edit_text_background"
+        android:padding="12dp"
+        android:inputType="text"
+        android:layout_marginBottom="32dp"
+        android:nextFocusUp="@+id/editServerUrl"
+        android:nextFocusDown="@+id/btnSave"
+        android:focusable="true"
+        android:focusableInTouchMode="true"/>
+
+    <!-- Save Button -->
+    <Button
+        android:id="@+id/btnSave"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Сохранить и запустить"
+        android:textSize="16sp"
+        android:textColor="#ffffff"
+        android:background="@drawable/button_background"
+        android:padding="12dp"
+        android:nextFocusUp="@+id/editDeviceId"
+        android:focusable="true"
+        android:focusableInTouchMode="true"/>
+
+    <!-- Error Message -->
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#ef4444"
+        android:textSize="12sp"
+        android:gravity="center"
+        android:layout_marginTop="12dp"
+        android:visibility="gone"/>
+
+</LinearLayout>
+</ScrollView>
+

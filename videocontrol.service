@@ -1,0 +1,16 @@
+[Unit]
+Description=Video Control Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/VideoControl
+ExecStart=/usr/bin/node /path/to/VideoControl/server.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme - Fullscreen, no action bar -->
+    <style name="Theme.VideoControl" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Primary brand color -->
+        <item name="colorPrimary">#3B82F6</item>
+        <item name="colorPrimaryDark">#1E40AF</item>
+        <item name="colorAccent">#60A5FA</item>
+        
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@android:color/black</item>
+        
+        <!-- Window settings -->
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        
+        <!-- Keep screen on -->
+        <item name="android:keepScreenOn">true</item>
+    </style>
+</resources>
+

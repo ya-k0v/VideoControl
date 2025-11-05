@@ -1,0 +1,20 @@
+[Unit]
+Description=VideoControl VLC Client for %I
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+Environment="DISPLAY=:0"
+Environment="VIDEOCONTROL_SERVER=http://192.168.1.100"
+Environment="VIDEOCONTROL_DEVICE_ID=%i"
+WorkingDirectory=/vid/videocontrol/clients/vlc
+ExecStart=/usr/bin/python3 /vid/videocontrol/clients/vlc/vlc_client.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

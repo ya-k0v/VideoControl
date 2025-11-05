@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5"/>
+  <title>Admin - Video Control</title>
+  
+  <!-- Favicons -->
+  <link rel="icon" type="image/svg+xml" href="/icon.svg"/>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+  
+  <!-- PWA Support -->
+  <link rel="manifest" href="/manifest-admin.json"/>
+  <meta name="theme-color" content="#3b82f6"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="VC Admin"/>
+  
+  <link rel="stylesheet" href="/css/app.css?v=2.0.0"/>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/admin.js?v=2.0.0"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <button id="themeBtn" class="secondary" type="button" aria-label="Переключить тему">Dark</button>
+      <strong class="title">Админ‑панель</strong>
+    </div>
+    <div style="flex:1; min-width:0;"></div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <input id="newId" class="input" placeholder="ID устройства" style="min-width:120px; flex:1; max-width:200px;"/>
+      <input id="newName" class="input" placeholder="Имя устройства" style="min-width:120px; flex:1; max-width:200px;"/>
+      <button id="createBtn" class="primary" type="button">Создать</button>
+    </div>
+  </header>
+
+  <main style="flex:1; min-height:0;">
+    <div id="grid"></div>
+  </main>
+</body>
+</html>

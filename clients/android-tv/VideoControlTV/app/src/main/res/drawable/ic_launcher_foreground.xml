@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Monitor/Screen -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,24 h60 a8,8 0 0,1 8,8 v42 a8,8 0 0,1 -8,8 h-60 a8,8 0 0,1 -8,-8 v-42 a8,8 0 0,1 8,-8 z"/>
+    
+    <!-- Inner screen -->
+    <path
+        android:fillColor="#1e3a8a"
+        android:pathData="M26,26 h56 a6,6 0 0,1 6,6 v38 a6,6 0 0,1 -6,6 h-56 a6,6 0 0,1 -6,-6 v-38 a6,6 0 0,1 6,-6 z"/>
+    
+    <!-- Play button circle -->
+    <path
+        android:fillColor="#3b82f6"
+        android:fillAlpha="0.9"
+        android:pathData="M54,38 a16,16 0 1,1 0,32 a16,16 0 1,1 0,-32 z"/>
+    
+    <!-- Play triangle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,46 L48,62 L64,54 Z"/>
+    
+    <!-- Monitor stand -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,82 h16 a2,2 0 0,1 2,2 v2 a2,2 0 0,1 -2,2 h-16 a2,2 0 0,1 -2,-2 v-2 a2,2 0 0,1 2,-2 z"/>
+    
+    <!-- Monitor base -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,88 h24 v4 a2,2 0 0,1 -2,2 h-20 a2,2 0 0,1 -2,-2 z"/>
+</vector>
+

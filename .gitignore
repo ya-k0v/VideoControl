@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+
+# Archives
+*.tar.gz
+*.zip
+
+# Cache directories
+.converted/
+.pptx_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Internal documentation and planning (not for public repo)
+.internal/
+*.pyo
+
+# Content files - медиа файлы пользователей
+public/content/
+
+# Local configuration - локальные конфиги устройств
+devices.json
+file-names-map.json

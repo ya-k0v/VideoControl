@@ -14,6 +14,10 @@ class MainActivity : AppCompatActivity() {
     private var webView: WebView? = null
     private var config: ConfigManager? = null
     
+    // Счетчик попыток перезагрузки (предотвращает бесконечный цикл)
+    private var reloadAttempts = 0
+    private val MAX_RELOAD_ATTEMPTS = 3
+    
     companion object {
         private const val TAG = "VideoControl"
     }
@@ -149,6 +153,9 @@ class MainActivity : AppCompatActivity() {
                     super.onPageFinished(view, url)
                     Log.i(TAG, "Page loaded: $url")
                     
+                    // Сбрасываем счетчик при успешной загрузке
+                    reloadAttempts = 0
+                    
                     // КРИТИЧНО: Убеждаемся что фон черный после загрузки
                     view?.setBackgroundColor(android.graphics.Color.BLACK)
                     
@@ -207,13 +214,55 @@ class MainActivity : AppCompatActivity() {
                                 #stage { pointer-events: auto !important; }
                             `;
                             
-                            // Проверяем что стиль еще не добавлен
-                            if (!document.getElementById('android-media-controls-fix')) {
+                            // КРИТИЧНО: Проверяем что DOM готов и стиль еще не добавлен
+                            if (document.head && !document.getElementById('android-media-controls-fix')) {
                                 document.head.appendChild(style);
                                 console.log('[Android] ✅ Media controls CSS injected');
+                            } else if (!document.head) {
+                                console.warn('[Android] ⚠️ document.head not ready yet');
                             }
                             
-                            console.log('[Android] ✅ VCPlayer initialization complete');
+                            // КРИТИЧНО: Скрываем video элементы пока они не готовы к воспроизведению
+                            // Это предотвращает показ системной кнопки Play
+                            function hideVideoUntilReady() {
+                                const videos = document.querySelectorAll('video');
+                                videos.forEach(video => {
+                                    // Скрываем video пока не начало играть
+                                    if (video.paused && video.readyState < 3) {
+                                        video.style.opacity = '0';
+                                        video.style.visibility = 'hidden';
+                                    }
+                                    
+                                    // Показываем когда начало играть
+                                    video.addEventListener('playing', function() {
+                                        this.style.opacity = '1';
+                                        this.style.visibility = 'visible';
+                                    });
+                                    
+                                    // Скрываем при паузе
+                                    video.addEventListener('pause', function() {
+                                        this.style.opacity = '0';
+                                        this.style.visibility = 'hidden';
+                                    });
+                                    
+                                    // Скрываем при ошибке
+                                    video.addEventListener('error', function() {
+                                        this.style.opacity = '0';
+                                        this.style.visibility = 'hidden';
+                                    });
+                                    
+                                    // Убираем poster (может показывать Play кнопку)
+                                    video.removeAttribute('poster');
+                                    video.setAttribute('poster', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+                                });
+                            }
+                            
+                            // Запускаем сразу и периодически проверяем
+                            hideVideoUntilReady();
+                            setInterval(hideVideoUntilReady, 500);
+                            
+                            console.log('[Android] ✅ Video hiding protection enabled');
+                            console.log('[Android] ✅ Initialization complete');
                         })();
                     """.trimIndent(), null)
                 }
@@ -224,13 +273,25 @@ class MainActivity : AppCompatActivity() {
                     error: WebResourceError
                 ) {
                     super.onReceivedError(view, request, error)
-                    Log.e(TAG, "WebView error: ${error.description}")
                     
-                    // Retry after 5 seconds
-                    view.postDelayed({
-                        Log.i(TAG, "Retrying page load...")
-                        view.reload()
-                    }, 5000)
+                    // КРИТИЧНО: Перезагружаем только если это главная страница (не sub-resources)
+                    if (request.isForMainFrame) {
+                        Log.e(TAG, "Main frame error: ${error.description}")
+                        
+                        // Retry with limit (предотвращает бесконечный цикл)
+                        if (reloadAttempts < MAX_RELOAD_ATTEMPTS) {
+                            reloadAttempts++
+                            view.postDelayed({
+                                Log.i(TAG, "Retrying page load... (attempt $reloadAttempts/$MAX_RELOAD_ATTEMPTS)")
+                                view.reload()
+                            }, 5000)
+                        } else {
+                            Log.e(TAG, "Max reload attempts reached. Stopping retries.")
+                        }
+                    } else {
+                        // Sub-resource error (favicon, images, etc) - игнорируем
+                        Log.w(TAG, "Sub-resource error (ignored): ${request.url} - ${error.description}")
+                    }
                 }
                 
                 override fun onReceivedHttpError(

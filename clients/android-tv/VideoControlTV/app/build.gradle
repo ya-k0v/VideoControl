@@ -9,10 +9,10 @@ android {
     
     defaultConfig {
         applicationId "com.videocontrol.tv"
-        minSdk 21  // ВАЖНО: Требует обновленный WebView для ES6 (template literals, arrow functions)
+        minSdk 21
         targetSdk 34
-        versionCode 7
-        versionName "1.0.7"
+        versionCode 9
+        versionName "1.0.7-bugfix"
         
         // Default server URL - измените на ваш сервер
         buildConfigField "String", "DEFAULT_SERVER_URL", '"http://192.168.1.101"'

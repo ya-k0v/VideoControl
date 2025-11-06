@@ -625,7 +625,23 @@ async function refreshFilesPanel(deviceId, panelEl) {
       const safeName = decodeURIComponent(btn.getAttribute('data-safe'));
       const frame = document.querySelector('#detailPane iframe');
       if (frame) {
-        const u = `/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1&file=${encodeURIComponent(safeName)}`;
+        // Определяем тип файла по расширению
+        const ext = safeName.split('.').pop().toLowerCase();
+        let u = `/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1&file=${encodeURIComponent(safeName)}`;
+        
+        // КРИТИЧНО: Для PPTX, PDF и изображений добавляем параметры type и page
+        if (ext === 'pdf') {
+          u += `&type=pdf&page=1`;
+        } else if (ext === 'pptx') {
+          u += `&type=pptx&page=1`;
+        } else if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+          u += `&type=image&page=1`;
+        }
+        
+        // Добавляем timestamp для обхода кэша iframe
+        u += `&t=${Date.now()}`;
+        
+        console.log('[Admin] 📋 Preview URL:', u);
         frame.src = u;
       }
     };

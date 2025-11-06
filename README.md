@@ -1,4 +1,4 @@
-# Video Control System v2.0
+# Video Control System v2.1
 
 Система управления видео-контентом для множественных устройств (ТВ, проекторы, дисплеи) с поддержкой видео, изображений, PDF и PowerPoint презентаций.
 
@@ -143,7 +143,7 @@ VideoControl/
 │   │   ├── vlc_client.py
 │   │   ├── requirements.txt
 │   │   └── README.md
-│   └── android-tv/            # Android TV клиент v1.0.4
+│   └── android-tv/            # Android TV клиент v1.0.7
 │       ├── VideoControlTV/
 │       ├── mass-install.sh
 │       └── configure-devices.sh
@@ -301,9 +301,9 @@ python3 vlc_client.py --server http://SERVER --device vlc-001
 
 **Документация:** [clients/vlc/README.md](clients/vlc/README.md)
 
-### Android TV Client v1.0.4
+### Android TV Client v1.0.7
 
-Нативное Android приложение для Android TV устройств с оптимизацией черного фона:
+Нативное Android приложение для Android TV устройств с полной оптимизацией черного фона:
 
 **Поддержка:**
 - ✅ iconBIT DS2
@@ -438,10 +438,11 @@ echo $DISPLAY  # должно быть :0
 
 ## 📚 Версия
 
-**Текущая:** v2.0 (November 2025)
+**Текущая:** v2.1 (November 2025)
 
 **Changelog:**
-- v2.0 - Video.js integration, VLC v2.0, Android TV v1.0.4 (black screen optimization), PPTX caching, double buffering, removed MPV
+- v2.1 - Android TV v1.0.7 (permanent black layer, video hiding), Double buffering (img1/img2), Admin preview fix
+- v2.0 - Video.js integration, VLC v2.0, Android TV v1.0.4 (black screen optimization), PPTX caching, removed MPV
 - v1.0.2 - VLC/MPV клиенты, PWA, оптимизация
 - v1.0.1 - Nginx поддержка
 - v1.0.0 - Первый релиз

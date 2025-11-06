@@ -114,15 +114,16 @@ class MainActivity : AppCompatActivity() {
                     return true
                 }
                 
-                // КРИТИЧНО: Скрываем встроенные медиа контролы Android
+                // КРИТИЧНО: ПОЛНОСТЬЮ блокируем fullscreen overlay с кнопкой Play
                 override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
-                    // Отключаем fullscreen overlay контролы
-                    super.onShowCustomView(view, callback)
+                    // НЕ вызываем super - полностью блокируем показ overlay
+                    Log.d(TAG, "onShowCustomView BLOCKED - preventing Play button overlay")
+                    callback?.onCustomViewHidden() // Сразу говорим что скрыто
                 }
                 
                 override fun onHideCustomView() {
-                    // Отключаем fullscreen overlay контролы
-                    super.onHideCustomView()
+                    // НЕ вызываем super - блокируем скрытие (его и не было)
+                    Log.d(TAG, "onHideCustomView BLOCKED")
                 }
             }
             
@@ -171,20 +172,39 @@ class MainActivity : AppCompatActivity() {
                                 console.log('[Android] ✅ Unmute button hidden');
                             }
                             
-                            // Инъекция CSS ТОЛЬКО для скрытия Android WebView контролов
+                            // АГРЕССИВНАЯ CSS инъекция для полного скрытия ВСЕХ контролов
                             const style = document.createElement('style');
                             style.id = 'android-media-controls-fix';
                             style.textContent = `
-                                /* Убираем встроенные Android WebView контролы */
-                                video::-webkit-media-controls { display: none !important; }
-                                video::-webkit-media-controls-enclosure { display: none !important; }
-                                video::-webkit-media-controls-panel { display: none !important; }
-                                video::-webkit-media-controls-play-button { display: none !important; }
-                                video::-webkit-media-controls-overlay-play-button { display: none !important; }
+                                /* КРИТИЧНО: Убираем ВСЕ встроенные WebView медиа контролы */
+                                video::-webkit-media-controls { display: none !important; opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+                                video::-webkit-media-controls-enclosure { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+                                video::-webkit-media-controls-panel { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+                                video::-webkit-media-controls-play-button { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+                                video::-webkit-media-controls-overlay-play-button { display: none !important; opacity: 0 !important; visibility: hidden !important; width: 0 !important; height: 0 !important; }
+                                video::-webkit-media-controls-start-playback-button { display: none !important; opacity: 0 !important; visibility: hidden !important; }
+                                video::-webkit-media-controls-fullscreen-button { display: none !important; }
+                                video::-webkit-media-controls-timeline { display: none !important; }
+                                video::-webkit-media-controls-current-time-display { display: none !important; }
+                                video::-webkit-media-controls-time-remaining-display { display: none !important; }
                                 
-                                /* Скрываем все остальные оверлеи */
-                                .vjs-big-play-button { opacity: 0 !important; visibility: hidden !important; display: none !important; }
+                                /* Video.js контролы */
+                                .vjs-big-play-button { opacity: 0 !important; visibility: hidden !important; display: none !important; width: 0 !important; height: 0 !important; pointer-events: none !important; }
                                 .vjs-control-bar { opacity: 0 !important; visibility: hidden !important; display: none !important; }
+                                .vjs-loading-spinner { opacity: 0 !important; visibility: hidden !important; display: none !important; }
+                                .vjs-poster { opacity: 0 !important; visibility: hidden !important; display: none !important; }
+                                
+                                /* Android fullscreen overlay */
+                                video::cue { display: none !important; }
+                                video::-webkit-media-text-track-container { display: none !important; }
+                                video::-webkit-media-text-track-display { display: none !important; }
+                                
+                                /* Блокируем pointer events на video для предотвращения показа контролов */
+                                video { pointer-events: none !important; }
+                                .video-js { pointer-events: none !important; }
+                                
+                                /* Разрешаем события только на stage */
+                                #stage { pointer-events: auto !important; }
                             `;
                             
                             // Проверяем что стиль еще не добавлен
@@ -193,6 +213,46 @@ class MainActivity : AppCompatActivity() {
                                 console.log('[Android] ✅ Media controls CSS injected');
                             }
                             
+                            // КРИТИЧНО: Скрываем video элементы пока они не готовы к воспроизведению
+                            // Это предотвращает показ системной кнопки Play
+                            function hideVideoUntilReady() {
+                                const videos = document.querySelectorAll('video');
+                                videos.forEach(video => {
+                                    // Скрываем video пока не начало играть
+                                    if (video.paused && video.readyState < 3) {
+                                        video.style.opacity = '0';
+                                        video.style.visibility = 'hidden';
+                                    }
+                                    
+                                    // Показываем когда начало играть
+                                    video.addEventListener('playing', function() {
+                                        this.style.opacity = '1';
+                                        this.style.visibility = 'visible';
+                                    });
+                                    
+                                    // Скрываем при паузе
+                                    video.addEventListener('pause', function() {
+                                        this.style.opacity = '0';
+                                        this.style.visibility = 'hidden';
+                                    });
+                                    
+                                    // Скрываем при ошибке
+                                    video.addEventListener('error', function() {
+                                        this.style.opacity = '0';
+                                        this.style.visibility = 'hidden';
+                                    });
+                                    
+                                    // Убираем poster (может показывать Play кнопку)
+                                    video.removeAttribute('poster');
+                                    video.setAttribute('poster', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+                                });
+                            }
+                            
+                            // Запускаем сразу и периодически проверяем
+                            hideVideoUntilReady();
+                            setInterval(hideVideoUntilReady, 500);
+                            
+                            console.log('[Android] ✅ Video hiding protection enabled');
                             console.log('[Android] ✅ Initialization complete');
                         })();
                     """.trimIndent(), null)

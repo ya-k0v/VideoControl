@@ -37,6 +37,9 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             
+            // КРИТИЧНО: Устанавливаем layout с постоянным черным слоем
+            setContentView(R.layout.activity_main)
+            
             // Setup fullscreen
             setupFullscreen()
             
@@ -50,6 +53,9 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+        
+        // Получаем контейнер для WebView
+        val webViewContainer = findViewById<android.widget.FrameLayout>(R.id.webViewContainer)
         
         // Create and configure WebView
         webView = WebView(this).apply {
@@ -223,7 +229,9 @@ class MainActivity : AppCompatActivity() {
             loadUrl(playerUrl)
         }
         
-        webView?.let { setContentView(it) }
+        // КРИТИЧНО: Добавляем WebView в контейнер поверх постоянного черного слоя
+        webView?.let { webViewContainer.addView(it) }
+        Log.i(TAG, "WebView добавлен в контейнер поверх черного фона")
         
         // Start watchdog service (disabled for now to prevent crashes)
         // WatchdogService.start(this)

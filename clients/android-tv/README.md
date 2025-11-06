@@ -199,7 +199,9 @@ keytool -genkey -v -keystore release.keystore \
 
 ---
 
-**Версия:** 1.0.4 (VCPlayer)  
+**Версия:** 1.0.5 (VCPlayer)  
 **Дата:** 2025-11-06  
 **APK:** VCPlayer.apk (подписанный)
+
+**Важно:** v1.0.5 - постоянный черный слой под WebView, предотвращает показ стандартной кнопки Play Android
 

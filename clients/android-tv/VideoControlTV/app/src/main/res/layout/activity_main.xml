@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- This layout is created programmatically in MainActivity.kt -->
-<!-- WebView is added dynamically for better control -->
+<!-- КРИТИЧНО: Постоянный черный слой под WebView -->
+<!-- Предотвращает появление стандартной кнопки Play Android -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootContainer"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
     
-    <!-- WebView будет добавлен программно в MainActivity -->
+    <!-- Постоянный черный слой (всегда видимый) -->
+    <View
+        android:id="@+id/blackBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000" />
+    
+    <!-- WebView будет добавлен программно поверх черного слоя -->
+    <FrameLayout
+        android:id="@+id/webViewContainer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000" />
     
 </FrameLayout>
 

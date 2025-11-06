@@ -11,8 +11,8 @@ android {
         applicationId "com.videocontrol.tv"
         minSdk 21
         targetSdk 34
-        versionCode 5
-        versionName "1.0.4"
+        versionCode 6
+        versionName "1.0.5"
         
         // Default server URL - измените на ваш сервер
         buildConfigField "String", "DEFAULT_SERVER_URL", '"http://192.168.1.101"'

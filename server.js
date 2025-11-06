@@ -419,6 +419,16 @@ app.post('/api/devices/:id/make-default', (req, res) => {
     } catch (e) {
       console.warn(`[make-default] ⚠️ Не удалось установить права: ${e}`);
     }
+    
+    // КРИТИЧНО: Проверяем что файл действительно доступен для чтения
+    try {
+      fs.accessSync(dst, fs.constants.R_OK);
+      const stats = fs.statSync(dst);
+      console.log(`[make-default] ✅ Файл доступен для чтения, размер: ${stats.size} bytes`);
+    } catch (e) {
+      console.error(`[make-default] ❌ Файл недоступен для чтения: ${e}`);
+      return res.status(500).json({ error: 'file not readable after copy' });
+    }
   } catch (e) {
     console.error(`[make-default] ❌ Ошибка копирования: ${e}`);
     return res.status(500).json({ error: 'copy failed', detail: String(e) });
@@ -446,8 +456,15 @@ app.post('/api/devices/:id/make-default', (req, res) => {
 
   io.emit('devices/updated');
   io.to(`device:${id}`).emit('player/stop');
-  io.to(`device:${id}`).emit('placeholder/refresh');
-  io.emit('preview/refresh', { device_id: id });
+  
+  // КРИТИЧНО: Небольшая задержка перед отправкой placeholder/refresh
+  // Даем файловой системе и Nginx время синхронизироваться
+  setTimeout(() => {
+    io.to(`device:${id}`).emit('placeholder/refresh');
+    io.emit('preview/refresh', { device_id: id });
+    console.log(`[make-default] 📡 Отправлены события обновления для ${id}`);
+  }, 500);
+  
   return res.json({ ok: true, default: path.basename(dst) });
 });
 

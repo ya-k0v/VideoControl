@@ -1,21 +1,20 @@
 #!/bin/bash
-# VideoControl - Массовая установка APK на Android устройства
+# VCPlayer - Массовая установка APK на Android устройства
 # Usage: bash mass-install.sh
 
 set -e
 
-APK="VideoControlTV/app/build/outputs/apk/release/app-release.apk"
+APK="VCPlayer.apk"
 
 if [ ! -f "$APK" ]; then
     echo "❌ APK не найден: $APK"
     echo "Сначала соберите APK:"
-    echo "  cd VideoControlTV"
-    echo "  ./gradlew assembleRelease"
+    echo "  bash build-apk.sh"
     exit 1
 fi
 
 echo "======================================"
-echo "VideoControl - Массовая установка APK"
+echo "VCPlayer - Массовая установка APK"
 echo "======================================"
 echo ""
 echo "APK: $APK"

@@ -275,6 +275,11 @@ async function loadFiles() {
       }
       // Для видео параметры не нужны, player-videojs определит сам
       
+      // КРИТИЧНО: Добавляем timestamp для обхода кэша iframe
+      src += `&t=${Date.now()}`;
+      
+      console.log('[Speaker] 📋 Preview URL:', src);
+      
       const frame = filePreview.querySelector('iframe');
       if (frame) {
         frame.src = src;

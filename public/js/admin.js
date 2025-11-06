@@ -243,7 +243,7 @@ function renderLayout() {
         <div class="title">Устройства</div>
       </div>
       <div style="display:flex; flex-direction:column; gap:var(--space-md); flex:1 1 auto; min-height:0">
-        <ul id="tvList" class="list" style="flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; display:grid; gap:var(--space-sm)"></ul>
+        <ul id="tvList" class="list" style="flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:var(--space-sm)"></ul>
         <div id="tvPager" class="meta" style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-sm); flex-wrap:wrap"></div>
       </div>
     </div>
@@ -641,6 +641,12 @@ async function refreshFilesPanel(deviceId, panelEl) {
           headers: { 'Content-Type':'application/json' },
           body: JSON.stringify({ file: safeName })
         });
+        
+        // КРИТИЧНО: Задержка перед обновлением UI
+        // Даем серверу время скопировать файл и установить права
+        // Preview iframe обновится через событие placeholder/refresh от сервера
+        await new Promise(resolve => setTimeout(resolve, 600));
+        
         await refreshFilesPanel(deviceId, panelEl);
         socket.emit('devices/updated');
       } catch (e) { console.error(e); }

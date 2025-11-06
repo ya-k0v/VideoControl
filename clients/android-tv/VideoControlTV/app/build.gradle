@@ -11,17 +11,28 @@ android {
         applicationId "com.videocontrol.tv"
         minSdk 21
         targetSdk 34
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 5
+        versionName "1.0.4"
         
         // Default server URL - измените на ваш сервер
         buildConfigField "String", "DEFAULT_SERVER_URL", '"http://192.168.1.101"'
+    }
+    
+    signingConfigs {
+        release {
+            // Debug signing для быстрой сборки и установки
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
     }
     
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     

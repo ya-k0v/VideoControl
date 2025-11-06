@@ -1,4 +1,4 @@
-# VideoControl Android TV Client
+# VCPlayer - Android TV Client
 
 Нативное Android приложение для отображения видео контента на Android устройствах.
 
@@ -18,24 +18,19 @@
 - ✅ **Kiosk режим** - блокировка кнопки назад
 - ✅ **Hardware acceleration** для плавного видео
 - ✅ **WebView оптимизация** под медиа
+- ✅ **Подписанный APK** - готов к установке
 
 ## 🚀 Быстрая установка
 
-### 1. Собрать APK
+### 1. Собрать подписанный APK
 
 ```bash
-cd clients/android-tv/VideoControlTV
+cd clients/android-tv
 
-# Измените URL сервера в build.gradle (строка 18)
-# buildConfigField "String", "DEFAULT_SERVER_URL", '"http://192.168.1.101"'
+# Одна команда - создаст keystore и соберет подписанный APK
+bash build-apk.sh
 
-# Windows
-build.ps1
-
-# Linux/macOS
-./gradlew assembleRelease
-
-# APK: app/build/outputs/apk/release/app-release.apk
+# APK: VCPlayer.apk (готов к установке)
 ```
 
 ### 2. Установить на устройства
@@ -47,39 +42,22 @@ build.ps1
 # Настройки → О системе → Версия сборки (7 раз нажать)
 # Настройки → Для разработчиков → Отладка по USB
 
-# Через USB
-adb install app-release.apk
+# Установка одного устройства
+adb install -r VCPlayer.apk
 
 # Через WiFi (узнайте IP устройства)
 adb connect 192.168.1.101:5555
-adb install app-release.apk
+adb install -r VCPlayer.apk
 ```
 
-#### Массовая установка (скрипт)
+#### Массовая установка на все устройства
 
 ```bash
-#!/bin/bash
-# mass-install.sh
+# Подключите все устройства через WiFi или USB
+# Затем запустите:
+bash mass-install.sh
 
-SERVER="http://192.168.1.101"
-APK="app-release.apk"
-
-# iconBIT DS2 - 2 шт
-echo "Установка на iconBIT DS2..."
-adb connect 192.168.1.101:5555 && adb -s 192.168.1.101:5555 install $APK
-adb connect 192.168.1.102:5555 && adb -s 192.168.1.102:5555 install $APK
-
-# Lumien LS5550SD - 8 шт
-echo "Установка на Lumien LS5550SD..."
-for i in {1..8}; do
-    IP="192.168.1.$(( 110 + i ))"
-    echo "Устройство $i: $IP"
-    adb connect $IP:5555
-    adb -s $IP:5555 install $APK
-    sleep 2
-done
-
-echo "✓ Установка завершена на все устройства!"
+# Скрипт автоматически установит APK на все подключенные устройства
 ```
 
 ### 3. Настройка при первом запуске
@@ -101,7 +79,7 @@ echo "✓ Установка завершена на все устройства
 Приложение автоматически запускается при загрузке Android (через `BootReceiver`).
 
 Если не работает:
-1. Настройки → Приложения → VideoControl
+1. Настройки → Приложения → VCPlayer
 2. Разрешения → Автозапуск: **Включить**
 3. Оптимизация батареи: **Не оптимизировать**
 
@@ -174,30 +152,41 @@ adb shell am start -n com.videocontrol.tv/.MainActivity
 
 ---
 
-## 📦 Сборка разных версий
+## 📦 Сборка и подпись
 
-### Debug версия (для тестирования)
+### Автоматическая сборка (рекомендуется)
 
 ```bash
+# Создаст keystore и соберет подписанный release APK
+bash build-apk.sh
+
+# Результат: VCPlayer.apk (3.3MB)
+```
+
+### Ручная сборка через Gradle
+
+```bash
+cd VideoControlTV
+
+# Debug версия (для тестирования)
 ./gradlew assembleDebug
-# APK: app/build/outputs/apk/debug/app-debug.apk
-```
 
-### Release версия (для production)
-
-```bash
+# Release версия (подписанная)
 ./gradlew assembleRelease
-# APK: app/build/outputs/apk/release/app-release.apk
 ```
 
-### Подписанная версия (для Play Store)
+### О подписи APK
 
+Скрипт `build-apk.sh` автоматически создает debug keystore и подписывает APK.
+Это позволяет устанавливать приложение без ошибок сертификата.
+
+Для production используйте собственный keystore:
 ```bash
-# Создайте keystore
-keytool -genkey -v -keystore videocontrol.keystore -alias videocontrol -keyalg RSA -keysize 2048 -validity 10000
+# Создайте release keystore
+keytool -genkey -v -keystore release.keystore \
+    -alias vcplayer -keyalg RSA -keysize 2048 -validity 10000
 
-# Подпишите APK
-jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore videocontrol.keystore app-release.apk videocontrol
+# Обновите signingConfigs в app/build.gradle
 ```
 
 ---
@@ -210,6 +199,7 @@ jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore videocontrol.ke
 
 ---
 
-**Версия:** 1.0.1  
-**Дата:** 2025-11-05
+**Версия:** 1.0.4 (VCPlayer)  
+**Дата:** 2025-11-06  
+**APK:** VCPlayer.apk (подписанный)
 

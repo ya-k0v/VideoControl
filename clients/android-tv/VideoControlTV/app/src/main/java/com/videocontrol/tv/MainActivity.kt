@@ -53,6 +53,9 @@ class MainActivity : AppCompatActivity() {
         
         // Create and configure WebView
         webView = WebView(this).apply {
+            // КРИТИЧНО: Черный фон WebView для избежания белых вспышек
+            setBackgroundColor(android.graphics.Color.BLACK)
+            
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -130,68 +133,61 @@ class MainActivity : AppCompatActivity() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     Log.d(TAG, "Page loading: $url")
+                    
+                    // КРИТИЧНО: Гарантируем черный фон во время загрузки
+                    view?.setBackgroundColor(android.graphics.Color.BLACK)
                 }
                 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     Log.i(TAG, "Page loaded: $url")
                     
-                    // КРИТИЧНО: Убираем ВСЕ overlay элементы и включаем autoplay
+                    // КРИТИЧНО: Убеждаемся что фон черный после загрузки
+                    view?.setBackgroundColor(android.graphics.Color.BLACK)
+                    
+                    // КРИТИЧНО: Минимальная инъекция для включения звука и скрытия unmute кнопки
                     view?.evaluateJavascript("""
                         (function() {
-                            console.log('[Android] Initializing clean player...');
+                            console.log('[Android] Initializing VCPlayer...');
                             
-                            // Инъекция CSS для скрытия ВСЕХ overlay элементов
+                            // Принудительно включаем звук в localStorage
+                            try { 
+                                localStorage.setItem('vc_sound', '1'); 
+                                console.log('[Android] ✅ Sound enabled in localStorage');
+                            } catch(e) {
+                                console.warn('[Android] ⚠️ Cannot set localStorage:', e);
+                            }
+                            
+                            // Скрываем unmute кнопку (если есть)
+                            const unmuteBtn = document.getElementById('unmute');
+                            if (unmuteBtn) {
+                                unmuteBtn.style.display = 'none';
+                                console.log('[Android] ✅ Unmute button hidden');
+                            }
+                            
+                            // Инъекция CSS ТОЛЬКО для скрытия Android WebView контролов
                             const style = document.createElement('style');
+                            style.id = 'android-media-controls-fix';
                             style.textContent = `
-                                /* Скрываем ВСЕ overlay кнопки и контролы */
-                                #unmute, button, .controls, .overlay { display: none !important; }
-                                
-                                /* Убираем pointer-events с video чтобы не показывались контролы */
+                                /* Убираем встроенные Android WebView контролы */
                                 video::-webkit-media-controls { display: none !important; }
                                 video::-webkit-media-controls-enclosure { display: none !important; }
                                 video::-webkit-media-controls-panel { display: none !important; }
                                 video::-webkit-media-controls-play-button { display: none !important; }
                                 video::-webkit-media-controls-overlay-play-button { display: none !important; }
                                 
-                                /* Только контент на черном фоне */
-                                body, html { background: #000 !important; margin: 0 !important; padding: 0 !important; }
-                                #stage > * { pointer-events: none !important; }
+                                /* Скрываем все остальные оверлеи */
+                                .vjs-big-play-button { opacity: 0 !important; visibility: hidden !important; display: none !important; }
+                                .vjs-control-bar { opacity: 0 !important; visibility: hidden !important; display: none !important; }
                             `;
-                            document.head.appendChild(style);
                             
-                            // Принудительно включаем звук
-                            try { localStorage.setItem('vc_sound', '1'); } catch(e) {}
-                            
-                            // Находим video элемент
-                            const video = document.getElementById('v');
-                            if (video) {
-                                // Убираем controls
-                                video.controls = false;
-                                video.removeAttribute('controls');
-                                
-                                // Включаем звук
-                                video.muted = false;
-                                video.volume = 1.0;
-                                
-                                // Playsinline для Android
-                                video.setAttribute('playsinline', '');
-                                video.setAttribute('webkit-playsinline', '');
-                                
-                                // Принудительный autoplay через 200ms
-                                setTimeout(() => {
-                                    video.play().then(() => {
-                                        console.log('[Android] ✅ Autoplay успешен');
-                                    }).catch(e => {
-                                        console.log('[Android] ⚠️ Autoplay заблокирован:', e);
-                                        // Пробуем еще раз через click
-                                        video.click();
-                                        setTimeout(() => video.play(), 100);
-                                    });
-                                }, 200);
+                            // Проверяем что стиль еще не добавлен
+                            if (!document.getElementById('android-media-controls-fix')) {
+                                document.head.appendChild(style);
+                                console.log('[Android] ✅ Media controls CSS injected');
                             }
                             
-                            console.log('[Android] ✅ Инициализация завершена');
+                            console.log('[Android] ✅ Initialization complete');
                         })();
                     """.trimIndent(), null)
                 }

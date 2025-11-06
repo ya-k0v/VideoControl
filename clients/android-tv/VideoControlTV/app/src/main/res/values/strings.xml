@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Video Control</string>
-    <string name="notification_title">Video Control Player</string>
+    <string name="app_name">VCPlayer</string>
+    <string name="notification_title">VCPlayer</string>
     <string name="notification_text">Running in background…</string>
 </resources>
 

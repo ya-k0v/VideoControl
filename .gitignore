@@ -41,3 +41,13 @@ public/content/
 # Local configuration - локальные конфиги устройств
 devices.json
 file-names-map.json
+
+# Android build files
+clients/android-tv/VideoControlTV/app/build/
+clients/android-tv/VideoControlTV/build/
+clients/android-tv/VideoControlTV/.gradle/
+clients/android-tv/VideoControlTV/local.properties
+clients/android-tv/VideoControlTV/app/debug.keystore
+clients/android-tv/VCPlayer.apk
+*.apk
+*.keystore

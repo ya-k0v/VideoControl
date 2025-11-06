@@ -143,7 +143,7 @@ VideoControl/
 │   │   ├── vlc_client.py
 │   │   ├── requirements.txt
 │   │   └── README.md
-│   └── android-tv/            # Android TV клиент v1.0.2
+│   └── android-tv/            # Android TV клиент v1.0.4
 │       ├── VideoControlTV/
 │       ├── mass-install.sh
 │       └── configure-devices.sh
@@ -301,9 +301,9 @@ python3 vlc_client.py --server http://SERVER --device vlc-001
 
 **Документация:** [clients/vlc/README.md](clients/vlc/README.md)
 
-### Android TV Client v1.0.2
+### Android TV Client v1.0.4
 
-Нативное Android приложение для Android TV устройств:
+Нативное Android приложение для Android TV устройств с оптимизацией черного фона:
 
 **Поддержка:**
 - ✅ iconBIT DS2
@@ -441,7 +441,7 @@ echo $DISPLAY  # должно быть :0
 **Текущая:** v2.0 (November 2025)
 
 **Changelog:**
-- v2.0 - Video.js integration, VLC v2.0, Android TV v1.0.2, PPTX caching, removed MPV
+- v2.0 - Video.js integration, VLC v2.0, Android TV v1.0.4 (black screen optimization), PPTX caching, double buffering, removed MPV
 - v1.0.2 - VLC/MPV клиенты, PWA, оптимизация
 - v1.0.1 - Nginx поддержка
 - v1.0.0 - Первый релиз

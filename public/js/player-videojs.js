@@ -57,7 +57,7 @@ function hideVideoJsControls() {
 }
 
 if (!device_id || !device_id.trim()) {
-  [idle, v, img, pdf].forEach(el => el && el.classList.remove('visible'));
+  [idle, v, img1, img2, pdf].forEach(el => el && el.classList.remove('visible'));
   document.documentElement.style.background = '#000 !important';
   document.body.style.background = '#000 !important';
   if (unmuteBtn) unmuteBtn.style.display = 'none';
@@ -822,10 +822,13 @@ if (!device_id || !device_id.trim()) {
   let isRegistered = false;
   let heartbeatInterval = null;
   let pingTimeout = null;
+  let registrationTimeout = null;
   
   function registerPlayer() {
     if (!preview && device_id && socket.connected) {
-      console.log('[Player] 📡 Регистрация устройства:', device_id);
+      console.log('[Player] 📡 Попытка регистрации устройства:', device_id);
+      
+      // Отправляем запрос на регистрацию
       socket.emit('player/register', { 
         device_id, 
         device_type: 'VJC', 
@@ -839,14 +842,26 @@ if (!device_id || !device_id.trim()) {
           streaming: true
         }
       });
-      // Отложенный старт heartbeat - даем серверу время обработать регистрацию
-      setTimeout(() => {
-        isRegistered = true;
-        startHeartbeat();
-        console.log('[Player] 💓 Heartbeat запущен');
-      }, 1000);
+      
+      // Если через 3 секунды нет подтверждения - повторяем попытку
+      if (registrationTimeout) clearTimeout(registrationTimeout);
+      registrationTimeout = setTimeout(() => {
+        if (!isRegistered && socket.connected && device_id && !preview) {
+          console.warn('[Player] ⚠️ Нет подтверждения регистрации через 3с, повторная попытка...');
+          registerPlayer();
+        }
+      }, 3000);
     }
   }
+  
+  // КРИТИЧНО: Обработчик подтверждения регистрации от сервера
+  socket.on('player/registered', ({ device_id: registeredId, current }) => {
+    if (registrationTimeout) clearTimeout(registrationTimeout);
+    console.log('[Player] ✅ Регистрация ПОДТВЕРЖДЕНА сервером:', registeredId);
+    isRegistered = true;
+    startHeartbeat();
+    console.log('[Player] 💓 Heartbeat запущен');
+  });
   
   function startHeartbeat() {
     if (heartbeatInterval) {
@@ -891,8 +906,8 @@ if (!device_id || !device_id.trim()) {
     registerPlayer();
   });
 
-  socket.on('disconnect', () => {
-    console.warn('⚠️ Disconnected');
+  socket.on('disconnect', (reason) => {
+    console.warn('⚠️ Disconnected, reason:', reason);
     isRegistered = false;
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
@@ -901,6 +916,10 @@ if (!device_id || !device_id.trim()) {
     if (pingTimeout) {
       clearTimeout(pingTimeout);
       pingTimeout = null;
+    }
+    if (registrationTimeout) {
+      clearTimeout(registrationTimeout);
+      registrationTimeout = null;
     }
   });
 
@@ -911,12 +930,12 @@ if (!device_id || !device_id.trim()) {
     }
   });
   
-  // Watchdog проверка каждые 10 секунд
+  // Watchdog проверка каждые 5 секунд (чаще для надежности)
   setInterval(() => {
-    if (socket.connected && !isRegistered) {
-      console.log('🔄 Watchdog: re-registering');
+    if (socket.connected && !isRegistered && !preview && device_id) {
+      console.log('🔄 Watchdog: re-registering (device not registered)');
       registerPlayer();
     }
-  }, 10000);
+  }, 5000);
 }
 

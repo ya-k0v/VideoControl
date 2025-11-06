@@ -213,47 +213,7 @@ class MainActivity : AppCompatActivity() {
                                 console.log('[Android] ✅ Media controls CSS injected');
                             }
                             
-                            // КРИТИЧНО: Скрываем video элементы пока они не готовы к воспроизведению
-                            // Это предотвращает показ системной кнопки Play
-                            function hideVideoUntilReady() {
-                                const videos = document.querySelectorAll('video');
-                                videos.forEach(video => {
-                                    // Скрываем video пока не начало играть
-                                    if (video.paused && video.readyState < 3) {
-                                        video.style.opacity = '0';
-                                        video.style.visibility = 'hidden';
-                                    }
-                                    
-                                    // Показываем когда начало играть
-                                    video.addEventListener('playing', function() {
-                                        this.style.opacity = '1';
-                                        this.style.visibility = 'visible';
-                                    });
-                                    
-                                    // Скрываем при паузе
-                                    video.addEventListener('pause', function() {
-                                        this.style.opacity = '0';
-                                        this.style.visibility = 'hidden';
-                                    });
-                                    
-                                    // Скрываем при ошибке
-                                    video.addEventListener('error', function() {
-                                        this.style.opacity = '0';
-                                        this.style.visibility = 'hidden';
-                                    });
-                                    
-                                    // Убираем poster (может показывать Play кнопку)
-                                    video.removeAttribute('poster');
-                                    video.setAttribute('poster', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
-                                });
-                            }
-                            
-                            // Запускаем сразу и периодически проверяем
-                            hideVideoUntilReady();
-                            setInterval(hideVideoUntilReady, 500);
-                            
-                            console.log('[Android] ✅ Video hiding protection enabled');
-                            console.log('[Android] ✅ Initialization complete');
+                            console.log('[Android] ✅ VCPlayer initialization complete');
                         })();
                     """.trimIndent(), null)
                 }

@@ -1004,6 +1004,14 @@ io.on('connection', socket => {
     
     devices[device_id].current = { type: 'idle', file: null, state: 'idle' };
     socket.emit('player/state', devices[device_id].current);
+    
+    // КРИТИЧНО: Отправляем подтверждение успешной регистрации
+    socket.emit('player/registered', { 
+      device_id, 
+      current: devices[device_id].current,
+      timestamp: Date.now()
+    });
+    console.log(`[Server] ✅ Player registered: ${device_id} (socket: ${socket.id})`);
   });
     
   socket.on('player/ping', () => {

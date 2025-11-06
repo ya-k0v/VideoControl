@@ -21,14 +21,5 @@
         android:layout_height="match_parent"
         android:background="#000000" />
     
-    <!-- Прозрачный overlay для блокировки тапов по video (предотвращает показ контролов) -->
-    <View
-        android:id="@+id/tapBlocker"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@android:color/transparent"
-        android:clickable="false"
-        android:focusable="false" />
-    
 </FrameLayout>
 

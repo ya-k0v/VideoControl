@@ -157,47 +157,33 @@ if (!device_id || !device_id.trim()) {
           let stalledTimeout = null;
           let waitingTimeout = null;
           
+          // КРИТИЧНО для Android: просто логируем события, НЕ перезапускаем
+          // Перезапуск вызывает DOMException и ухудшает ситуацию
           vjsPlayer.on('stalled', () => {
-            console.warn('[Player] ⚠️ Video stalled (буферизация застряла)');
-            
-            // Если зависло больше 3 секунд - пробуем перезапустить
-            stalledTimeout = setTimeout(() => {
-              if (!vjsPlayer.paused()) {
-                console.warn('[Player] 🔄 Пытаемся возобновить после stalled');
-                const currentTime = vjsPlayer.currentTime();
-                vjsPlayer.pause();
-                setTimeout(() => {
-                  vjsPlayer.currentTime(currentTime);
-                  vjsPlayer.play().catch(e => console.error('[Player] ❌ Ошибка возобновления:', e));
-                }, 100);
-              }
-            }, 3000);
+            console.warn('[Player] ⚠️ Video stalled (буферизация застряла) - ждем автовосстановления');
           });
           
           vjsPlayer.on('waiting', () => {
-            console.log('[Player] ⏳ Video waiting (буферизация)');
-            
-            // Если waiting больше 5 секунд - перезапускаем
-            waitingTimeout = setTimeout(() => {
-              if (!vjsPlayer.paused()) {
-                console.warn('[Player] 🔄 Пытаемся возобновить после waiting');
-                const currentTime = vjsPlayer.currentTime();
-                vjsPlayer.load();
-                vjsPlayer.currentTime(currentTime);
-                vjsPlayer.play().catch(e => console.error('[Player] ❌ Ошибка возобновления:', e));
-              }
-            }, 5000);
+            console.log('[Player] ⏳ Video waiting (буферизация) - загрузка данных');
           });
           
           vjsPlayer.on('playing', () => {
-            console.log('[Player] ▶️ Video playing');
-            if (stalledTimeout) clearTimeout(stalledTimeout);
-            if (waitingTimeout) clearTimeout(waitingTimeout);
+            console.log('[Player] ▶️ Video playing - воспроизведение возобновлено');
           });
           
           vjsPlayer.on('progress', () => {
-            // Очищаем таймауты при прогрессе загрузки
-            if (stalledTimeout) clearTimeout(stalledTimeout);
+            // Логируем прогресс загрузки для диагностики
+            const buffered = vjsPlayer.buffered();
+            if (buffered.length > 0) {
+              const bufferedEnd = buffered.end(buffered.length - 1);
+              const duration = vjsPlayer.duration();
+              const percent = duration > 0 ? Math.round((bufferedEnd / duration) * 100) : 0;
+              console.log(`[Player] 📊 Буферизовано: ${percent}% (${bufferedEnd.toFixed(1)}s / ${duration.toFixed(1)}s)`);
+            }
+          });
+          
+          vjsPlayer.on('suspend', () => {
+            console.log('[Player] ⏸️ Video suspend - загрузка приостановлена браузером');
           });
           
           // Загружаем заглушку или preview файл после готовности

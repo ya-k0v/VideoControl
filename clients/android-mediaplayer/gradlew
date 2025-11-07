@@ -1,0 +1,5 @@
+#!/bin/sh
+# Gradle wrapper script
+# Скачайте gradle wrapper: gradle wrapper --gradle-version 8.1.1
+echo "Run: gradle wrapper --gradle-version 8.1.1 первый раз"
+

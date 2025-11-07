@@ -1,6 +1,16 @@
 // VideoControl Player - Video.js версия (упрощенная и надежная)
 
-const socket = io();
+const socket = io('/', {
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 2000,
+  reconnectionDelayMax: 10000,
+  timeout: 20000,
+  forceNew: false,
+  upgrade: true,
+  autoConnect: true
+});
 const url = new URL(location.href);
 const device_id = url.searchParams.get('device_id');
 const preview = url.searchParams.get('preview') === '1';
@@ -21,8 +31,22 @@ let currentFileState = { type: null, file: null, page: 1 };
 let soundUnlocked = false;
 let vjsPlayer = null;
 let isLoadingPlaceholder = false; // Флаг для предотвращения двойной загрузки
+let registerInFlight = false; // Предотвращаем одновременные попытки регистрации
 let slidesCache = {}; // Кэш предзагруженных слайдов PPTX/PDF: { 'filename': { count: N, images: [Image, ...] } }
 let currentImgBuffer = 1; // Текущий активный буфер изображений (1 или 2) для двойной буферизации
+
+function ensureSocketConnected(reason = 'manual') {
+  const isActive = typeof socket.active === 'boolean' ? socket.active : false;
+  if (socket.connected || isActive) {
+    return;
+  }
+  console.log(`[Player] 🔄 ensureSocketConnected → connect (${reason})`);
+  try {
+    socket.connect();
+  } catch (err) {
+    console.error(`[Player] ❌ ensureSocketConnected error (${reason}):`, err);
+  }
+}
 
 // Функция для принудительного скрытия всех контролов Video.js
 function hideVideoJsControls() {
@@ -933,38 +957,49 @@ if (!device_id || !device_id.trim()) {
   let registrationTimeout = null;
   
   function registerPlayer() {
-    if (!preview && device_id && socket.connected) {
-      console.log('[Player] 📡 Попытка регистрации устройства:', device_id);
-      
-      // Отправляем запрос на регистрацию
-      socket.emit('player/register', { 
-        device_id, 
-        device_type: 'VJC', 
-        platform: navigator.platform,
-        capabilities: {
-          video: true,
-          audio: true,
-          images: true,
-          pdf: true,
-          pptx: true,
-          streaming: true
-        }
-      });
-      
-      // Если через 3 секунды нет подтверждения - повторяем попытку
-      if (registrationTimeout) clearTimeout(registrationTimeout);
-      registrationTimeout = setTimeout(() => {
-        if (!isRegistered && socket.connected && device_id && !preview) {
-          console.warn('[Player] ⚠️ Нет подтверждения регистрации через 3с, повторная попытка...');
-          registerPlayer();
-        }
-      }, 3000);
+    if (preview || !device_id) return;
+    if (!socket.connected) {
+      console.warn('[Player] ⚠️ Нельзя зарегистрироваться: нет соединения');
+      ensureSocketConnected('register');
+      return;
     }
+    if (registerInFlight) {
+      console.log('[Player] ⏳ Регистрация уже выполняется, пропуск');
+      return;
+    }
+    registerInFlight = true;
+    console.log('[Player] 📡 Попытка регистрации устройства:', device_id);
+    
+    // Отправляем запрос на регистрацию
+    socket.emit('player/register', { 
+      device_id, 
+      device_type: 'VJC', 
+      platform: navigator.platform,
+      capabilities: {
+        video: true,
+        audio: true,
+        images: true,
+        pdf: true,
+        pptx: true,
+        streaming: true
+      }
+    });
+    
+    // Если через 3 секунды нет подтверждения - повторяем попытку
+    if (registrationTimeout) clearTimeout(registrationTimeout);
+    registrationTimeout = setTimeout(() => {
+      registerInFlight = false;
+      if (!isRegistered && socket.connected && device_id && !preview) {
+        console.warn('[Player] ⚠️ Нет подтверждения регистрации через 3с, повторная попытка...');
+        registerPlayer();
+      }
+    }, 3000);
   }
   
   // КРИТИЧНО: Обработчик подтверждения регистрации от сервера
   socket.on('player/registered', ({ device_id: registeredId, current }) => {
     if (registrationTimeout) clearTimeout(registrationTimeout);
+    registerInFlight = false;
     console.log('[Player] ✅ Регистрация ПОДТВЕРЖДЕНА сервером:', registeredId);
     isRegistered = true;
     startHeartbeat();
@@ -1007,17 +1042,20 @@ if (!device_id || !device_id.trim()) {
   socket.on('player/reject', ({ reason }) => {
     console.error('[Player] ❌ Регистрация отклонена:', reason);
     isRegistered = false;
+    registerInFlight = false;
   });
 
   socket.on('connect', () => {
     console.log('✅ Connected');
     isRegistered = false; // Сбрасываем при каждом connect
+    registerInFlight = false;
     registerPlayer();
   });
 
   socket.on('disconnect', (reason) => {
     console.warn('⚠️ Disconnected, reason:', reason);
     isRegistered = false;
+    registerInFlight = false;
     if (heartbeatInterval) {
       clearInterval(heartbeatInterval);
       heartbeatInterval = null;
@@ -1035,17 +1073,20 @@ if (!device_id || !device_id.trim()) {
     if (reason === 'transport close' || reason === 'transport error') {
       console.log('🔄 Transport закрыт, попытка переподключения через 2с...');
       setTimeout(() => {
-        if (!socket.connected && !preview && device_id) {
-          console.log('🔄 Принудительное переподключение...');
-          socket.connect();
+        if (!preview && device_id) {
+          ensureSocketConnected('disconnect-transport');
         }
       }, 2000);
+    }
+    if (reason === 'ping timeout') {
+      ensureSocketConnected('disconnect-ping-timeout');
     }
   });
 
   socket.on('reconnect', () => {
     console.log('🔄 Reconnected');
     isRegistered = false;
+    registerInFlight = false;
     registerPlayer();
   });
   
@@ -1062,25 +1103,28 @@ if (!device_id || !device_id.trim()) {
     console.error('❌ Переподключение не удалось');
     // Пробуем еще раз вручную через 5 секунд
     setTimeout(() => {
-      if (!socket.connected && !preview && device_id) {
-        console.log('🔄 Ручное переподключение после неудачи...');
-        socket.connect();
+      if (!preview && device_id) {
+        ensureSocketConnected('reconnect-failed');
       }
     }, 5000);
   });
   
+  socket.on('connect_error', (error) => {
+    console.error('[Player] ❌ connect_error:', error?.message || error, error?.code || '');
+  });
+
+  socket.on('error', (error) => {
+    console.error('[Player] ❌ socket error:', error);
+  });
+
   // Watchdog проверка каждые 5 секунд (чаще для надежности)
   setInterval(() => {
     if (!preview && device_id) {
       // Проверяем подключение
       if (!socket.connected) {
         console.warn('🔄 Watchdog: socket disconnected, пытаемся переподключиться...');
-        try {
-          socket.connect();
-        } catch (e) {
-          console.error('❌ Ошибка переподключения:', e);
-        }
-      } else if (!isRegistered) {
+        ensureSocketConnected('watchdog-disconnected');
+      } else if (!isRegistered && !registerInFlight) {
         // Подключены, но не зарегистрированы
         console.log('🔄 Watchdog: re-registering (device not registered)');
         registerPlayer();

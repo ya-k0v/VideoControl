@@ -15,7 +15,22 @@ const execAsync = util.promisify(execCallback);
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type']
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingInterval: 25000,
+  pingTimeout: 60000,
+  maxHttpBufferSize: 10 * 1024 * 1024 // 10MB запас для событий
+});
+
+io.engine.on('connection_error', (err) => {
+  console.warn(`[Socket.IO] connection_error code=${err.code} message=${err.message} transport=${err.context?.transport || 'n/a'}`);
+});
 
 const ROOT = process.cwd();
 
@@ -1697,6 +1712,18 @@ function getOnlineDevices() {
 }
 
 io.on('connection', socket => {
+  const transport = socket.conn?.transport?.name;
+  console.log(`[Socket.IO] 🔌 connection id=${socket.id} transport=${transport}`);
+
+  if (socket.conn) {
+    socket.conn.on('upgrade', () => {
+      console.log(`[Socket.IO] 🚀 transport upgraded for ${socket.id} → ${socket.conn.transport.name}`);
+    });
+    socket.conn.on('close', (reason) => {
+      console.warn(`[Socket.IO] 🔌 connection closed id=${socket.id} reason=${reason}`);
+    });
+  }
+
   try {
     const snapshot = getOnlineDevices();
     socket.emit('players/onlineSnapshot', snapshot);

@@ -165,7 +165,8 @@ async function loadFiles() {
   if (!currentDevice) return;
   
   try {
-    const res = await fetch(`/api/devices/${encodeURIComponent(currentDevice)}/files`);
+    // КРИТИЧНО: Используем files-with-status для получения разрешения видео
+    const res = await fetch(`/api/devices/${encodeURIComponent(currentDevice)}/files-with-status`);
     if (!res.ok) {
       console.error('Failed to load files:', res.status);
       fileList.innerHTML = '<li class="item" style="text-align:center; padding:var(--space-xl)"><div class="meta">Ошибка загрузки файлов</div></li>';

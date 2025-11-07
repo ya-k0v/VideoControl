@@ -224,12 +224,94 @@ function renderTVList() {
   }).join('');
 
   tvList.querySelectorAll('.tvTile').forEach(item => {
+    const targetDeviceId = item.dataset.id;
+    
     item.onclick = async () => {
       currentDeviceId = item.dataset.id;
       openDevice(currentDeviceId);
       renderFilesPane(currentDeviceId);
       renderTVList();
     };
+    
+    // НОВОЕ: Drag & Drop zone - карточки устройств принимают файлы
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+      item.style.outline = '3px dashed var(--brand)';
+      item.style.background = 'rgba(59, 130, 246, 0.1)';
+      item.style.transform = 'scale(1.02)';
+    });
+    
+    item.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      item.style.outline = '';
+      item.style.background = '';
+      item.style.transform = '';
+    });
+    
+    item.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      item.style.outline = '';
+      item.style.background = '';
+      item.style.transform = '';
+      
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+        const { sourceDeviceId, fileName } = data;
+        const move = !e.ctrlKey; // Ctrl = копировать, без Ctrl = переместить
+        
+        if (!sourceDeviceId || !fileName) {
+          console.warn('[DragDrop] ⚠️ Неверные данные');
+          return;
+        }
+        
+        if (sourceDeviceId === targetDeviceId) {
+          console.log('[DragDrop] ℹ️ Источник и цель совпадают');
+          return;
+        }
+        
+        const sourceDevice = devicesCache.find(dev => dev.device_id === sourceDeviceId);
+        const targetDevice = devicesCache.find(dev => dev.device_id === targetDeviceId);
+        const sourceName = sourceDevice ? (sourceDevice.name || sourceDeviceId) : sourceDeviceId;
+        const targetName = targetDevice ? (targetDevice.name || targetDeviceId) : targetDeviceId;
+        
+        const action = move ? 'Переместить' : 'Скопировать';
+        
+        console.log(`[DragDrop] 📦 ${action}: ${fileName} (${sourceDeviceId} → ${targetDeviceId})`);
+        
+        const response = await adminFetch(`/api/devices/${encodeURIComponent(targetDeviceId)}/copy-file`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceDeviceId,
+            fileName: decodeURIComponent(fileName),
+            move
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.ok) {
+          console.log(`[DragDrop] ✅ Файл ${result.action === 'moved' ? 'перемещен' : 'скопирован'}: "${decodeURIComponent(fileName)}" → "${targetName}"`);
+          
+          // Обновляем список устройств
+          await loadDevices();
+          renderTVList();
+          
+          // Обновляем панель файлов если одно из устройств открыто
+          if (currentDeviceId === sourceDeviceId || currentDeviceId === targetDeviceId) {
+            await renderFilesPane(currentDeviceId);
+          }
+        } else {
+          console.error(`[DragDrop] ❌ Ошибка: ${result.error || 'Unknown error'}`);
+        }
+        
+      } catch (error) {
+        console.error('[DragDrop] ❌ Ошибка:', error);
+      }
+    });
   });
 
   // рендер пейджера под списком - как в спикере
@@ -548,91 +630,6 @@ function renderDeviceCard(d) {
 
   // Инициализация загрузки (после загрузки — обновить правую колонку)
   setupUploadUI(card, d.device_id, document.getElementById('filesPanel'));
-  
-  // НОВОЕ: Drag & Drop zone для приема файлов с других устройств
-  card.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
-    card.style.outline = '2px dashed var(--brand)';
-    card.style.background = 'rgba(59, 130, 246, 0.05)';
-  });
-  
-  card.addEventListener('dragleave', (e) => {
-    // Проверяем что действительно вышли из card (не из дочернего элемента)
-    if (e.target === card || !card.contains(e.relatedTarget)) {
-      card.style.outline = '';
-      card.style.background = '';
-    }
-  });
-  
-  card.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    card.style.outline = '';
-    card.style.background = '';
-    
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      const { sourceDeviceId, fileName } = data;
-      const targetDeviceId = d.device_id;
-      const move = !e.ctrlKey; // Ctrl = копировать, без Ctrl = переместить
-      
-      if (!sourceDeviceId || !fileName) {
-        console.warn('[DragDrop] ⚠️ Неверные данные');
-        return;
-      }
-      
-      if (sourceDeviceId === targetDeviceId) {
-        console.log('[DragDrop] ℹ️ Источник и цель совпадают');
-        return;
-      }
-      
-      const action = move ? 'переместить' : 'скопировать';
-      const sourceDevice = devicesCache.find(dev => dev.device_id === sourceDeviceId);
-      const sourceName = sourceDevice ? (sourceDevice.name || sourceDeviceId) : sourceDeviceId;
-      
-      if (!confirm(`${move ? 'Переместить' : 'Скопировать'} файл "${decodeURIComponent(fileName)}" с "${sourceName}" на "${d.name || targetDeviceId}"?`)) {
-        return;
-      }
-      
-      console.log(`[DragDrop] 📦 ${action}: ${fileName} (${sourceDeviceId} → ${targetDeviceId})`);
-      
-      const response = await adminFetch(`/api/devices/${encodeURIComponent(targetDeviceId)}/copy-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceDeviceId,
-          fileName: decodeURIComponent(fileName),
-          move
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.ok) {
-        console.log(`[DragDrop] ✅ Файл ${result.action === 'moved' ? 'перемещен' : 'скопирован'}`);
-        
-        // Обновляем оба устройства
-        await loadDevices();
-        renderTVList();
-        
-        // Обновляем панель файлов если одно из устройств открыто
-        if (currentDeviceId === sourceDeviceId || currentDeviceId === targetDeviceId) {
-          const filesPanel = document.getElementById('filesPanel');
-          if (filesPanel) {
-            await refreshFilesPanel(currentDeviceId, filesPanel);
-          }
-        }
-        
-        alert(`✅ Файл успешно ${result.action === 'moved' ? 'перемещен' : 'скопирован'}!`);
-      } else {
-        alert(`❌ Ошибка: ${result.error || 'Unknown error'}`);
-      }
-      
-    } catch (error) {
-      console.error('[DragDrop] ❌ Ошибка:', error);
-      alert(`❌ Ошибка при ${e.ctrlKey ? 'копировании' : 'перемещении'} файла`);
-    }
-  });
 
   return card;
 }

@@ -1632,18 +1632,23 @@ app.get('/api/devices/:id/files-with-status', async (req, res) => {
     
     let resolution = null;
     
-    // Для видео получаем разрешение
-    if (isVideo && status?.status === 'ready') {
-      try {
-        const filePath = path.join(deviceFolder, fileName);
-        if (fs.existsSync(filePath)) {
-          const params = await checkVideoParameters(filePath);
-          if (params && params.width && params.height) {
-            resolution = { width: params.width, height: params.height };
+    // Для видео получаем разрешение (если файл не в обработке)
+    if (isVideo) {
+      const isProcessing = status && (status.status === 'processing' || status.status === 'checking');
+      
+      if (!isProcessing) {
+        try {
+          const filePath = path.join(deviceFolder, fileName);
+          if (fs.existsSync(filePath)) {
+            const params = await checkVideoParameters(filePath);
+            if (params && params.width && params.height) {
+              resolution = { width: params.width, height: params.height };
+            }
           }
+        } catch (e) {
+          // Игнорируем ошибки получения параметров
+          console.debug(`[API] Не удалось получить разрешение для ${fileName}: ${e.message}`);
         }
-      } catch (e) {
-        // Игнорируем ошибки получения параметров
       }
     }
     

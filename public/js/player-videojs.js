@@ -276,22 +276,33 @@ if (!device_id || !device_id.trim()) {
 
   // Поиск заглушки
   async function resolvePlaceholder(force = false) {
+    // КРИТИЧНО: При force=true генерируем timestamp для полного обхода кэша
+    const cacheBuster = force ? `?t=${Date.now()}` : '';
+    
     try {
-      const apiRes = await fetch(`/api/devices/${encodeURIComponent(device_id)}/placeholder`);
+      // API запрос тоже с cache-busting при force=true
+      const apiUrl = `/api/devices/${encodeURIComponent(device_id)}/placeholder${cacheBuster}`;
+      const apiRes = await fetch(apiUrl, {
+        cache: force ? 'no-store' : 'default' // Запрещаем браузеру использовать HTTP кэш при force=true
+      });
+      
       if (apiRes.ok) {
         const data = await apiRes.json();
         if (data.placeholder) {
           let url = `/content/${encodeURIComponent(device_id)}/${data.placeholder}`;
           
           // КРИТИЧНО: Проверяем что файл реально доступен (может быть удален после создания записи в API)
+          // При force=true проверка тоже идет с cache-busting
           try {
-            const checkRes = await fetch(url, { method: 'HEAD' });
+            const checkUrl = url + cacheBuster;
+            const checkRes = await fetch(checkUrl, { 
+              method: 'HEAD',
+              cache: force ? 'no-store' : 'default' // Обход HTTP кэша браузера
+            });
+            
             if (checkRes.ok) {
-              // При force=true добавляем cache-busting параметр для обхода кэша браузера
-              if (force) {
-                url += `?t=${Date.now()}`;
-              }
-              return url;
+              // Возвращаем URL с cache-busting если force=true
+              return url + cacheBuster;
             } else {
               console.warn(`[Player] ⚠️ API вернул ${data.placeholder}, но файл недоступен (${checkRes.status})`);
             }
@@ -310,14 +321,17 @@ if (!device_id || !device_id.trim()) {
     for (const ext of tryList) {
       let url = `/content/${encodeURIComponent(device_id)}/default.${ext}`;
       try {
-        const r = await fetch(url, { method: 'HEAD' });
+        // КРИТИЧНО: HEAD запрос с cache-busting при force=true
+        const checkUrl = url + cacheBuster;
+        const r = await fetch(checkUrl, { 
+          method: 'HEAD',
+          cache: force ? 'no-store' : 'default' // Обход HTTP кэша браузера
+        });
+        
         if (r.ok) {
-          console.log(`[Player] ✅ Найден файл: default.${ext}`);
-          // При force=true добавляем cache-busting параметр для обхода кэша браузера
-          if (force) {
-            url += `?t=${Date.now()}`;
-          }
-          return url;
+          console.log(`[Player] ✅ Найден файл: default.${ext} ${force ? '(с cache-busting)' : ''}`);
+          // Возвращаем URL с cache-busting если force=true
+          return url + cacheBuster;
         }
       } catch {}
     }
@@ -851,12 +865,41 @@ if (!device_id || !device_id.trim()) {
 
   socket.on('placeholder/refresh', () => {
     console.log('[Player] 🔄 placeholder/refresh - перезагрузка заглушки');
+    
     // Очищаем slidesCache при смене заглушки
     slidesCache = {};
-    // Если сейчас показывается заглушка (idle) - перезагружаем её
-    if (!currentFileState.type || currentFileState.type === null) {
-      showPlaceholder(true); // Принудительная перезагрузка
+    
+    // КРИТИЧНО: Очищаем текущую заглушку из памяти для принудительной перезагрузки
+    currentPlaceholderSrc = null;
+    
+    // СРАЗУ показываем черный экран (мгновенная реакция)
+    // Это предотвращает показ старой/поврежденной заглушки
+    console.log('[Player] 🖤 Переход на черный экран...');
+    [videoContainer, img1, img2, pdf].forEach(e => {
+      if (e) e.classList.remove('visible', 'preloading');
+    });
+    idle.classList.add('visible');
+    
+    // Останавливаем плеер (НЕ очищаем src - это вызывает ошибку, просто паузим)
+    if (vjsPlayer) {
+      try {
+        console.log('[Player] ⏸️ Остановка плеера...');
+        vjsPlayer.pause();
+        // НЕ вызываем vjsPlayer.src('') - это генерирует ошибку
+        // Новый src установится автоматически при загрузке заглушки
+        console.log('[Player] ✅ Плеер остановлен');
+      } catch (e) {
+        console.warn('[Player] ⚠️ Ошибка остановки плеера:', e);
+      }
     }
+    
+    // Небольшая задержка, затем загружаем новую заглушку
+    setTimeout(() => {
+      if (!currentFileState.type || currentFileState.type === null) {
+        console.log('[Player] 🔄 Загрузка новой заглушки с cache-busting...');
+        showPlaceholder(true); // Принудительная перезагрузка с ?t=timestamp
+      }
+    }, 300); // Даем время на переход к черному экрану
   });
 
   socket.on('player/pdfPage', (page) => {

@@ -97,6 +97,39 @@ socket.on('devices/updated', debounce(async () => {
   renderTVList();
 }, 150));
 
+// НОВОЕ: Обработчики событий оптимизации видео
+socket.on('file/processing', ({ device_id, file }) => {
+  console.log(`[Admin] ⏳ Файл в обработке: ${file} (${device_id})`);
+  if (currentDeviceId === device_id) {
+    const panel = document.getElementById('filesPanel');
+    if (panel) refreshFilesPanel(device_id, panel);
+  }
+});
+
+socket.on('file/progress', ({ device_id, file, progress }) => {
+  console.log(`[Admin] 📊 Прогресс: ${file} - ${progress}% (${device_id})`);
+  if (currentDeviceId === device_id) {
+    const panel = document.getElementById('filesPanel');
+    if (panel) refreshFilesPanel(device_id, panel);
+  }
+});
+
+socket.on('file/ready', ({ device_id, file }) => {
+  console.log(`[Admin] ✅ Файл готов: ${file} (${device_id})`);
+  if (currentDeviceId === device_id) {
+    const panel = document.getElementById('filesPanel');
+    if (panel) refreshFilesPanel(device_id, panel);
+  }
+});
+
+socket.on('file/error', ({ device_id, file, error }) => {
+  console.error(`[Admin] ❌ Ошибка обработки: ${file} (${device_id}):`, error);
+  if (currentDeviceId === device_id) {
+    const panel = document.getElementById('filesPanel');
+    if (panel) refreshFilesPanel(device_id, panel);
+  }
+});
+
 socket.on('preview/refresh', debounce(async () => {
   if (currentDeviceId) await renderFilesPane(currentDeviceId);
 }, 150));
@@ -530,15 +563,24 @@ async function renderFilesPane(deviceId) {
 }
 
 async function refreshFilesPanel(deviceId, panelEl) {
-  const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files`);
+  // НОВОЕ: Используем API с статусами файлов
+  const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files-with-status`);
   const filesData = await res.json();
   
-  // Поддержка старого формата (массив строк) и нового формата (массив объектов)
+  // Файлы уже в формате { name, originalName, status, progress, canPlay, error }
   const allFiles = filesData.map(item => {
     if (typeof item === 'string') {
-      return { safeName: item, originalName: item };
+      // Старый формат (для обратной совместимости)
+      return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true };
     }
-    return { safeName: item.safeName || item.originalName, originalName: item.originalName || item.safeName };
+    return { 
+      safeName: item.name, 
+      originalName: item.originalName,
+      status: item.status || 'ready',
+      progress: item.progress || 100,
+      canPlay: item.canPlay !== false,
+      error: item.error || null
+    };
   });
   
   if (!allFiles || allFiles.length === 0) {
@@ -563,13 +605,42 @@ async function refreshFilesPanel(deviceId, panelEl) {
   
   panelEl.innerHTML = `
     <ul class="list" style="display:grid; gap:var(--space-sm)">
-      ${files.map(({ safeName, originalName }) => {
+      ${files.map(({ safeName, originalName, status, progress, canPlay, error }) => {
         // placeholders allowed only for image/video (no pdf/pptx)
         const isEligible = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i.test(safeName);
         const ext = safeName.split('.').pop().toLowerCase();
         const typeLabel = ext === 'pdf' ? 'PDF' : ext === 'pptx' ? 'PPTX' : ['png','jpg','jpeg','gif','webp'].includes(ext) ? 'IMG' : 'VID';
+        
+        // НОВОЕ: Определяем статус для видео
+        const isVideo = ['mp4','webm','ogg','mkv','mov','avi'].includes(ext);
+        const fileStatus = status || 'ready';
+        const isProcessing = fileStatus === 'processing' || fileStatus === 'checking';
+        const hasError = fileStatus === 'error';
+        const fileProgress = progress || 100;
+        
+        // Иконки статуса
+        let statusIcon = '';
+        let statusText = '';
+        let statusColor = '';
+        
+        if (isVideo) {
+          if (isProcessing) {
+            statusIcon = '⏳';
+            statusText = `Обработка... ${fileProgress}%`;
+            statusColor = 'var(--warning)';
+          } else if (hasError) {
+            statusIcon = '❌';
+            statusText = 'Ошибка обработки';
+            statusColor = 'var(--danger)';
+          } else if (fileStatus === 'ready') {
+            statusIcon = '✅';
+            statusText = 'Готов';
+            statusColor = 'var(--success)';
+          }
+        }
+        
         return `
-          <li class="file-item" style="border:var(--border); background:var(--panel-2)">
+          <li class="file-item" style="border:var(--border); background:var(--panel-2); ${isProcessing ? 'opacity:0.7;' : ''}">
             <div class="file-item-header">
               <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
                 <span class="file-item-name fileName-editable" data-safe="${encodeURIComponent(safeName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">${originalName}</span>
@@ -579,11 +650,14 @@ async function refreshFilesPanel(deviceId, panelEl) {
                   </svg>
                 </button>
               </div>
-              <span class="file-item-type">${typeLabel}</span>
+              <div style="display:flex; align-items:center; gap:var(--space-sm);">
+                ${statusText ? `<span style="font-size:var(--font-size-sm); color:${statusColor}; white-space:nowrap; display:flex; align-items:center; gap:var(--space-xs);">${statusIcon} ${statusText}</span>` : ''}
+                <span class="file-item-type">${typeLabel}</span>
+              </div>
             </div>
             <div class="file-item-actions">
-              <button class="secondary previewFileBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Предпросмотр">Превью</button>
-              ${isEligible ? `<button class="secondary makeDefaultBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Сделать заглушкой">Заглушка</button>` : ``}
+              <button class="secondary previewFileBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Предпросмотр" ${!canPlay ? 'disabled' : ''}>Превью</button>
+              ${isEligible ? `<button class="secondary makeDefaultBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Сделать заглушкой" ${!canPlay ? 'disabled' : ''}>Заглушка</button>` : ``}
               <button class="danger delFileBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Удалить">Удалить</button>
             </div>
           </li>
@@ -863,3 +937,30 @@ function setupUploadUI(card, deviceId, filesPanelEl) {
     socket.emit('devices/updated');
   };
 }
+
+// ------ Периодическая проверка статусов файлов в обработке ------
+setInterval(async () => {
+  if (!currentDeviceId) return;
+  
+  try {
+    // Получаем статусы всех файлов текущего устройства
+    const res = await adminFetch(`/api/devices/${encodeURIComponent(currentDeviceId)}/files-with-status`);
+    const filesData = await res.json();
+    
+    // Проверяем есть ли файлы в обработке
+    const hasProcessing = filesData.some(f => 
+      f.status === 'processing' || f.status === 'checking'
+    );
+    
+    // Если есть файлы в обработке - обновляем панель
+    if (hasProcessing) {
+      const panel = document.getElementById('filesPanel');
+      if (panel) {
+        await refreshFilesPanel(currentDeviceId, panel);
+      }
+    }
+  } catch (e) {
+    // Игнорируем ошибки (например если устройство удалено)
+    console.debug('[Admin] Ошибка проверки статусов (игнорируем):', e);
+  }
+}, 3000); // Проверяем каждые 3 секунды

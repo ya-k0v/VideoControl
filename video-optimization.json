@@ -1,0 +1,45 @@
+{
+  "enabled": true,
+  "autoOptimize": true,
+  "deleteOriginal": true,
+  "profiles": {
+    "720p": {
+      "width": 1280,
+      "height": 720,
+      "fps": 25,
+      "bitrate": "2000k",
+      "maxrate": "2500k",
+      "bufsize": "5000k",
+      "profile": "baseline",
+      "level": "3.1",
+      "audioBitrate": "128k"
+    },
+    "1080p": {
+      "width": 1920,
+      "height": 1080,
+      "fps": 30,
+      "bitrate": "4000k",
+      "maxrate": "5000k",
+      "bufsize": "8000k",
+      "profile": "main",
+      "level": "4.0",
+      "audioBitrate": "192k"
+    }
+  },
+  "defaultProfile": "1080p",
+  "optimization": {
+    "maxConcurrent": 2,
+    "preset": "medium",
+    "pixelFormat": "yuv420p",
+    "audioCodec": "aac",
+    "audioSampleRate": "44100",
+    "audioChannels": 2
+  },
+  "thresholds": {
+    "maxWidth": 1920,
+    "maxHeight": 1080,
+    "maxFps": 30,
+    "maxBitrate": 6000000
+  }
+}
+

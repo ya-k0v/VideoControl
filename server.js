@@ -8,7 +8,7 @@ import multer from 'multer';
 import crypto from 'crypto';
 import util from "util";
 import { fromPath } from "pdf2pic";
-import { exec as execCallback } from "child_process";
+import { exec as execCallback, spawn } from "child_process";
 import { PDFDocument } from 'pdf-lib';
 
 const execAsync = util.promisify(execCallback);
@@ -24,6 +24,20 @@ function sanitizeDeviceId(id){
   if(typeof id !== 'string') return null;
   const m = id.match(/^[A-Za-z0-9_-]+$/);
   return m ? id : null;
+}
+
+// Проверка является ли файл системным/временным (не показывать пользователям)
+function isSystemFile(fileName) {
+  // Исключаем:
+  // - default.* (заглушки)
+  // - .optimizing_* (временные файлы оптимизации)
+  // - .tmp_default_* (временные файлы при смене заглушки)
+  // - любые файлы начинающиеся с точки
+  return /^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(fileName) ||
+         /^\.optimizing_/i.test(fileName) ||
+         /^\.tmp_default_/i.test(fileName) ||
+         /^\.original_/i.test(fileName) ||
+         fileName.startsWith('.');
 }
 
 const PUBLIC = path.join(ROOT, 'public');
@@ -239,6 +253,31 @@ function scan() {
   savedNames = loadDevicesJson();
   fileNamesMap = loadFileNamesMap();
   const dirs = fs.readdirSync(DEVICES).filter(d => fs.statSync(path.join(DEVICES, d)).isDirectory());
+  
+  // КРИТИЧНО: Очистка временных файлов оптимизации при запуске сервера
+  console.log('[Cleanup] 🧹 Очистка временных файлов...');
+  for (const d of dirs) {
+    const folder = path.join(DEVICES, d);
+    try {
+      const entries = fs.readdirSync(folder);
+      for (const entry of entries) {
+        // Удаляем все временные файлы оптимизации и смены заглушки
+        if (/^\.optimizing_/i.test(entry) || /^\.tmp_default_/i.test(entry)) {
+          const tmpFile = path.join(folder, entry);
+          try {
+            fs.unlinkSync(tmpFile);
+            console.log(`[Cleanup] 🗑️ Удален временный файл: ${entry}`);
+          } catch (e) {
+            console.warn(`[Cleanup] ⚠️ Не удалось удалить ${entry}: ${e.message}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[Cleanup] ⚠️ Ошибка очистки папки ${d}: ${e.message}`);
+    }
+  }
+  console.log('[Cleanup] ✅ Очистка завершена');
+  
   for (const d of dirs) {
     const id = d;
     const folder = path.join(DEVICES, d);
@@ -253,7 +292,8 @@ function scan() {
         const stat = fs.statSync(entryPath);
         
         if (stat.isFile()) {
-          if (entry.toLowerCase() !== 'default.mp4' && !/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(entry)) {
+          // Пропускаем системные файлы (default.*, .optimizing_*, .tmp_*, etc.)
+          if (!isSystemFile(entry)) {
             result.push(entry);
             // Используем оригинальное имя если есть маппинг
             const originalName = fileNamesMap[id]?.[entry] || entry;
@@ -328,6 +368,19 @@ app.post('/api/devices/:id/upload', async (req, res, next) => {
       if (ext === '.pdf' || ext === '.pptx') {
         autoConvertFile(id, fileName).catch(() => {});
       }
+      // НОВОЕ: Автоматическая оптимизация видео
+      else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+        // Оптимизация в фоне, не блокирует ответ
+        autoOptimizeVideo(id, fileName).then(result => {
+          if (result.success) {
+            console.log(`[upload] 🎬 Видео обработано: ${fileName} (optimized=${result.optimized})`);
+            // Отправляем событие клиентам об обновлении
+            io.emit('devices/updated');
+          }
+        }).catch(err => {
+          console.error(`[upload] ❌ Ошибка оптимизации ${fileName}:`, err);
+        });
+      }
     }
     
     // folder уже определен выше
@@ -340,7 +393,8 @@ app.post('/api/devices/:id/upload', async (req, res, next) => {
         const stat = fs.statSync(entryPath);
         
         if (stat.isFile()) {
-          if (!/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(entry)) {
+          // Пропускаем системные файлы (default.*, .optimizing_*, .tmp_*, etc.)
+          if (!isSystemFile(entry)) {
             result.push(entry);
             const originalName = fileNamesMap[id]?.[entry] || entry;
             fileNames.push(originalName);
@@ -394,44 +448,86 @@ app.post('/api/devices/:id/make-default', (req, res) => {
     return res.json({ success: true, message: 'Already default file' });
   }
 
+  // АТОМАРНАЯ ОПЕРАЦИЯ: Копируем сначала во временный файл, затем переименовываем
+  // Это предотвращает race condition когда клиенты запрашивают файл между удалением и копированием
+  const tmpPath = path.join(folder, `.tmp_default_${Date.now()}${ext}`);
+  
   try {
-    // Удаляем существующие default.* файлы (кроме src)
-    const existing = fs.readdirSync(folder);
-    for (const f of existing) {
-      if (/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(f)) {
-        const fullPath = path.join(folder, f);
-        // НЕ удаляем исходный файл если он default.*
-        if (fullPath !== src) {
-          try { fs.unlinkSync(fullPath); } catch {}
+    // Шаг 1: Копируем в временный файл
+    console.log(`[make-default] 📝 Копирование в временный файл: ${tmpPath}`);
+    fs.copyFileSync(src, tmpPath);
+    
+    // Устанавливаем права сразу на временный файл
+    try {
+      fs.chmodSync(tmpPath, 0o644);
+      console.log(`[make-default] ✅ Права 644 установлены на временный файл`);
+    } catch (e) {
+      console.warn(`[make-default] ⚠️ Не удалось установить права на временный файл: ${e}`);
+    }
+    
+    // Проверяем что временный файл доступен для чтения
+    try {
+      fs.accessSync(tmpPath, fs.constants.R_OK);
+      const tmpStats = fs.statSync(tmpPath);
+      console.log(`[make-default] ✅ Временный файл готов, размер: ${tmpStats.size} bytes`);
+      
+      // Проверяем что размер совпадает с источником
+      const srcStats = fs.statSync(src);
+      if (tmpStats.size !== srcStats.size) {
+        throw new Error(`Size mismatch: src=${srcStats.size}, tmp=${tmpStats.size}`);
+      }
+    } catch (e) {
+      console.error(`[make-default] ❌ Ошибка проверки временного файла: ${e}`);
+      try { fs.unlinkSync(tmpPath); } catch {}
+      return res.status(500).json({ error: 'temporary file validation failed', detail: String(e) });
+    }
+    
+    // Шаг 2: Удаляем существующие default.* файлы (кроме src)
+    console.log(`[make-default] 🗑️ Удаление старых заглушек...`);
+    try {
+      const existing = fs.readdirSync(folder);
+      for (const f of existing) {
+        if (/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(f)) {
+          const fullPath = path.join(folder, f);
+          // НЕ удаляем исходный файл если он default.*
+          if (fullPath !== src) {
+            try { 
+              fs.unlinkSync(fullPath);
+              console.log(`[make-default] 🗑️ Удален: ${f}`);
+            } catch {}
+          }
         }
       }
-    }
-  } catch {}
-
-  try {
-    fs.copyFileSync(src, dst);
-    
-    // КРИТИЧНО: Устанавливаем права 644 для нового default.* файла
-    // Чтобы Nginx (www-data) мог его прочитать
-    try {
-      fs.chmodSync(dst, 0o644);
-      console.log(`[make-default] ✅ Установлены права 644 на ${dst}`);
     } catch (e) {
-      console.warn(`[make-default] ⚠️ Не удалось установить права: ${e}`);
+      console.warn(`[make-default] ⚠️ Ошибка удаления старых заглушек: ${e}`);
     }
     
-    // КРИТИЧНО: Проверяем что файл действительно доступен для чтения
+    // Шаг 3: АТОМАРНОЕ переименование временного файла → default.*
+    // Это гарантирует что файл либо существует полностью, либо не существует вообще
+    console.log(`[make-default] 🔄 Атомарное переименование: ${path.basename(tmpPath)} → ${path.basename(dst)}`);
+    fs.renameSync(tmpPath, dst);
+    
+    // Финальная проверка
     try {
       fs.accessSync(dst, fs.constants.R_OK);
-      const stats = fs.statSync(dst);
-      console.log(`[make-default] ✅ Файл доступен для чтения, размер: ${stats.size} bytes`);
+      const finalStats = fs.statSync(dst);
+      console.log(`[make-default] ✅ Заглушка установлена успешно! Размер: ${finalStats.size} bytes`);
+      console.log(`[make-default] 📍 Путь: ${dst}`);
     } catch (e) {
-      console.error(`[make-default] ❌ Файл недоступен для чтения: ${e}`);
-      return res.status(500).json({ error: 'file not readable after copy' });
+      console.error(`[make-default] ❌ Финальная проверка не пройдена: ${e}`);
+      return res.status(500).json({ error: 'final validation failed', detail: String(e) });
     }
+    
   } catch (e) {
-    console.error(`[make-default] ❌ Ошибка копирования: ${e}`);
-    return res.status(500).json({ error: 'copy failed', detail: String(e) });
+    console.error(`[make-default] ❌ Ошибка атомарного копирования: ${e}`);
+    // Очищаем временный файл в случае ошибки
+    try { 
+      if (fs.existsSync(tmpPath)) {
+        fs.unlinkSync(tmpPath);
+        console.log(`[make-default] 🧹 Временный файл удален после ошибки`);
+      }
+    } catch {}
+    return res.status(500).json({ error: 'atomic copy failed', detail: String(e) });
   }
 
   const result = [];
@@ -442,7 +538,8 @@ app.post('/api/devices/:id/make-default', (req, res) => {
       const stat = fs.statSync(entryPath);
       
       if (stat.isFile()) {
-        if (!/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(entry)) {
+        // Пропускаем системные файлы (default.*, .optimizing_*, .tmp_*, etc.)
+        if (!isSystemFile(entry)) {
           result.push(entry);
         }
       } else if (stat.isDirectory()) {
@@ -457,15 +554,39 @@ app.post('/api/devices/:id/make-default', (req, res) => {
   io.emit('devices/updated');
   io.to(`device:${id}`).emit('player/stop');
   
-  // КРИТИЧНО: Небольшая задержка перед отправкой placeholder/refresh
-  // Даем файловой системе и Nginx время синхронизироваться
-  setTimeout(() => {
-    io.to(`device:${id}`).emit('placeholder/refresh');
-    io.emit('preview/refresh', { device_id: id });
-    console.log(`[make-default] 📡 Отправлены события обновления для ${id}`);
-  }, 500);
+  // КРИТИЧНО: Увеличенная задержка + проверка готовности файла
+  // Даем файловой системе, Nginx и клиентскому кэшу время синхронизироваться
+  console.log(`[make-default] ⏳ Ожидание синхронизации перед отправкой событий...`);
   
-  return res.json({ ok: true, default: path.basename(dst) });
+  // Возвращаем успешный ответ клиенту немедленно
+  res.json({ ok: true, default: path.basename(dst) });
+  
+  // Асинхронно проверяем готовность и отправляем события
+  setTimeout(async () => {
+    try {
+      // Финальная проверка что файл всё ещё доступен и не поврежден
+      const finalCheck = fs.statSync(dst);
+      if (finalCheck.size === 0) {
+        console.error(`[make-default] ❌ Файл пустой (0 bytes), отменяем отправку событий`);
+        return;
+      }
+      
+      // Проверяем что файл читаемый
+      fs.accessSync(dst, fs.constants.R_OK);
+      
+      console.log(`[make-default] ✅ Финальная проверка OK: ${finalCheck.size} bytes`);
+      
+      // Отправляем события клиентам
+      io.to(`device:${id}`).emit('placeholder/refresh');
+      io.emit('preview/refresh', { device_id: id });
+      console.log(`[make-default] 📡 События placeholder/refresh отправлены для ${id}`);
+      
+    } catch (e) {
+      console.error(`[make-default] ❌ Финальная проверка не пройдена, события НЕ отправлены: ${e}`);
+    }
+  }, 1500); // Увеличено с 500ms до 1500ms для гарантии синхронизации
+  
+  return; // res.json уже вызван выше
 });
 
 app.post('/api/devices/:id/files/:name/rename', express.json(), (req, res) => {
@@ -549,7 +670,8 @@ app.delete('/api/devices/:id/files/:name', (req, res) => {
       const stat = fs.statSync(entryPath);
       
       if (stat.isFile()) {
-        if (!/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(entry)) {
+        // Пропускаем системные файлы (default.*, .optimizing_*, .tmp_*, etc.)
+        if (!isSystemFile(entry)) {
           result.push(entry);
           const originalName = fileNamesMap[id]?.[entry] || entry;
           fileNames.push(originalName);
@@ -698,7 +820,8 @@ app.get('/api/devices/:id/files', (req, res) => {
       const stat = fs.statSync(entryPath);
       
       if (stat.isFile()) {
-        if (!/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(entry)) {
+        // Пропускаем системные файлы (default.*, .optimizing_*, .tmp_*, etc.)
+        if (!isSystemFile(entry)) {
           result.push(entry);
           const originalName = fileNamesMap[id]?.[entry] || entry;
           fileNames.push(originalName);
@@ -757,6 +880,304 @@ async function convertPdfToImages(pdfPath, outputDir) {
     await convert(i);
   }
   return pageCount;
+}
+
+// ========================================
+// VIDEO OPTIMIZATION для Android TV
+// ========================================
+
+// Загружаем конфигурацию оптимизации
+let videoOptConfig = {};
+try {
+  const configPath = path.join(ROOT, 'video-optimization.json');
+  if (fs.existsSync(configPath)) {
+    videoOptConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    console.log('[VideoOpt] ✅ Конфигурация загружена');
+  }
+} catch (e) {
+  console.warn('[VideoOpt] ⚠️ Ошибка загрузки конфигурации, используем defaults');
+  videoOptConfig = { enabled: false };
+}
+
+// Глобальное хранилище статусов файлов
+const fileStatuses = new Map(); // Map<deviceId_fileName, {status, progress, error, job}>
+
+// Проверка параметров видео через ffprobe
+async function checkVideoParameters(filePath) {
+  try {
+    const { stdout } = await execAsync(
+      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,r_frame_rate,bit_rate,profile,level -of json "${filePath}"`
+    );
+    
+    const data = JSON.parse(stdout);
+    const stream = data.streams?.[0];
+    
+    if (!stream) return null;
+    
+    // Парсим frame rate (например "25/1" -> 25)
+    let fps = 0;
+    if (stream.r_frame_rate) {
+      const [num, den] = stream.r_frame_rate.split('/').map(Number);
+      fps = den ? num / den : num;
+    }
+    
+    return {
+      codec: stream.codec_name,
+      width: stream.width || 0,
+      height: stream.height || 0,
+      fps: Math.round(fps),
+      bitrate: parseInt(stream.bit_rate) || 0,
+      profile: stream.profile || 'unknown',
+      level: stream.level || 0
+    };
+  } catch (error) {
+    console.error(`[VideoOpt] ❌ Ошибка ffprobe: ${error.message}`);
+    return null;
+  }
+}
+
+// Проверяем нужна ли оптимизация
+function needsOptimization(params) {
+  if (!params || !videoOptConfig.enabled) return false;
+  
+  const thresholds = videoOptConfig.thresholds || {};
+  
+  const needsOpt = 
+    params.width > (thresholds.maxWidth || 1920) ||
+    params.height > (thresholds.maxHeight || 1080) ||
+    params.fps > (thresholds.maxFps || 30) ||
+    params.bitrate > (thresholds.maxBitrate || 6000000) ||
+    params.profile === 'High 10' ||
+    params.profile === 'High 4:4:4 Predictive' ||
+    (params.codec !== 'h264' && params.codec !== 'H.264');
+  
+  return needsOpt;
+}
+
+// Автоматическая оптимизация видео для Android TV
+async function autoOptimizeVideo(deviceId, fileName) {
+  const d = devices[deviceId];
+  if (!d) return { success: false, message: 'Device not found' };
+  
+  if (!videoOptConfig.enabled) {
+    return { success: false, message: 'Video optimization disabled' };
+  }
+  
+  const deviceFolder = path.join(DEVICES, d.folder);
+  const filePath = path.join(deviceFolder, fileName);
+  const statusKey = `${deviceId}_${fileName}`;
+  
+  if (!fs.existsSync(filePath)) {
+    return { success: false, message: 'File not found' };
+  }
+  
+  const ext = path.extname(fileName).toLowerCase();
+  if (!['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+    return { success: false, message: 'Not a video file' };
+  }
+  
+  console.log(`[VideoOpt] 🔍 Проверка: ${fileName}`);
+  
+  // Устанавливаем статус "проверка"
+  fileStatuses.set(statusKey, { status: 'checking', progress: 0, canPlay: false });
+  
+  // Проверяем параметры видео
+  const params = await checkVideoParameters(filePath);
+  if (!params) {
+    fileStatuses.delete(statusKey);
+    return { success: false, message: 'Cannot read video parameters' };
+  }
+  
+  console.log(`[VideoOpt] 📊 Параметры: ${params.width}x${params.height} @ ${params.fps}fps, ${Math.round(params.bitrate/1000)}kbps, ${params.codec}/${params.profile}`);
+  
+  // Проверяем нужна ли оптимизация
+  if (!needsOptimization(params)) {
+    console.log(`[VideoOpt] ✅ Видео оптимально: ${fileName}`);
+    fileStatuses.set(statusKey, { status: 'ready', progress: 100, canPlay: true });
+    return { success: true, message: 'Already optimized', optimized: false };
+  }
+  
+  console.log(`[VideoOpt] ⚠️ Требуется оптимизация: ${fileName}`);
+  
+  // Устанавливаем статус "обработка"
+  fileStatuses.set(statusKey, { status: 'processing', progress: 5, canPlay: false });
+  io.emit('file/processing', { device_id: deviceId, file: fileName });
+  
+  // Определяем целевой профиль
+  const profiles = videoOptConfig.profiles || {};
+  let targetProfile = profiles['1080p'];
+  
+  // Если видео меньше 1080p - используем 720p
+  if (params.width <= 1280 && params.height <= 720) {
+    targetProfile = profiles['720p'];
+  }
+  
+  // Если видео больше 1080p (4K) - конвертируем в 1080p
+  if (params.width > 1920 || params.height > 1080) {
+    targetProfile = profiles['1080p'];
+    console.log(`[VideoOpt] 📉 4K → 1080p конвертация`);
+  }
+  
+  const optConfig = videoOptConfig.optimization || {};
+  
+  // Создаем временный файл
+  const tempPath = path.join(deviceFolder, `.optimizing_${Date.now()}${ext}`);
+  
+  console.log(`[VideoOpt] 🎬 Начало конвертации: ${fileName}`);
+  console.log(`[VideoOpt] 🎯 Профиль: ${targetProfile.width}x${targetProfile.height} @ ${targetProfile.fps}fps, ${targetProfile.bitrate}`);
+  
+  try {
+    // FFmpeg аргументы
+    const ffmpegArgs = [
+      '-i', filePath,
+      '-c:v', 'libx264',
+      '-profile:v', targetProfile.profile,
+      '-level', String(targetProfile.level),
+      '-vf', `scale=${targetProfile.width}:${targetProfile.height}`,
+      '-r', String(targetProfile.fps),
+      '-b:v', targetProfile.bitrate,
+      '-maxrate', targetProfile.maxrate,
+      '-bufsize', targetProfile.bufsize,
+      '-g', String(targetProfile.fps * 2),
+      '-preset', optConfig.preset || 'medium',
+      '-pix_fmt', optConfig.pixelFormat || 'yuv420p',
+      '-c:a', optConfig.audioCodec || 'aac',
+      '-b:a', targetProfile.audioBitrate,
+      '-ar', String(optConfig.audioSampleRate || '44100'),
+      '-ac', String(optConfig.audioChannels || 2),
+      '-movflags', '+faststart',
+      '-y', tempPath
+    ];
+    
+    console.log(`[VideoOpt] 🔧 FFmpeg команда: ffmpeg ${ffmpegArgs.join(' ')}`);
+    
+    // Запускаем FFmpeg с отслеживанием прогресса
+    await new Promise((resolve, reject) => {
+      const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
+      
+      let duration = 0;
+      let stderr = '';
+      
+      // Парсим вывод FFmpeg для прогресса
+      ffmpegProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        
+        // Извлекаем длительность видео (только один раз)
+        if (duration === 0) {
+          const durationMatch = output.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+          if (durationMatch) {
+            const hours = parseInt(durationMatch[1]);
+            const minutes = parseInt(durationMatch[2]);
+            const seconds = parseFloat(durationMatch[3]);
+            duration = hours * 3600 + minutes * 60 + seconds;
+            console.log(`[VideoOpt] ⏱️ Длительность видео: ${duration.toFixed(1)}s`);
+          }
+        }
+        
+        // Извлекаем текущее время обработки
+        if (duration > 0) {
+          const timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+          if (timeMatch) {
+            const hours = parseInt(timeMatch[1]);
+            const minutes = parseInt(timeMatch[2]);
+            const seconds = parseFloat(timeMatch[3]);
+            const currentTime = hours * 3600 + minutes * 60 + seconds;
+            
+            // Вычисляем прогресс (10% - 90%)
+            const rawProgress = (currentTime / duration) * 100;
+            const progress = Math.min(90, Math.max(10, 10 + Math.round(rawProgress * 0.8)));
+            
+            // Обновляем статус
+            fileStatuses.set(statusKey, { status: 'processing', progress, canPlay: false });
+            
+            // Отправляем событие клиентам каждые 5%
+            if (progress % 5 === 0) {
+              io.emit('file/progress', { device_id: deviceId, file: fileName, progress });
+              console.log(`[VideoOpt] 📊 Прогресс: ${progress}% (${currentTime.toFixed(1)}s / ${duration.toFixed(1)}s)`);
+            }
+          }
+        }
+      });
+      
+      ffmpegProcess.on('close', (code) => {
+        if (code === 0) {
+          console.log(`[VideoOpt] ✅ FFmpeg завершен успешно`);
+          resolve();
+        } else {
+          console.error(`[VideoOpt] ❌ FFmpeg завершен с кодом ${code}`);
+          console.error(`[VideoOpt] Stderr: ${stderr.substring(stderr.length - 500)}`); // Последние 500 символов
+          reject(new Error(`FFmpeg exited with code ${code}`));
+        }
+      });
+      
+      ffmpegProcess.on('error', (err) => {
+        console.error(`[VideoOpt] ❌ Ошибка запуска FFmpeg: ${err}`);
+        reject(err);
+      });
+    });
+    
+    fileStatuses.set(statusKey, { status: 'processing', progress: 90, canPlay: false });
+    console.log(`[VideoOpt] ✅ Конвертация завершена: ${fileName}`);
+    
+    // Проверяем что файл создан и не пустой
+    const stats = fs.statSync(tempPath);
+    if (stats.size === 0) {
+      throw new Error('Converted file is empty');
+    }
+    
+    // КРИТИЧНО: Удаляем оригинал и заменяем оптимизированным (без резервной копии)
+    fs.unlinkSync(filePath);
+    fs.renameSync(tempPath, filePath);
+    
+    // Устанавливаем права
+    fs.chmodSync(filePath, 0o644);
+    
+    // Устанавливаем статус "готово"
+    fileStatuses.set(statusKey, { status: 'ready', progress: 100, canPlay: true });
+    io.emit('file/ready', { device_id: deviceId, file: fileName });
+    
+    console.log(`[VideoOpt] 🎉 Видео оптимизировано: ${fileName}`);
+    console.log(`[VideoOpt] 📊 Размер: ${Math.round(stats.size / 1024 / 1024)}MB`);
+    
+    return { 
+      success: true, 
+      message: 'Optimized successfully', 
+      optimized: true,
+      sizeBytes: stats.size,
+      params: {
+        before: params,
+        after: {
+          width: targetProfile.width,
+          height: targetProfile.height,
+          fps: targetProfile.fps,
+          bitrate: targetProfile.bitrate
+        }
+      }
+    };
+    
+  } catch (error) {
+    console.error(`[VideoOpt] ❌ Ошибка конвертации: ${error.message}`);
+    
+    // Очищаем временный файл
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+    
+    // Если оригинал был удален, а конвертация провалилась - проблема!
+    // Но мы удаляем оригинал ПОСЛЕ успешной конвертации, так что это safe
+    
+    // Устанавливаем статус "ошибка" но файл можно воспроизвести (оригинал)
+    fileStatuses.set(statusKey, { 
+      status: 'error', 
+      progress: 0, 
+      canPlay: true, 
+      error: error.message 
+    });
+    io.emit('file/error', { device_id: deviceId, file: fileName, error: error.message });
+    
+    return { success: false, message: `Conversion failed: ${error.message}` };
+  }
 }
 
 async function autoConvertFile(deviceId, fileName) {
@@ -919,6 +1340,127 @@ app.get('/api/devices/:id/converted/:file/:type/:num', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: `Failed: ${error.message}` });
   }
+});
+
+// ========================================
+// VIDEO OPTIMIZATION API
+// ========================================
+
+// API: Получить статус файла (обрабатывается/готов)
+app.get('/api/devices/:id/files/:name/status', (req, res) => {
+  const id = sanitizeDeviceId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid device id' });
+  
+  const fileName = req.params.name;
+  const statusKey = `${id}_${fileName}`;
+  
+  const status = fileStatuses.get(statusKey);
+  
+  if (!status) {
+    // Файл не в обработке - значит готов к воспроизведению
+    return res.json({
+      file: fileName,
+      status: 'ready',
+      progress: 100,
+      canPlay: true
+    });
+  }
+  
+  res.json({
+    file: fileName,
+    ...status
+  });
+});
+
+// API: Получить информацию о видео (параметры)
+app.get('/api/devices/:id/files/:name/video-info', async (req, res) => {
+  const id = sanitizeDeviceId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid device id' });
+  
+  const fileName = req.params.name;
+  const d = devices[id];
+  
+  if (!d) return res.status(404).json({ error: 'device not found' });
+  
+  const deviceFolder = path.join(DEVICES, d.folder);
+  const filePath = path.join(deviceFolder, fileName);
+  
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'file not found' });
+  }
+  
+  try {
+    const params = await checkVideoParameters(filePath);
+    if (!params) {
+      return res.status(400).json({ error: 'cannot read video parameters' });
+    }
+    
+    const needsOpt = needsOptimization(params);
+    
+    res.json({
+      file: fileName,
+      parameters: params,
+      needsOptimization: needsOpt,
+      recommendation: needsOpt ? 
+        'Видео рекомендуется оптимизировать для Android TV' : 
+        'Видео оптимально для Android TV'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Запустить оптимизацию вручную
+app.post('/api/devices/:id/files/:name/optimize', async (req, res) => {
+  const id = sanitizeDeviceId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid device id' });
+  
+  const fileName = req.params.name;
+  const d = devices[id];
+  
+  if (!d) return res.status(404).json({ error: 'device not found' });
+  
+  console.log(`[API] 🎬 Ручная оптимизация: ${fileName}`);
+  
+  try {
+    const result = await autoOptimizeVideo(id, fileName);
+    
+    if (result.success) {
+      // Обновляем список файлов
+      io.emit('devices/updated');
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Список всех файлов со статусами
+app.get('/api/devices/:id/files-with-status', (req, res) => {
+  const id = sanitizeDeviceId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid device id' });
+  
+  const d = devices[id];
+  if (!d) return res.status(404).json({ error: 'device not found' });
+  
+  const files = d.files || [];
+  const filesWithStatus = files.map(fileName => {
+    const statusKey = `${id}_${fileName}`;
+    const status = fileStatuses.get(statusKey);
+    
+    return {
+      name: fileName,
+      originalName: d.fileNames?.[files.indexOf(fileName)] || fileName,
+      status: status ? status.status : 'ready',
+      progress: status ? status.progress : 100,
+      canPlay: status ? status.canPlay : true,
+      error: status ? status.error : null
+    };
+  });
+  
+  res.json(filesWithStatus);
 });
 
 const activeConnections = new Map();

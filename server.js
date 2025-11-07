@@ -62,7 +62,7 @@ const CONVERTED_CACHE = path.join(ROOT, '.converted');
 
 if (!fs.existsSync(CONVERTED_CACHE)) fs.mkdirSync(CONVERTED_CACHE, { recursive: true });
 
-const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+const MAX_FILE_SIZE = 3 *1024 * 1024 * 1024;
 const ALLOWED_EXT = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i;
 
 const storage = multer.diskStorage({

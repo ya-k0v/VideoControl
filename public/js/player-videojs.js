@@ -125,8 +125,19 @@ if (!device_id || !device_id.trim()) {
           // Обработчик окончания видео
           vjsPlayer.on('ended', () => {
             console.log('[Player] 🎬 Video.js ended event');
-            if (!preview && (currentFileState.type === null || currentFileState.type === 'video')) {
+            
+            // КРИТИЧНО: Android WebView может генерировать 'ended' при паузе (баг)
+            // Проверяем, что видео ДЕЙСТВИТЕЛЬНО закончилось
+            const currentTime = vjsPlayer.currentTime();
+            const duration = vjsPlayer.duration();
+            const isActuallyEnded = duration > 0 && currentTime >= duration - 0.5; // 0.5s запас
+            
+            console.log('[Player] 🔍 Проверка ended:', { currentTime, duration, isActuallyEnded, paused: vjsPlayer.paused() });
+            
+            if (!preview && isActuallyEnded && (currentFileState.type === null || currentFileState.type === 'video')) {
               showPlaceholder();
+            } else if (!isActuallyEnded) {
+              console.log('[Player] ⚠️ Ложное ended событие (Android WebView bug), игнорируем');
             }
           });
           

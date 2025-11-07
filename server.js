@@ -1500,17 +1500,39 @@ app.post('/api/devices/:id/files/:name/optimize', async (req, res) => {
 });
 
 // API: Список всех файлов со статусами
-app.get('/api/devices/:id/files-with-status', (req, res) => {
+app.get('/api/devices/:id/files-with-status', async (req, res) => {
   const id = sanitizeDeviceId(req.params.id);
   if (!id) return res.status(400).json({ error: 'invalid device id' });
   
   const d = devices[id];
   if (!d) return res.status(404).json({ error: 'device not found' });
   
+  const deviceFolder = path.join(DEVICES, d.folder);
   const files = d.files || [];
-  const filesWithStatus = files.map(fileName => {
+  
+  // Асинхронно получаем параметры для каждого файла
+  const filesWithStatus = await Promise.all(files.map(async (fileName) => {
     const statusKey = `${id}_${fileName}`;
     const status = fileStatuses.get(statusKey);
+    const ext = path.extname(fileName).toLowerCase();
+    const isVideo = ['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext);
+    
+    let resolution = null;
+    
+    // Для видео получаем разрешение
+    if (isVideo && status?.status === 'ready') {
+      try {
+        const filePath = path.join(deviceFolder, fileName);
+        if (fs.existsSync(filePath)) {
+          const params = await checkVideoParameters(filePath);
+          if (params && params.width && params.height) {
+            resolution = { width: params.width, height: params.height };
+          }
+        }
+      } catch (e) {
+        // Игнорируем ошибки получения параметров
+      }
+    }
     
     return {
       name: fileName,
@@ -1518,9 +1540,10 @@ app.get('/api/devices/:id/files-with-status', (req, res) => {
       status: status ? status.status : 'ready',
       progress: status ? status.progress : 100,
       canPlay: status ? status.canPlay : true,
-      error: status ? status.error : null
+      error: status ? status.error : null,
+      resolution: resolution
     };
-  });
+  }));
   
   res.json(filesWithStatus);
 });

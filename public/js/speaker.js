@@ -176,9 +176,13 @@ async function loadFiles() {
   // Поддержка старого формата (массив строк) и нового формата (массив объектов)
   const allFiles = filesData.map(item => {
     if (typeof item === 'string') {
-      return { safeName: item, originalName: item };
+      return { safeName: item, originalName: item, resolution: null };
     }
-    return { safeName: item.safeName || item.originalName, originalName: item.originalName || item.safeName };
+    return { 
+      safeName: item.name || item.safeName || item.originalName, 
+      originalName: item.originalName || item.name || item.safeName,
+      resolution: item.resolution || null
+    };
   });
 
   if (!allFiles || allFiles.length === 0) {
@@ -201,20 +205,41 @@ async function loadFiles() {
   const end = Math.min(start + pageSize, allFiles.length);
   const files = allFiles.slice(start, end);
 
-  fileList.innerHTML = files.map(({ safeName, originalName }) => {
+  fileList.innerHTML = files.map(({ safeName, originalName, resolution }) => {
     const ext = safeName.split('.').pop().toLowerCase();
     const type = ext === 'pdf' ? 'PDF' : ext === 'pptx' ? 'PPTX' : ['png','jpg','jpeg','gif','webp'].includes(ext) ? 'IMG' : 'VID';
+    
+    // НОВОЕ: Определяем разрешение для видео
+    let resolutionLabel = '';
+    if (type === 'VID' && resolution) {
+      const width = resolution.width || 0;
+      const height = resolution.height || 0;
+      
+      if (width >= 3840 || height >= 2160) {
+        resolutionLabel = '4K';
+      } else if (width >= 1920 || height >= 1080) {
+        resolutionLabel = 'FHD';
+      } else if (width >= 1280 || height >= 720) {
+        resolutionLabel = 'HD';
+      } else if (width > 0) {
+        resolutionLabel = 'SD';
+      }
+    }
+    
     // Используем safeName для сравнения с currentFile (для обратной совместимости)
     const active = currentFile === safeName || currentFile === originalName;
     // Убираем расширение из отображаемого имени
     const displayNameFull = originalName.replace(/\.[^.]+$/, '');
-    // НОВОЕ: Обрезаем до 40 символов
+    // Обрезаем до 40 символов
     const displayName = truncateText(displayNameFull, 40);
     return `
       <li class="file-item ${active ? 'active' : ''}">
         <div class="file-item-header">
           <div class="file-item-name" title="${displayNameFull}">${displayName}</div>
-          <span class="file-item-type">${type}</span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            ${resolutionLabel ? `<span class="file-item-resolution" style="font-size:10px; opacity:0.7;">${resolutionLabel}</span>` : ''}
+            <span class="file-item-type">${type}</span>
+          </div>
         </div>
         <div class="file-item-actions">
           <button class="secondary previewBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}">Превью</button>

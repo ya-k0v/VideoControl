@@ -237,12 +237,11 @@ async function loadFiles() {
     const active = currentFile === safeName || currentFile === originalName;
     // Убираем расширение из отображаемого имени
     const displayNameFull = originalName.replace(/\.[^.]+$/, '');
-    // Обрезаем до 40 символов
-    const displayName = truncateText(displayNameFull, 40);
+    // НЕ обрезаем в JS - используем CSS ellipsis
     return `
       <li class="file-item ${active ? 'active' : ''}">
         <div class="file-item-header">
-          <div class="file-item-name" title="${displayNameFull}">${displayName}</div>
+          <div class="file-item-name" title="${displayNameFull}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; flex:1;">${displayNameFull}</div>
           <div style="display:flex; align-items:center; gap:4px;">
             ${resolutionLabel ? `<span class="file-item-resolution" style="font-size:10px; opacity:0.7;">${resolutionLabel}</span>` : ''}
             <span class="file-item-type">${type}</span>

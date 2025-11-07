@@ -5,49 +5,33 @@ node_modules/
 *.log
 npm-debug.log*
 
-# Environment variables
+# Runtime data
+*.pid
+*.seed
+.converted/
+
+# Production
+public/content/*/
+!public/content/.gitkeep
+
+# Environment
 .env
 .env.local
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
 
 # Archives
 *.tar.gz
 *.zip
 
-# Cache directories
-.converted/
-.pptx_cache/
-
-# OS files
-.DS_Store
-Thumbs.db
-
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# Python cache
-__pycache__/
-*.pyc
-
-# Internal documentation and planning (not for public repo)
-.internal/
-*.pyo
-
-# Content files - медиа файлы пользователей
-public/content/
-
-# Local configuration - локальные конфиги устройств
-devices.json
-file-names-map.json
-
-# Android build files
-clients/android-tv/VideoControlTV/app/build/
-clients/android-tv/VideoControlTV/build/
-clients/android-tv/VideoControlTV/.gradle/
-clients/android-tv/VideoControlTV/local.properties
-clients/android-tv/VideoControlTV/app/debug.keystore
-clients/android-tv/VCPlayer.apk
-*.apk
-*.keystore
+# System
+Thumbs.db

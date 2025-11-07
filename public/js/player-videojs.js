@@ -26,8 +26,6 @@ const img2 = document.getElementById('img2');
 const img = img1; // Для обратной совместимости со старым кодом
 const pdf = document.getElementById('pdf');
 const unmuteBtn = document.getElementById('unmute');
-const pauseCanvas = document.getElementById('pauseCanvas');
-const pauseSnapshot = document.getElementById('pauseSnapshot');
 
 let currentFileState = { type: null, file: null, page: 1 };
 let soundUnlocked = false;
@@ -95,12 +93,25 @@ if (!device_id || !device_id.trim()) {
         vjsPlayer = videojs('v', {
           controls: false,
           autoplay: false,
-          preload: 'metadata',
+          preload: 'auto', // КРИТИЧНО: для больших файлов используем 'auto' вместо 'metadata'
           muted: true,
           loop: false,
           playsinline: true,
           disablePictureInPicture: true,
-          nativeControlsForTouch: false
+          nativeControlsForTouch: false,
+          // Настройки для стабильного streaming больших файлов
+          html5: {
+            vhs: {
+              overrideNative: true,
+              enableLowInitialPlaylist: true,
+              smoothQualityChange: true,
+              bandwidth: 10000000, // 10 Mbps
+              bufferSize: 30 // 30 секунд буфера для стабильности
+            },
+            nativeVideoTracks: false,
+            nativeAudioTracks: false,
+            nativeTextTracks: false
+          }
         });
         
         // Ждем полной готовности Video.js
@@ -703,14 +714,6 @@ if (!device_id || !device_id.trim()) {
   socket.on('player/play', ({ type, file, page }) => {
     console.log('[Player] 📡 player/play:', { type, file, page });
     
-    // КРИТИЧНО: Убираем снимок паузы при возобновлении
-    if (pauseSnapshot) {
-      console.log('[Player] 🗑️ Удаляем снимок паузы');
-      pauseSnapshot.style.display = 'none';
-      pauseSnapshot.classList.remove('visible');
-      pauseSnapshot.removeAttribute('src');
-    }
-    
     if (type === 'video') {
       img1.removeAttribute('src');
       img2.removeAttribute('src');
@@ -886,40 +889,8 @@ if (!device_id || !device_id.trim()) {
   socket.on('player/pause', () => {
     console.log('[Player] ⏸️ player/pause');
     if (vjsPlayer && !vjsPlayer.paused()) {
-      // КРИТИЧНО: Захватываем текущий кадр ПЕРЕД паузой
-      try {
-        const videoEl = vjsPlayer.el().querySelector('video');
-        if (videoEl && pauseCanvas && pauseSnapshot) {
-          const ctx = pauseCanvas.getContext('2d');
-          
-          // Устанавливаем размер canvas = размеру видео
-          pauseCanvas.width = videoEl.videoWidth;
-          pauseCanvas.height = videoEl.videoHeight;
-          
-          // Рисуем текущий кадр на canvas
-          ctx.drawImage(videoEl, 0, 0, pauseCanvas.width, pauseCanvas.height);
-          
-          // Конвертируем canvas в data URL и устанавливаем в img
-          const frameDataURL = pauseCanvas.toDataURL('image/jpeg', 0.95);
-          pauseSnapshot.src = frameDataURL;
-          
-          console.log('[Player] 📸 Снимок кадра сделан:', pauseCanvas.width + 'x' + pauseCanvas.height);
-        }
-      } catch (e) {
-        console.warn('[Player] ⚠️ Не удалось захватить кадр:', e);
-      }
-      
       vjsPlayer.pause();
-      
-      // Показываем снимок поверх видео через 50ms (чтобы пауза успела примениться)
-      setTimeout(() => {
-        if (currentFileState.type === 'video' && pauseSnapshot) {
-          console.log('[Player] 🖼️ Показываем снимок кадра поверх видео');
-          pauseSnapshot.style.display = 'block';
-          pauseSnapshot.classList.add('visible');
-          pauseSnapshot.style.zIndex = '999999'; // Поверх всего
-        }
-      }, 50);
+      console.log('[Player] ⏸️ Видео на паузе, последний кадр остается на экране');
     }
   });
 

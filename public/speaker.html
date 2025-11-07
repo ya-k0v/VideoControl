@@ -37,6 +37,16 @@
       min-height: 0;
     }
     
+    /* КРИТИЧНО: Ограничиваем ширину панели файлов */
+    .files-panel {
+      max-width: 100%;
+      overflow: hidden;
+    }
+    
+    .files-panel .list {
+      max-width: 100%;
+    }
+    
     /* Минимальные высоты для вертикального режима */
     .sidebar {
       min-height: 280px;

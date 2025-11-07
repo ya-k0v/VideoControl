@@ -26,17 +26,32 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerView: StyledPlayerView
     private lateinit var imageView: ImageView
     private lateinit var statusText: TextView
+    private lateinit var settingsButton: android.widget.Button
     
     private var player: ExoPlayer? = null
     private var socket: Socket? = null
     private var wakeLock: PowerManager.WakeLock? = null
     
     private val TAG = "VCMediaPlayer"
-    private val SERVER_URL = "http://10.172.0.151" // TODO: Сделать настраиваемым
-    private val DEVICE_ID = "ATV001" // TODO: Из настроек
+    private var SERVER_URL = ""
+    private var DEVICE_ID = ""
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Проверяем настройки при запуске
+        if (!SettingsActivity.isConfigured(this)) {
+            // Перенаправляем на настройки
+            startActivity(Intent(this, SettingsActivity::class.java))
+            finish()
+            return
+        }
+        
+        // Загружаем настройки
+        SERVER_URL = SettingsActivity.getServerUrl(this) ?: ""
+        DEVICE_ID = SettingsActivity.getDeviceId(this) ?: ""
+        
+        Log.d(TAG, "Loaded settings: SERVER_URL=$SERVER_URL, DEVICE_ID=$DEVICE_ID")
         setContentView(R.layout.activity_main)
         
         // Fullscreen и не гасим экран
@@ -50,6 +65,18 @@ class MainActivity : AppCompatActivity() {
         playerView = findViewById(R.id.playerView)
         imageView = findViewById(R.id.imageView)
         statusText = findViewById(R.id.statusText)
+        settingsButton = findViewById(R.id.settingsButton)
+        
+        // Кнопка настроек - открывает SettingsActivity
+        settingsButton.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+        
+        // Длинное нажатие на экран - тоже открывает настройки
+        playerView.setOnLongClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+            true
+        }
         
         // Скрываем контролы ExoPlayer
         playerView.useController = false

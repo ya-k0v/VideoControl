@@ -418,6 +418,119 @@ app.post('/api/devices/:id/upload', async (req, res, next) => {
   });
 });
 
+// API: Копировать/переместить файл между устройствами
+app.post('/api/devices/:targetId/copy-file', async (req, res) => {
+  const targetId = sanitizeDeviceId(req.params.targetId);
+  if (!targetId) return res.status(400).json({ error: 'invalid target device id' });
+  
+  const { sourceDeviceId, fileName, move } = req.body || {};
+  
+  if (!sourceDeviceId) return res.status(400).json({ error: 'sourceDeviceId required' });
+  if (!fileName) return res.status(400).json({ error: 'fileName required' });
+  
+  const sourceId = sanitizeDeviceId(sourceDeviceId);
+  if (!sourceId) return res.status(400).json({ error: 'invalid source device id' });
+  
+  const sourceDevice = devices[sourceId];
+  const targetDevice = devices[targetId];
+  
+  if (!sourceDevice) return res.status(404).json({ error: 'source device not found' });
+  if (!targetDevice) return res.status(404).json({ error: 'target device not found' });
+  
+  if (sourceId === targetId) {
+    return res.status(400).json({ error: 'source and target are the same' });
+  }
+  
+  const sourceFolder = path.join(DEVICES, sourceDevice.folder);
+  const targetFolder = path.join(DEVICES, targetDevice.folder);
+  const sourceFile = path.join(sourceFolder, fileName);
+  
+  if (!sourceFile.startsWith(DEVICES)) return res.status(403).json({ error: 'forbidden' });
+  if (!fs.existsSync(sourceFile)) return res.status(404).json({ error: 'source file not found' });
+  
+  // Проверяем это файл или папка (для PDF/PPTX)
+  const isDirectory = fs.statSync(sourceFile).isDirectory();
+  const targetFile = path.join(targetFolder, fileName);
+  
+  // Проверяем что целевой файл не существует
+  if (fs.existsSync(targetFile)) {
+    return res.status(409).json({ error: 'file already exists in target device' });
+  }
+  
+  try {
+    if (!fs.existsSync(targetFolder)) {
+      fs.mkdirSync(targetFolder, { recursive: true });
+      fs.chmodSync(targetFolder, 0o755);
+    }
+    
+    if (isDirectory) {
+      // Копируем папку (для PDF/PPTX)
+      fs.cpSync(sourceFile, targetFile, { recursive: true });
+      console.log(`[copy-file] 📁 Папка скопирована: ${fileName} (${sourceId} → ${targetId})`);
+    } else {
+      // Копируем файл
+      fs.copyFileSync(sourceFile, targetFile);
+      console.log(`[copy-file] 📄 Файл скопирован: ${fileName} (${sourceId} → ${targetId})`);
+    }
+    
+    // Устанавливаем права
+    if (isDirectory) {
+      // Права на папку и все файлы внутри
+      fs.chmodSync(targetFile, 0o755);
+      const files = fs.readdirSync(targetFile);
+      for (const f of files) {
+        fs.chmodSync(path.join(targetFile, f), 0o644);
+      }
+    } else {
+      fs.chmodSync(targetFile, 0o644);
+    }
+    
+    // Копируем маппинг имени (если есть)
+    if (fileNamesMap[sourceId] && fileNamesMap[sourceId][fileName]) {
+      if (!fileNamesMap[targetId]) fileNamesMap[targetId] = {};
+      fileNamesMap[targetId][fileName] = fileNamesMap[sourceId][fileName];
+      saveFileNamesMap();
+    }
+    
+    // Если перемещение - удаляем из источника
+    if (move) {
+      if (isDirectory) {
+        fs.rmSync(sourceFile, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(sourceFile);
+      }
+      
+      // Удаляем маппинг из источника
+      if (fileNamesMap[sourceId] && fileNamesMap[sourceId][fileName]) {
+        delete fileNamesMap[sourceId][fileName];
+        if (Object.keys(fileNamesMap[sourceId]).length === 0) {
+          delete fileNamesMap[sourceId];
+        }
+        saveFileNamesMap();
+      }
+      
+      console.log(`[copy-file] 🗑️ Файл удален из источника: ${fileName} (${sourceId})`);
+    }
+    
+    // Обновляем списки файлов
+    scan();
+    
+    io.emit('devices/updated');
+    
+    res.json({ 
+      ok: true, 
+      action: move ? 'moved' : 'copied',
+      file: fileName,
+      from: sourceId,
+      to: targetId
+    });
+    
+  } catch (e) {
+    console.error(`[copy-file] ❌ Ошибка: ${e}`);
+    return res.status(500).json({ error: 'copy/move failed', detail: String(e) });
+  }
+});
+
 app.post('/api/devices/:id/make-default', (req, res) => {
   const id = sanitizeDeviceId(req.params.id); if(!id) return res.status(400).json({ error: 'invalid device id' });
   const { file } = req.body || {};

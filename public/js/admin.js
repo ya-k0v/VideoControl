@@ -548,6 +548,91 @@ function renderDeviceCard(d) {
 
   // Инициализация загрузки (после загрузки — обновить правую колонку)
   setupUploadUI(card, d.device_id, document.getElementById('filesPanel'));
+  
+  // НОВОЕ: Drag & Drop zone для приема файлов с других устройств
+  card.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+    card.style.outline = '2px dashed var(--brand)';
+    card.style.background = 'rgba(59, 130, 246, 0.05)';
+  });
+  
+  card.addEventListener('dragleave', (e) => {
+    // Проверяем что действительно вышли из card (не из дочернего элемента)
+    if (e.target === card || !card.contains(e.relatedTarget)) {
+      card.style.outline = '';
+      card.style.background = '';
+    }
+  });
+  
+  card.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    card.style.outline = '';
+    card.style.background = '';
+    
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+      const { sourceDeviceId, fileName } = data;
+      const targetDeviceId = d.device_id;
+      const move = !e.ctrlKey; // Ctrl = копировать, без Ctrl = переместить
+      
+      if (!sourceDeviceId || !fileName) {
+        console.warn('[DragDrop] ⚠️ Неверные данные');
+        return;
+      }
+      
+      if (sourceDeviceId === targetDeviceId) {
+        console.log('[DragDrop] ℹ️ Источник и цель совпадают');
+        return;
+      }
+      
+      const action = move ? 'переместить' : 'скопировать';
+      const sourceDevice = devicesCache.find(dev => dev.device_id === sourceDeviceId);
+      const sourceName = sourceDevice ? (sourceDevice.name || sourceDeviceId) : sourceDeviceId;
+      
+      if (!confirm(`${move ? 'Переместить' : 'Скопировать'} файл "${decodeURIComponent(fileName)}" с "${sourceName}" на "${d.name || targetDeviceId}"?`)) {
+        return;
+      }
+      
+      console.log(`[DragDrop] 📦 ${action}: ${fileName} (${sourceDeviceId} → ${targetDeviceId})`);
+      
+      const response = await adminFetch(`/api/devices/${encodeURIComponent(targetDeviceId)}/copy-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceDeviceId,
+          fileName: decodeURIComponent(fileName),
+          move
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.ok) {
+        console.log(`[DragDrop] ✅ Файл ${result.action === 'moved' ? 'перемещен' : 'скопирован'}`);
+        
+        // Обновляем оба устройства
+        await loadDevices();
+        renderTVList();
+        
+        // Обновляем панель файлов если одно из устройств открыто
+        if (currentDeviceId === sourceDeviceId || currentDeviceId === targetDeviceId) {
+          const filesPanel = document.getElementById('filesPanel');
+          if (filesPanel) {
+            await refreshFilesPanel(currentDeviceId, filesPanel);
+          }
+        }
+        
+        alert(`✅ Файл успешно ${result.action === 'moved' ? 'перемещен' : 'скопирован'}!`);
+      } else {
+        alert(`❌ Ошибка: ${result.error || 'Unknown error'}`);
+      }
+      
+    } catch (error) {
+      console.error('[DragDrop] ❌ Ошибка:', error);
+      alert(`❌ Ошибка при ${e.ctrlKey ? 'копировании' : 'перемещении'} файла`);
+    }
+  });
 
   return card;
 }
@@ -640,7 +725,11 @@ async function refreshFilesPanel(deviceId, panelEl) {
         }
         
         return `
-          <li class="file-item" style="border:var(--border); background:var(--panel-2); ${isProcessing ? 'opacity:0.7;' : ''}">
+          <li class="file-item" 
+              draggable="${canPlay ? 'true' : 'false'}" 
+              data-device-id="${deviceId}"
+              data-file-name="${encodeURIComponent(safeName)}"
+              style="border:var(--border); background:var(--panel-2); ${isProcessing ? 'opacity:0.7;' : ''} ${canPlay ? 'cursor:move;' : ''}">
             <div class="file-item-header">
               <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
                 <span class="file-item-name fileName-editable" data-safe="${encodeURIComponent(safeName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">${originalName}</span>
@@ -752,6 +841,27 @@ async function refreshFilesPanel(deviceId, panelEl) {
       await refreshFilesPanel(deviceId, panelEl);
       socket.emit('devices/updated');
     };
+  });
+  
+  // НОВОЕ: Drag & Drop для перемещения файлов между устройствами
+  panelEl.querySelectorAll('.file-item[draggable="true"]').forEach(fileItem => {
+    fileItem.addEventListener('dragstart', (e) => {
+      const sourceDeviceId = fileItem.getAttribute('data-device-id');
+      const fileName = decodeURIComponent(fileItem.getAttribute('data-file-name'));
+      
+      e.dataTransfer.effectAllowed = 'copyMove';
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        sourceDeviceId,
+        fileName
+      }));
+      
+      fileItem.style.opacity = '0.5';
+      console.log(`[DragDrop] 🎬 Начало перетаскивания: ${fileName} (${sourceDeviceId})`);
+    });
+    
+    fileItem.addEventListener('dragend', (e) => {
+      fileItem.style.opacity = '1';
+    });
   });
   
   // Переименование файлов - аналогично переименованию устройств

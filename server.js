@@ -371,11 +371,10 @@ app.post('/api/devices/:id/upload', async (req, res, next) => {
       // НОВОЕ: Автоматическая оптимизация видео
       else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
         // Оптимизация в фоне, не блокирует ответ
+        // devices/updated отправляется внутри autoOptimizeVideo
         autoOptimizeVideo(id, fileName).then(result => {
           if (result.success) {
             console.log(`[upload] 🎬 Видео обработано: ${fileName} (optimized=${result.optimized})`);
-            // Отправляем событие клиентам об обновлении
-            io.emit('devices/updated');
           }
         }).catch(err => {
           console.error(`[upload] ❌ Ошибка оптимизации ${fileName}:`, err);
@@ -731,8 +730,11 @@ app.post('/api/devices/:id/files/:name/rename', express.json(), (req, res) => {
     if (!fileNamesMap[id]) fileNamesMap[id] = {};
     if (fileNamesMap[id][oldName]) delete fileNamesMap[id][oldName];
     saveFileNamesMap();
-    d.files = fs.readdirSync(deviceFolder).filter(f => ALLOWED_EXT.test(f));
+    
+    // КРИТИЧНО: Фильтруем системные файлы (default.*, .optimizing_*, etc.)
+    d.files = fs.readdirSync(deviceFolder).filter(f => ALLOWED_EXT.test(f) && !isSystemFile(f));
     d.fileNames = d.files.map(f => fileNamesMap[id]?.[f] || f);
+    
     res.json({ success: true, newName: newNameWithExt });
     io.emit('devices/updated');
   } catch (err) {
@@ -1287,6 +1289,9 @@ async function autoOptimizeVideo(deviceId, fileName) {
       const newStatusKey = `${deviceId}_${finalFileName}`;
       fileStatuses.delete(statusKey); // Удаляем статус старого файла (.webm)
       fileStatuses.set(newStatusKey, { status: 'ready', progress: 100, canPlay: true });
+      
+      // КРИТИЧНО: Сначала обновляем devices, затем уведомляем о готовности файла
+      io.emit('devices/updated');
       io.emit('file/ready', { device_id: deviceId, file: finalFileName });
       
     } else {
@@ -1299,6 +1304,9 @@ async function autoOptimizeVideo(deviceId, fileName) {
       
       // Устанавливаем статус "готово"
       fileStatuses.set(statusKey, { status: 'ready', progress: 100, canPlay: true });
+      
+      // КРИТИЧНО: Сначала обновляем devices, затем уведомляем о готовности файла
+      io.emit('devices/updated');
       io.emit('file/ready', { device_id: deviceId, file: fileName });
       
       console.log(`[VideoOpt] 🎉 Видео оптимизировано: ${fileName}`);
@@ -1601,8 +1609,7 @@ app.post('/api/devices/:id/files/:name/optimize', async (req, res) => {
     const result = await autoOptimizeVideo(id, fileName);
     
     if (result.success) {
-      // Обновляем список файлов
-      io.emit('devices/updated');
+      // devices/updated уже отправлен внутри autoOptimizeVideo
       res.json(result);
     } else {
       res.status(400).json(result);

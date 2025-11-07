@@ -34,6 +34,7 @@ let isLoadingPlaceholder = false; // Флаг для предотвращени�
 let registerInFlight = false; // Предотвращаем одновременные попытки регистрации
 let slidesCache = {}; // Кэш предзагруженных слайдов PPTX/PDF: { 'filename': { count: N, images: [Image, ...] } }
 let currentImgBuffer = 1; // Текущий активный буфер изображений (1 или 2) для двойной буферизации
+let wakeLock = null; // Wake Lock для предотвращения suspend
 
 function ensureSocketConnected(reason = 'manual') {
   const isActive = typeof socket.active === 'boolean' ? socket.active : false;
@@ -170,6 +171,21 @@ if (!device_id || !device_id.trim()) {
           
           vjsPlayer.on('playing', () => {
             console.log('[Player] ▶️ Video playing');
+            
+            // КРИТИЧНО: Запрашиваем Wake Lock для предотвращения suspend
+            if ('wakeLock' in navigator && !wakeLock) {
+              navigator.wakeLock.request('screen').then(wl => {
+                wakeLock = wl;
+                console.log('[Player] 🔒 Wake Lock получен - предотвращаем suspend');
+                
+                wakeLock.addEventListener('release', () => {
+                  console.log('[Player] 🔓 Wake Lock освобожден');
+                  wakeLock = null;
+                });
+              }).catch(e => {
+                console.debug('[Player] Wake Lock недоступен:', e);
+              });
+            }
           });
           
           vjsPlayer.on('progress', () => {
@@ -187,9 +203,23 @@ if (!device_id || !device_id.trim()) {
           });
           
           vjsPlayer.on('suspend', () => {
-            // КРИТИЧНО: Android приостанавливает загрузку для экономии энергии
-            // Это НОРМАЛЬНО для локальных файлов - не показываем это как ошибку
-            console.debug('[Player] ⏸️ Video suspend (нормально)');
+            console.log('[Player] ⏸️ Video suspend - принудительно возобновляем загрузку');
+            
+            // КРИТИЧНО: Android агрессивно приостанавливает загрузку
+            // Явно запрашиваем продолжение загрузки
+            setTimeout(() => {
+              if (vjsPlayer && !vjsPlayer.paused() && currentFileState.type === 'video') {
+                const videoEl = vjsPlayer.el().querySelector('video');
+                if (videoEl) {
+                  try {
+                    videoEl.load(); // Явно запрашиваем продолжение загрузки
+                    console.log('[Player] 🔄 Запрошено продолжение загрузки после suspend');
+                  } catch (e) {
+                    console.warn('[Player] ⚠️ Ошибка возобновления загрузки:', e);
+                  }
+                }
+              }
+            }, 100);
           });
           
           vjsPlayer.on('canplay', () => {

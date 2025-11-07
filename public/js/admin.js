@@ -687,7 +687,7 @@ async function refreshFilesPanel(deviceId, panelEl) {
   
   panelEl.innerHTML = `
     <ul class="list" style="display:grid; gap:var(--space-sm)">
-      ${files.map(({ safeName, originalName, status, progress, canPlay, error }) => {
+      ${files.map(({ safeName, originalName, status, progress, canPlay, error, resolution }) => {
         // placeholders allowed only for image/video (no pdf/pptx)
         const isEligible = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i.test(safeName);
         const ext = safeName.split('.').pop().toLowerCase();
@@ -699,6 +699,23 @@ async function refreshFilesPanel(deviceId, panelEl) {
         const isProcessing = fileStatus === 'processing' || fileStatus === 'checking';
         const hasError = fileStatus === 'error';
         const fileProgress = progress || 100;
+        
+        // Определяем разрешение для видео
+        let resolutionLabel = '';
+        if (isVideo && resolution) {
+          const width = resolution.width || 0;
+          const height = resolution.height || 0;
+          
+          if (width >= 3840 || height >= 2160) {
+            resolutionLabel = '4K';
+          } else if (width >= 1920 || height >= 1080) {
+            resolutionLabel = 'FHD';
+          } else if (width >= 1280 || height >= 720) {
+            resolutionLabel = 'HD';
+          } else if (width > 0) {
+            resolutionLabel = 'SD';
+          }
+        }
         
         // Иконки статуса
         let statusIcon = '';
@@ -738,7 +755,10 @@ async function refreshFilesPanel(deviceId, panelEl) {
               </div>
               <div style="display:flex; align-items:center; gap:var(--space-sm);">
                 ${statusText ? `<span style="font-size:var(--font-size-sm); color:${statusColor}; white-space:nowrap; display:flex; align-items:center; gap:var(--space-xs);">${statusIcon} ${statusText}</span>` : ''}
-                <span class="file-item-type">${typeLabel}</span>
+                <div style="display:flex; align-items:center; gap:4px;">
+                  ${resolutionLabel ? `<span style="font-size:10px; opacity:0.7;">${resolutionLabel}</span>` : ''}
+                  <span class="file-item-type">${typeLabel}</span>
+                </div>
               </div>
             </div>
             <div class="file-item-actions">

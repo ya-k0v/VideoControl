@@ -629,11 +629,11 @@ async function refreshFilesPanel(deviceId, panelEl) {
             statusText = `Обработка... ${fileProgress}%`;
             statusColor = 'var(--warning)';
           } else if (hasError) {
-            statusIcon = '❌';
+            statusIcon = '✗';
             statusText = 'Ошибка обработки';
             statusColor = 'var(--danger)';
           } else if (fileStatus === 'ready') {
-            statusIcon = '✅';
+            statusIcon = '✓';
             statusText = 'Готов';
             statusColor = 'var(--success)';
           }

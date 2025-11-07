@@ -872,6 +872,9 @@ if (!device_id || !device_id.trim()) {
     // КРИТИЧНО: Очищаем текущую заглушку из памяти для принудительной перезагрузки
     currentPlaceholderSrc = null;
     
+    // КРИТИЧНО: Сбрасываем currentFileState в idle (важно для перезагрузки заглушки)
+    currentFileState = { type: null, file: null, page: 1 };
+    
     // СРАЗУ показываем черный экран (мгновенная реакция)
     // Это предотвращает показ старой/поврежденной заглушки
     console.log('[Player] 🖤 Переход на черный экран...');
@@ -893,12 +896,11 @@ if (!device_id || !device_id.trim()) {
       }
     }
     
-    // Небольшая задержка, затем загружаем новую заглушку
+    // Небольшая задержка, затем ВСЕГДА загружаем новую заглушку
     setTimeout(() => {
-      if (!currentFileState.type || currentFileState.type === null) {
-        console.log('[Player] 🔄 Загрузка новой заглушки с cache-busting...');
-        showPlaceholder(true); // Принудительная перезагрузка с ?t=timestamp
-      }
+      // УБРАЛИ УСЛОВИЕ - всегда загружаем новую заглушку при placeholder/refresh
+      console.log('[Player] 🔄 Загрузка новой заглушки с cache-busting...');
+      showPlaceholder(true); // Принудительная перезагрузка с ?t=timestamp
     }, 300); // Даем время на переход к черному экрану
   });
 
@@ -1009,6 +1011,7 @@ if (!device_id || !device_id.trim()) {
 
   socket.on('connect', () => {
     console.log('✅ Connected');
+    isRegistered = false; // Сбрасываем при каждом connect
     registerPlayer();
   });
 
@@ -1027,20 +1030,61 @@ if (!device_id || !device_id.trim()) {
       clearTimeout(registrationTimeout);
       registrationTimeout = null;
     }
+    
+    // КРИТИЧНО: Для Android - явное переподключение после disconnect
+    if (reason === 'transport close' || reason === 'transport error') {
+      console.log('🔄 Transport закрыт, попытка переподключения через 2с...');
+      setTimeout(() => {
+        if (!socket.connected && !preview && device_id) {
+          console.log('🔄 Принудительное переподключение...');
+          socket.connect();
+        }
+      }, 2000);
+    }
   });
 
   socket.on('reconnect', () => {
     console.log('🔄 Reconnected');
-    if (!isRegistered) {
-      registerPlayer();
-    }
+    isRegistered = false;
+    registerPlayer();
+  });
+  
+  // НОВОЕ: Обработчики попыток переподключения
+  socket.on('reconnect_attempt', (attemptNumber) => {
+    console.log(`🔄 Попытка переподключения #${attemptNumber}`);
+  });
+  
+  socket.on('reconnect_error', (error) => {
+    console.warn('⚠️ Ошибка переподключения:', error);
+  });
+  
+  socket.on('reconnect_failed', () => {
+    console.error('❌ Переподключение не удалось');
+    // Пробуем еще раз вручную через 5 секунд
+    setTimeout(() => {
+      if (!socket.connected && !preview && device_id) {
+        console.log('🔄 Ручное переподключение после неудачи...');
+        socket.connect();
+      }
+    }, 5000);
   });
   
   // Watchdog проверка каждые 5 секунд (чаще для надежности)
   setInterval(() => {
-    if (socket.connected && !isRegistered && !preview && device_id) {
-      console.log('🔄 Watchdog: re-registering (device not registered)');
-      registerPlayer();
+    if (!preview && device_id) {
+      // Проверяем подключение
+      if (!socket.connected) {
+        console.warn('🔄 Watchdog: socket disconnected, пытаемся переподключиться...');
+        try {
+          socket.connect();
+        } catch (e) {
+          console.error('❌ Ошибка переподключения:', e);
+        }
+      } else if (!isRegistered) {
+        // Подключены, но не зарегистрированы
+        console.log('🔄 Watchdog: re-registering (device not registered)');
+        registerPlayer();
+      }
     }
   }, 5000);
 }

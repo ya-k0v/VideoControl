@@ -1020,10 +1020,19 @@ async function autoOptimizeVideo(deviceId, fileName) {
   
   const optConfig = videoOptConfig.optimization || {};
   
-  // Создаем временный файл
-  const tempPath = path.join(deviceFolder, `.optimizing_${Date.now()}${ext}`);
+  // КРИТИЧНО: Всегда конвертируем в MP4 (даже если оригинал WebM/MKV/AVI)
+  const outputExt = '.mp4';
+  const tempPath = path.join(deviceFolder, `.optimizing_${Date.now()}${outputExt}`);
+  
+  // Определяем финальное имя файла
+  const baseFileName = path.basename(fileName, ext);
+  const finalFileName = ext === '.mp4' ? fileName : `${baseFileName}.mp4`;
+  const finalPath = path.join(deviceFolder, finalFileName);
   
   console.log(`[VideoOpt] 🎬 Начало конвертации: ${fileName}`);
+  if (ext !== '.mp4') {
+    console.log(`[VideoOpt] 🔄 Конвертация ${ext} → .mp4: ${finalFileName}`);
+  }
   console.log(`[VideoOpt] 🎯 Профиль: ${targetProfile.width}x${targetProfile.height} @ ${targetProfile.fps}fps, ${targetProfile.bitrate}`);
   
   try {
@@ -1126,24 +1135,70 @@ async function autoOptimizeVideo(deviceId, fileName) {
       throw new Error('Converted file is empty');
     }
     
-    // КРИТИЧНО: Удаляем оригинал и заменяем оптимизированным (без резервной копии)
-    fs.unlinkSync(filePath);
-    fs.renameSync(tempPath, filePath);
-    
-    // Устанавливаем права
-    fs.chmodSync(filePath, 0o644);
-    
-    // Устанавливаем статус "готово"
-    fileStatuses.set(statusKey, { status: 'ready', progress: 100, canPlay: true });
-    io.emit('file/ready', { device_id: deviceId, file: fileName });
-    
-    console.log(`[VideoOpt] 🎉 Видео оптимизировано: ${fileName}`);
-    console.log(`[VideoOpt] 📊 Размер: ${Math.round(stats.size / 1024 / 1024)}MB`);
+    // КРИТИЧНО: Удаляем оригинал и заменяем оптимизированным
+    // Если конвертация изменила формат (webm→mp4) - переименовываем файл
+    if (ext !== '.mp4') {
+      console.log(`[VideoOpt] 🔄 Замена формата: ${fileName} → ${finalFileName}`);
+      
+      // Удаляем оригинал (.webm, .mkv, etc)
+      fs.unlinkSync(filePath);
+      
+      // Переименовываем временный → финальное имя с .mp4
+      fs.renameSync(tempPath, finalPath);
+      
+      // Обновляем маппинг имен (оригинальное имя сохраняем)
+      if (fileNamesMap[deviceId] && fileNamesMap[deviceId][fileName]) {
+        const originalName = fileNamesMap[deviceId][fileName];
+        delete fileNamesMap[deviceId][fileName];
+        fileNamesMap[deviceId][finalFileName] = originalName;
+        saveFileNamesMap();
+        console.log(`[VideoOpt] 📝 Маппинг обновлен: ${fileName} → ${finalFileName}`);
+      }
+      
+      // Устанавливаем права
+      fs.chmodSync(finalPath, 0o644);
+      
+      // Обновляем список файлов устройства
+      const fileIndex = d.files.indexOf(fileName);
+      if (fileIndex >= 0) {
+        d.files[fileIndex] = finalFileName;
+        if (d.fileNames && d.fileNames[fileIndex]) {
+          // fileNames уже правильное из маппинга
+        }
+      }
+      
+      console.log(`[VideoOpt] 🎉 Видео конвертировано: ${fileName} → ${finalFileName}`);
+      console.log(`[VideoOpt] 📊 Размер: ${Math.round(stats.size / 1024 / 1024)}MB`);
+      
+      // Статус для НОВОГО имени файла (.mp4)
+      const newStatusKey = `${deviceId}_${finalFileName}`;
+      fileStatuses.delete(statusKey); // Удаляем статус старого файла (.webm)
+      fileStatuses.set(newStatusKey, { status: 'ready', progress: 100, canPlay: true });
+      io.emit('file/ready', { device_id: deviceId, file: finalFileName });
+      
+    } else {
+      // MP4 → MP4 (просто замена на оптимизированный)
+      fs.unlinkSync(filePath);
+      fs.renameSync(tempPath, filePath);
+      
+      // Устанавливаем права
+      fs.chmodSync(filePath, 0o644);
+      
+      // Устанавливаем статус "готово"
+      fileStatuses.set(statusKey, { status: 'ready', progress: 100, canPlay: true });
+      io.emit('file/ready', { device_id: deviceId, file: fileName });
+      
+      console.log(`[VideoOpt] 🎉 Видео оптимизировано: ${fileName}`);
+      console.log(`[VideoOpt] 📊 Размер: ${Math.round(stats.size / 1024 / 1024)}MB`);
+    }
     
     return { 
       success: true, 
       message: 'Optimized successfully', 
       optimized: true,
+      originalFile: fileName,
+      finalFile: ext !== '.mp4' ? finalFileName : fileName,
+      formatChanged: ext !== '.mp4',
       sizeBytes: stats.size,
       params: {
         before: params,
@@ -1164,19 +1219,26 @@ async function autoOptimizeVideo(deviceId, fileName) {
       fs.unlinkSync(tempPath);
     }
     
-    // Если оригинал был удален, а конвертация провалилась - проблема!
-    // Но мы удаляем оригинал ПОСЛЕ успешной конвертации, так что это safe
+    // Определяем причину ошибки для понятного сообщения
+    let errorMessage = error.message;
+    
+    if (params && params.codec && params.codec.toLowerCase() === 'av1') {
+      errorMessage = `Кодек AV1 не поддерживается вашей версией FFmpeg. Файл воспроизводится как WebM, но может тормозить на Android. Рекомендация: конвертируйте файл в H.264 вручную или обновите FFmpeg.`;
+      console.warn(`[VideoOpt] ⚠️ AV1 кодек не поддерживается`);
+    } else if (params && params.codec && params.codec.toLowerCase() === 'vp9') {
+      errorMessage = `Кодек VP9 может не поддерживаться. Файл воспроизводится как WebM, но может тормозить на Android.`;
+    }
     
     // Устанавливаем статус "ошибка" но файл можно воспроизвести (оригинал)
     fileStatuses.set(statusKey, { 
       status: 'error', 
       progress: 0, 
-      canPlay: true, 
-      error: error.message 
+      canPlay: true,  // Оригинал можно воспроизвести
+      error: errorMessage 
     });
-    io.emit('file/error', { device_id: deviceId, file: fileName, error: error.message });
+    io.emit('file/error', { device_id: deviceId, file: fileName, error: errorMessage });
     
-    return { success: false, message: `Conversion failed: ${error.message}` };
+    return { success: false, message: errorMessage };
   }
 }
 

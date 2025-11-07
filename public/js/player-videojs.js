@@ -316,12 +316,22 @@ if (!device_id || !device_id.trim()) {
     // КРИТИЧНО: При force=true генерируем timestamp для полного обхода кэша
     const cacheBuster = force ? `?t=${Date.now()}` : '';
     
+    // Хелпер для fetch с timeout (защита от зависания)
+    const fetchWithTimeout = (url, options, timeoutMs = 5000) => {
+      return Promise.race([
+        fetch(url, options),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
+        )
+      ]);
+    };
+    
     try {
       // API запрос тоже с cache-busting при force=true
       const apiUrl = `/api/devices/${encodeURIComponent(device_id)}/placeholder${cacheBuster}`;
-      const apiRes = await fetch(apiUrl, {
+      const apiRes = await fetchWithTimeout(apiUrl, {
         cache: force ? 'no-store' : 'default' // Запрещаем браузеру использовать HTTP кэш при force=true
-      });
+      }, 5000);
       
       if (apiRes.ok) {
         const data = await apiRes.json();
@@ -332,10 +342,10 @@ if (!device_id || !device_id.trim()) {
           // При force=true проверка тоже идет с cache-busting
           try {
             const checkUrl = url + cacheBuster;
-            const checkRes = await fetch(checkUrl, { 
+            const checkRes = await fetchWithTimeout(checkUrl, { 
               method: 'HEAD',
               cache: force ? 'no-store' : 'default' // Обход HTTP кэша браузера
-            });
+            }, 3000);
             
             if (checkRes.ok) {
               // Возвращаем URL с cache-busting если force=true
@@ -354,16 +364,16 @@ if (!device_id || !device_id.trim()) {
     
     // Fallback: пробуем найти default.* файлы напрямую
     console.log('[Player] 🔍 Пробуем найти default.* файлы напрямую...');
-    const tryList = ['mp4','webm','ogg'];
+    const tryList = ['jpg','png','mp4','webm','ogg']; // КРИТИЧНО: сначала изображения
     for (const ext of tryList) {
       let url = `/content/${encodeURIComponent(device_id)}/default.${ext}`;
       try {
-        // КРИТИЧНО: HEAD запрос с cache-busting при force=true
+        // КРИТИЧНО: HEAD запрос с cache-busting при force=true и TIMEOUT
         const checkUrl = url + cacheBuster;
-        const r = await fetch(checkUrl, { 
+        const r = await fetchWithTimeout(checkUrl, { 
           method: 'HEAD',
           cache: force ? 'no-store' : 'default' // Обход HTTP кэша браузера
-        });
+        }, 3000);
         
         if (r.ok) {
           console.log(`[Player] ✅ Найден файл: default.${ext} ${force ? '(с cache-busting)' : ''}`);

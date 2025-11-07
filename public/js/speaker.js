@@ -15,6 +15,12 @@ let tvPage = 0;
 let filePage = 0;
 let nodeNames = {}; // { device_id: name }
 
+// Обрезка текста с многоточием
+function truncateText(text, maxLength = 40) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   initThemeToggle(document.getElementById('themeBtn'), 'vc_theme_speaker');
   nodeNames = await loadNodeNames();
@@ -201,11 +207,13 @@ async function loadFiles() {
     // Используем safeName для сравнения с currentFile (для обратной совместимости)
     const active = currentFile === safeName || currentFile === originalName;
     // Убираем расширение из отображаемого имени
-    const displayName = originalName.replace(/\.[^.]+$/, '');
+    const displayNameFull = originalName.replace(/\.[^.]+$/, '');
+    // НОВОЕ: Обрезаем до 40 символов
+    const displayName = truncateText(displayNameFull, 40);
     return `
       <li class="file-item ${active ? 'active' : ''}">
         <div class="file-item-header">
-          <div class="file-item-name">${displayName}</div>
+          <div class="file-item-name" title="${displayNameFull}">${displayName}</div>
           <span class="file-item-type">${type}</span>
         </div>
         <div class="file-item-actions">

@@ -653,7 +653,7 @@ async function refreshFilesPanel(deviceId, panelEl) {
   const allFiles = filesData.map(item => {
     if (typeof item === 'string') {
       // Старый формат (для обратной совместимости)
-      return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true };
+      return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true, resolution: null };
     }
     return { 
       safeName: item.name, 
@@ -661,7 +661,8 @@ async function refreshFilesPanel(deviceId, panelEl) {
       status: item.status || 'ready',
       progress: item.progress || 100,
       canPlay: item.canPlay !== false,
-      error: item.error || null
+      error: item.error || null,
+      resolution: item.resolution || null
     };
   });
   

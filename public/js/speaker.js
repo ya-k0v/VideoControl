@@ -241,10 +241,12 @@ async function loadFiles() {
     return `
       <li class="file-item ${active ? 'active' : ''}">
         <div class="file-item-header">
-          <div class="file-item-name" title="${displayNameFull}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; flex:1;">${displayNameFull}</div>
-          <div style="display:flex; align-items:center; gap:4px;">
-            ${resolutionLabel ? `<span class="file-item-resolution" style="font-size:10px; opacity:0.7;">${resolutionLabel}</span>` : ''}
-            <span class="file-item-type">${type}</span>
+          <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
+            <span class="file-item-name" title="${displayNameFull}" style="flex:1; min-width:0;">${displayNameFull}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+            ${resolutionLabel ? `<span style="font-size:10px; opacity:0.7; white-space:nowrap;">${resolutionLabel}</span>` : ''}
+            <span class="file-item-type" style="white-space:nowrap;">${type}</span>
           </div>
         </div>
         <div class="file-item-actions">

@@ -157,33 +157,47 @@ if (!device_id || !device_id.trim()) {
           let stalledTimeout = null;
           let waitingTimeout = null;
           
-          // КРИТИЧНО для Android: просто логируем события, НЕ перезапускаем
-          // Перезапуск вызывает DOMException и ухудшает ситуацию
+          // КРИТИЧНО для Android: обработчики состояния воспроизведения
+          let lastLoggedPercent = -1;
+          
           vjsPlayer.on('stalled', () => {
-            console.warn('[Player] ⚠️ Video stalled (буферизация застряла) - ждем автовосстановления');
+            console.warn('[Player] ⚠️ Video stalled');
           });
           
           vjsPlayer.on('waiting', () => {
-            console.log('[Player] ⏳ Video waiting (буферизация) - загрузка данных');
+            console.log('[Player] ⏳ Video waiting');
           });
           
           vjsPlayer.on('playing', () => {
-            console.log('[Player] ▶️ Video playing - воспроизведение возобновлено');
+            console.log('[Player] ▶️ Video playing');
           });
           
           vjsPlayer.on('progress', () => {
-            // Логируем прогресс загрузки для диагностики
+            // Логируем только изменения процента (не спамим)
             const buffered = vjsPlayer.buffered();
             if (buffered.length > 0) {
               const bufferedEnd = buffered.end(buffered.length - 1);
               const duration = vjsPlayer.duration();
               const percent = duration > 0 ? Math.round((bufferedEnd / duration) * 100) : 0;
-              console.log(`[Player] 📊 Буферизовано: ${percent}% (${bufferedEnd.toFixed(1)}s / ${duration.toFixed(1)}s)`);
+              if (percent !== lastLoggedPercent && percent % 10 === 0) {
+                console.log(`[Player] 📊 Буферизовано: ${percent}%`);
+                lastLoggedPercent = percent;
+              }
             }
           });
           
           vjsPlayer.on('suspend', () => {
-            console.log('[Player] ⏸️ Video suspend - загрузка приостановлена браузером');
+            // КРИТИЧНО: Android приостанавливает загрузку для экономии энергии
+            // Это НОРМАЛЬНО для локальных файлов - не показываем это как ошибку
+            console.debug('[Player] ⏸️ Video suspend (нормально)');
+          });
+          
+          vjsPlayer.on('canplay', () => {
+            console.log('[Player] ✅ canplay - достаточно данных для воспроизведения');
+          });
+          
+          vjsPlayer.on('canplaythrough', () => {
+            console.log('[Player] ✅ canplaythrough - весь файл может быть воспроизведен');
           });
           
           // Загружаем заглушку или preview файл после готовности

@@ -867,6 +867,24 @@ if (!device_id || !device_id.trim()) {
     console.log('[Player] ⏸️ player/pause');
     if (vjsPlayer && !vjsPlayer.paused()) {
       vjsPlayer.pause();
+      
+      // КРИТИЧНО для Android WebView: при паузе ЯВНО оставляем видео видимым
+      // WebView может скрывать видео при паузе - это баг
+      setTimeout(() => {
+        if (currentFileState.type === 'video' && videoContainer) {
+          console.log('[Player] 📺 Проверка видимости после паузы:', {
+            hasVisible: videoContainer.classList.contains('visible'),
+            idleVisible: idle.classList.contains('visible')
+          });
+          
+          // Если видео скрылось - явно показываем
+          if (!videoContainer.classList.contains('visible') || idle.classList.contains('visible')) {
+            console.log('[Player] 🔧 Восстанавливаем видимость видео после паузы');
+            idle.classList.remove('visible');
+            videoContainer.classList.add('visible');
+          }
+        }
+      }, 100); // Небольшая задержка чтобы Video.js/WebView успели обработать паузу
     }
   });
 

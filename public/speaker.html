@@ -65,7 +65,13 @@
       }
       
       .speaker-main {
-        grid-template-columns: 1fr 360px;
+        grid-template-columns: minmax(0, 1fr) 360px;
+      }
+      
+      /* На десктопе также ограничиваем */
+      .files-panel {
+        max-width: 100%;
+        overflow: hidden;
       }
       
       /* Сбрасываем ограничения высоты на широких экранах */

@@ -252,7 +252,7 @@
       } catch {}
     });
   </script>
-  <script type="module" src="/js/player-videojs.js?v=2.3.1"></script>
+  <script type="module" src="/js/player-videojs.js?v=2.4.0"></script>
 </head>
 <body>
   <div id="stage">
@@ -260,6 +260,10 @@
     <div id="videoContainer" class="layer">
       <video id="v" class="video-js" playsinline webkit-playsinline muted preload="auto" disablePictureInPicture></video>
     </div>
+    <!-- Canvas для захвата кадра при паузе (невидимый) -->
+    <canvas id="pauseCanvas" style="display:none;"></canvas>
+    <!-- Снимок последнего кадра при паузе -->
+    <img id="pauseSnapshot" class="layer" alt="pause frame" style="display:none; object-fit:contain;"/>
     <!-- Двойная буферизация для плавных переходов слайдов (ping-pong buffer) -->
     <img id="img1" class="layer img-buffer" alt="image" decoding="async"/>
     <img id="img2" class="layer img-buffer" alt="image" decoding="async"/>

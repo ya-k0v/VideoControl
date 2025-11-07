@@ -26,6 +26,8 @@ const img2 = document.getElementById('img2');
 const img = img1; // Для обратной совместимости со старым кодом
 const pdf = document.getElementById('pdf');
 const unmuteBtn = document.getElementById('unmute');
+const pauseCanvas = document.getElementById('pauseCanvas');
+const pauseSnapshot = document.getElementById('pauseSnapshot');
 
 let currentFileState = { type: null, file: null, page: 1 };
 let soundUnlocked = false;
@@ -691,6 +693,14 @@ if (!device_id || !device_id.trim()) {
   socket.on('player/play', ({ type, file, page }) => {
     console.log('[Player] 📡 player/play:', { type, file, page });
     
+    // КРИТИЧНО: Убираем снимок паузы при возобновлении
+    if (pauseSnapshot) {
+      console.log('[Player] 🗑️ Удаляем снимок паузы');
+      pauseSnapshot.style.display = 'none';
+      pauseSnapshot.classList.remove('visible');
+      pauseSnapshot.removeAttribute('src');
+    }
+    
     if (type === 'video') {
       img1.removeAttribute('src');
       img2.removeAttribute('src');
@@ -866,25 +876,40 @@ if (!device_id || !device_id.trim()) {
   socket.on('player/pause', () => {
     console.log('[Player] ⏸️ player/pause');
     if (vjsPlayer && !vjsPlayer.paused()) {
+      // КРИТИЧНО: Захватываем текущий кадр ПЕРЕД паузой
+      try {
+        const videoEl = vjsPlayer.el().querySelector('video');
+        if (videoEl && pauseCanvas && pauseSnapshot) {
+          const ctx = pauseCanvas.getContext('2d');
+          
+          // Устанавливаем размер canvas = размеру видео
+          pauseCanvas.width = videoEl.videoWidth;
+          pauseCanvas.height = videoEl.videoHeight;
+          
+          // Рисуем текущий кадр на canvas
+          ctx.drawImage(videoEl, 0, 0, pauseCanvas.width, pauseCanvas.height);
+          
+          // Конвертируем canvas в data URL и устанавливаем в img
+          const frameDataURL = pauseCanvas.toDataURL('image/jpeg', 0.95);
+          pauseSnapshot.src = frameDataURL;
+          
+          console.log('[Player] 📸 Снимок кадра сделан:', pauseCanvas.width + 'x' + pauseCanvas.height);
+        }
+      } catch (e) {
+        console.warn('[Player] ⚠️ Не удалось захватить кадр:', e);
+      }
+      
       vjsPlayer.pause();
       
-      // КРИТИЧНО для Android WebView: при паузе ЯВНО оставляем видео видимым
-      // WebView может скрывать видео при паузе - это баг
+      // Показываем снимок поверх видео через 50ms (чтобы пауза успела примениться)
       setTimeout(() => {
-        if (currentFileState.type === 'video' && videoContainer) {
-          console.log('[Player] 📺 Проверка видимости после паузы:', {
-            hasVisible: videoContainer.classList.contains('visible'),
-            idleVisible: idle.classList.contains('visible')
-          });
-          
-          // Если видео скрылось - явно показываем
-          if (!videoContainer.classList.contains('visible') || idle.classList.contains('visible')) {
-            console.log('[Player] 🔧 Восстанавливаем видимость видео после паузы');
-            idle.classList.remove('visible');
-            videoContainer.classList.add('visible');
-          }
+        if (currentFileState.type === 'video' && pauseSnapshot) {
+          console.log('[Player] 🖼️ Показываем снимок кадра поверх видео');
+          pauseSnapshot.style.display = 'block';
+          pauseSnapshot.classList.add('visible');
+          pauseSnapshot.style.zIndex = '999999'; // Поверх всего
         }
-      }, 100); // Небольшая задержка чтобы Video.js/WebView успели обработать паузу
+      }, 50);
     }
   });
 

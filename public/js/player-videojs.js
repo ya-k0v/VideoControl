@@ -93,24 +93,17 @@ if (!device_id || !device_id.trim()) {
         vjsPlayer = videojs('v', {
           controls: false,
           autoplay: false,
-          preload: 'auto', // КРИТИЧНО: для больших файлов используем 'auto' вместо 'metadata'
+          preload: 'auto',
           muted: true,
           loop: false,
           playsinline: true,
           disablePictureInPicture: true,
           nativeControlsForTouch: false,
-          // Настройки для стабильного streaming больших файлов
+          // КРИТИЧНО для Android WebView: используем нативный HTML5 плеер
           html5: {
-            vhs: {
-              overrideNative: true,
-              enableLowInitialPlaylist: true,
-              smoothQualityChange: true,
-              bandwidth: 10000000, // 10 Mbps
-              bufferSize: 30 // 30 секунд буфера для стабильности
-            },
-            nativeVideoTracks: false,
-            nativeAudioTracks: false,
-            nativeTextTracks: false
+            nativeVideoTracks: true,
+            nativeAudioTracks: true,
+            nativeTextTracks: true
           }
         });
         
@@ -158,6 +151,53 @@ if (!device_id || !device_id.trim()) {
           vjsPlayer.on('error', function() {
             const error = vjsPlayer.error();
             console.error('[Player] ❌ Video.js error:', error);
+          });
+          
+          // КРИТИЧНО для Android: обработчики буферизации и зависания
+          let stalledTimeout = null;
+          let waitingTimeout = null;
+          
+          vjsPlayer.on('stalled', () => {
+            console.warn('[Player] ⚠️ Video stalled (буферизация застряла)');
+            
+            // Если зависло больше 3 секунд - пробуем перезапустить
+            stalledTimeout = setTimeout(() => {
+              if (!vjsPlayer.paused()) {
+                console.warn('[Player] 🔄 Пытаемся возобновить после stalled');
+                const currentTime = vjsPlayer.currentTime();
+                vjsPlayer.pause();
+                setTimeout(() => {
+                  vjsPlayer.currentTime(currentTime);
+                  vjsPlayer.play().catch(e => console.error('[Player] ❌ Ошибка возобновления:', e));
+                }, 100);
+              }
+            }, 3000);
+          });
+          
+          vjsPlayer.on('waiting', () => {
+            console.log('[Player] ⏳ Video waiting (буферизация)');
+            
+            // Если waiting больше 5 секунд - перезапускаем
+            waitingTimeout = setTimeout(() => {
+              if (!vjsPlayer.paused()) {
+                console.warn('[Player] 🔄 Пытаемся возобновить после waiting');
+                const currentTime = vjsPlayer.currentTime();
+                vjsPlayer.load();
+                vjsPlayer.currentTime(currentTime);
+                vjsPlayer.play().catch(e => console.error('[Player] ❌ Ошибка возобновления:', e));
+              }
+            }, 5000);
+          });
+          
+          vjsPlayer.on('playing', () => {
+            console.log('[Player] ▶️ Video playing');
+            if (stalledTimeout) clearTimeout(stalledTimeout);
+            if (waitingTimeout) clearTimeout(waitingTimeout);
+          });
+          
+          vjsPlayer.on('progress', () => {
+            // Очищаем таймауты при прогрессе загрузки
+            if (stalledTimeout) clearTimeout(stalledTimeout);
           });
           
           // Загружаем заглушку или preview файл после готовности

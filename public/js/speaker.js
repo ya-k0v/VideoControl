@@ -15,10 +15,16 @@ let tvPage = 0;
 let filePage = 0;
 let nodeNames = {}; // { device_id: name }
 
-// Обрезка текста с многоточием
+// Обрезка текста с многоточием (адаптивно для мобильных)
 function truncateText(text, maxLength = 40) {
-  if (!text || text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
+  if (!text) return text;
+  
+  // Для мобильных устройств (включая iPad) - короче
+  const isMobile = window.innerWidth <= 1024;
+  const limit = isMobile ? 25 : maxLength;
+  
+  if (text.length <= limit) return text;
+  return text.substring(0, limit) + '...';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

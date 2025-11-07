@@ -235,14 +235,14 @@ async function loadFiles() {
     
     // Используем safeName для сравнения с currentFile (для обратной совместимости)
     const active = currentFile === safeName || currentFile === originalName;
-    // Убираем расширение из отображаемого имени
-    const displayNameFull = originalName.replace(/\.[^.]+$/, '');
-    // НЕ обрезаем в JS - используем CSS ellipsis
+    // Убираем расширение из отображаемого имени (как в админке)
+    const displayName = originalName.replace(/\.[^.]+$/, '');
+    
     return `
-      <li class="file-item ${active ? 'active' : ''}">
-        <div class="file-item-header">
-          <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
-            <span class="file-item-name" title="${displayNameFull}" style="flex:1; min-width:0;">${displayNameFull}</span>
+      <li class="file-item ${active ? 'active' : ''}" style="max-width:100%;">
+        <div class="file-item-header" style="max-width:100%;">
+          <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0; max-width:calc(100% - 80px);">
+            <span class="file-item-name" title="${displayName}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; display:block;">${displayName}</span>
           </div>
           <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
             ${resolutionLabel ? `<span style="font-size:10px; opacity:0.7; white-space:nowrap;">${resolutionLabel}</span>` : ''}

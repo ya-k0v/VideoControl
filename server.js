@@ -1109,6 +1109,11 @@ async function autoOptimizeVideo(deviceId, fileName) {
   if (!needsOptimization(params)) {
     console.log(`[VideoOpt] ✅ Видео оптимально: ${fileName}`);
     fileStatuses.set(statusKey, { status: 'ready', progress: 100, canPlay: true });
+    
+    // КРИТИЧНО: Отправляем событие клиентам даже если оптимизация не требуется
+    io.emit('devices/updated');
+    io.emit('file/ready', { device_id: deviceId, file: fileName });
+    
     return { success: true, message: 'Already optimized', optimized: false };
   }
   

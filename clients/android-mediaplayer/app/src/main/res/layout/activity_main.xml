@@ -33,5 +33,17 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <!-- Кнопка настроек (скрыта, вызов длинным нажатием) -->
+    <Button
+        android:id="@+id/settingsButton"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:text="⚙"
+        android:textSize="20sp"
+        android:alpha="0.3"
+        android:visibility="visible" />
+
 </FrameLayout>
 

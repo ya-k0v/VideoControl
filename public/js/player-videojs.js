@@ -94,18 +94,21 @@ if (!device_id || !device_id.trim()) {
         vjsPlayer = videojs('v', {
           controls: false,
           autoplay: false,
-          preload: 'auto',
+          preload: 'metadata', // КРИТИЧНО: metadata вместо auto - меньше нагрузки
           muted: true,
           loop: false,
           playsinline: true,
           disablePictureInPicture: true,
           nativeControlsForTouch: false,
-          // КРИТИЧНО для Android WebView: используем нативный HTML5 плеер
+          // КРИТИЧНО для Android WebView: полностью нативный режим
           html5: {
             nativeVideoTracks: true,
             nativeAudioTracks: true,
             nativeTextTracks: true
-          }
+          },
+          liveui: false,
+          responsive: false,
+          fluid: false
         });
         
         // Ждем полной готовности Video.js

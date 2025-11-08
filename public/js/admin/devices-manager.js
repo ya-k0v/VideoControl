@@ -127,10 +127,12 @@ export function renderTVList(devicesCache, readyDevices, currentDeviceId, nodeNa
         if (result.ok) {
           console.log(`[DragDrop] ✅ Файл ${result.action === 'moved' ? 'перемещен' : 'скопирован'}: "${decodeURIComponent(fileName)}" → "${targetName}"`);
           
-          // Обновляем список устройств
-          const newDevices = await loadDevices(adminFetch, sortDevices, nodeNames);
-          Object.assign(devicesCache, newDevices);
-          renderTVList(devicesCache, readyDevices, currentDeviceId, nodeNames, tvPage, getPageSize, sortDevices, openDevice, renderFilesPane, adminFetch);
+          // КРИТИЧНО: Перезагружаем список устройств через Socket.IO событие
+          // Socket.IO сервер отправит devices/updated, который обновит devicesCache
+          // Это гарантирует что все клиенты увидят изменения
+          
+          // Небольшая задержка чтобы Socket.IO событие успело обработаться
+          await new Promise(resolve => setTimeout(resolve, 100));
           
           // Обновляем панель файлов если одно из устройств открыто
           if (currentDeviceId === sourceDeviceId || currentDeviceId === targetDeviceId) {

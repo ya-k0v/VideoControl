@@ -6,7 +6,8 @@ export async function loadFilesWithStatus(deviceId) {
   return await res.json();
 }
 
-export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage, socket) {
+export 
+async function refreshFilesPanel(deviceId, panelEl) {
   // НОВОЕ: Используем API с статусами файлов
   const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files-with-status`);
   const filesData = await res.json();
@@ -43,9 +44,8 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   // Пагинация файлов
   const pageSize = getPageSize();
   const totalPages = Math.max(1, Math.ceil(allFiles.length / pageSize));
-  let currentFilePage = filePage;
-  if (currentFilePage >= totalPages) currentFilePage = totalPages - 1;
-  const start = currentFilePage * pageSize;
+  if (filePage >= totalPages) filePage = totalPages - 1;
+  const start = filePage * pageSize;
   const end = Math.min(start + pageSize, allFiles.length);
   const files = allFiles.slice(start, end);
   
@@ -89,7 +89,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
         if (isVideo) {
           if (isProcessing) {
             statusIcon = '⏳';
-            statusText = \`Обработка... \${fileProgress}%\`;
+            statusText = `Обработка... ${fileProgress}%`;
             statusColor = 'var(--warning)';
           } else if (hasError) {
             statusIcon = '✗';
@@ -102,15 +102,15 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
           }
         }
         
-        return \`
+        return `
           <li class="file-item" 
-              draggable="\${canPlay ? 'true' : 'false'}" 
-              data-device-id="\${deviceId}"
-              data-file-name="\${encodeURIComponent(safeName)}"
-              style="border:var(--border); background:var(--panel-2); \${isProcessing ? 'opacity:0.7;' : ''} \${canPlay ? 'cursor:move;' : ''}">
+              draggable="${canPlay ? 'true' : 'false'}" 
+              data-device-id="${deviceId}"
+              data-file-name="${encodeURIComponent(safeName)}"
+              style="border:var(--border); background:var(--panel-2); ${isProcessing ? 'opacity:0.7;' : ''} ${canPlay ? 'cursor:move;' : ''}">
             <div class="file-item-header">
               <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
-                <span class="file-item-name fileName-editable" data-safe="\${encodeURIComponent(safeName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">\${originalName}</span>
+                <span class="file-item-name fileName-editable" data-safe="${encodeURIComponent(safeName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">${originalName}</span>
                 <button class="primary fileRenameSaveBtn" style="display:none; min-width:28px; width:28px; height:28px; padding:0; border-radius:var(--radius-sm); flex-shrink:0" title="Сохранить">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block">
                     <polyline points="20 6 9 17 4 12"></polyline>
@@ -118,20 +118,20 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
                 </button>
               </div>
               <div style="display:flex; align-items:center; gap:var(--space-sm);">
-                \${statusText ? \`<span style="font-size:var(--font-size-sm); color:\${statusColor}; white-space:nowrap; display:flex; align-items:center; gap:var(--space-xs);">\${statusIcon} \${statusText}</span>\` : ''}
+                ${statusText ? `<span style="font-size:var(--font-size-sm); color:${statusColor}; white-space:nowrap; display:flex; align-items:center; gap:var(--space-xs);">${statusIcon} ${statusText}</span>` : ''}
                 <div style="display:flex; align-items:center; gap:4px;">
-                  \${resolutionLabel ? \`<span style="font-size:10px; opacity:0.7;">\${resolutionLabel}</span>\` : ''}
-                  <span class="file-item-type">\${typeLabel}</span>
+                  ${resolutionLabel ? `<span style="font-size:10px; opacity:0.7;">${resolutionLabel}</span>` : ''}
+                  <span class="file-item-type">${typeLabel}</span>
                 </div>
               </div>
             </div>
             <div class="file-item-actions">
-              <button class="secondary previewFileBtn" data-safe="\${encodeURIComponent(safeName)}" data-original="\${encodeURIComponent(originalName)}" title="Предпросмотр" \${!canPlay ? 'disabled' : ''}>Превью</button>
-              \${isEligible ? \`<button class="secondary makeDefaultBtn" data-safe="\${encodeURIComponent(safeName)}" data-original="\${encodeURIComponent(originalName)}" title="Сделать заглушкой" \${!canPlay ? 'disabled' : ''}>Заглушка</button>\` : \`\`}
-              <button class="danger delFileBtn" data-safe="\${encodeURIComponent(safeName)}" data-original="\${encodeURIComponent(originalName)}" title="Удалить">Удалить</button>
+              <button class="secondary previewFileBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Предпросмотр" ${!canPlay ? 'disabled' : ''}>Превью</button>
+              ${isEligible ? `<button class="secondary makeDefaultBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Сделать заглушкой" ${!canPlay ? 'disabled' : ''}>Заглушка</button>` : ``}
+              <button class="danger delFileBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}" title="Удалить">Удалить</button>
             </div>
           </li>
-        \`;
+        `;
       }).join('')}
     </ul>
   `;
@@ -152,14 +152,14 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   
   if (totalPages > 1) {
     filePagerAdmin.innerHTML = `
-      <button class="secondary" id="filePrevAdmin" ${currentFilePage<=0?'disabled':''} style="min-width:80px">Назад</button>
-      <span style="white-space:nowrap">Стр. ${currentFilePage+1} из ${totalPages}</span>
-      <button class="secondary" id="fileNextAdmin" ${currentFilePage>=totalPages-1?'disabled':''} style="min-width:80px">Вперёд</button>
+      <button class="secondary" id="filePrevAdmin" ${filePage<=0?'disabled':''} style="min-width:80px">Назад</button>
+      <span style="white-space:nowrap">Стр. ${filePage+1} из ${totalPages}</span>
+      <button class="secondary" id="fileNextAdmin" ${filePage>=totalPages-1?'disabled':''} style="min-width:80px">Вперёд</button>
     `;
     const prev = filePagerAdmin.querySelector('#filePrevAdmin');
     const next = filePagerAdmin.querySelector('#fileNextAdmin');
-    if (prev) prev.onclick = () => { if (currentFilePage>0) { refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, currentFilePage-1, socket); } };
-    if (next) next.onclick = () => { if (currentFilePage<totalPages-1) { refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, currentFilePage+1, socket); } };
+    if (prev) prev.onclick = () => { if (filePage>0) { filePage--; refreshFilesPanel(deviceId, panelEl); } };
+    if (next) next.onclick = () => { if (filePage<totalPages-1) { filePage++; refreshFilesPanel(deviceId, panelEl); } };
   } else if (filePagerAdmin) {
     filePagerAdmin.innerHTML = '';
   }
@@ -207,7 +207,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
         // Preview iframe обновится через событие placeholder/refresh от сервера
         await new Promise(resolve => setTimeout(resolve, 600));
         
-        await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, currentFilePage, socket);
+        await refreshFilesPanel(deviceId, panelEl);
         socket.emit('devices/updated');
       } catch (e) { console.error(e); }
     };
@@ -219,7 +219,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
       const originalName = decodeURIComponent(btn.getAttribute('data-original'));
       if (!confirm(`Удалить файл ${originalName}?`)) return;
       await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files/${encodeURIComponent(safeName)}`, { method: 'DELETE' });
-      await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, currentFilePage, socket);
+      await refreshFilesPanel(deviceId, panelEl);
       socket.emit('devices/updated');
     };
   });
@@ -315,7 +315,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
           isEditing = false;
           nameEl.contentEditable = 'false';
           if (saveBtn) saveBtn.style.display = 'none';
-          await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, currentFilePage, socket);
+          await refreshFilesPanel(deviceId, panelEl);
           socket.emit('devices/updated');
         } else {
           alert(`Ошибка переименования: ${data.error || 'Неизвестная ошибка'}`);
@@ -352,3 +352,5 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
     }
   });
 }
+
+// setupUploadUI перенесена в upload-ui.js

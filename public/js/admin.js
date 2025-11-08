@@ -3,6 +3,12 @@ import { sortDevices, debounce, getPageSize, loadNodeNames } from './utils.js';
 import { DEVICE_ICONS, DEVICE_TYPE_NAMES } from './shared/constants.js';
 import { ensureAuth, adminFetch, setXhrAuth } from './admin/auth.js';
 import { setupSocketListeners } from './admin/socket-listeners.js';
+import { loadDevices as loadDevicesModule, renderTVList as renderTVListModule } from './admin/devices-manager.js';
+import { createDevice, renameDevice, deleteDevice } from './admin/device-crud.js';
+import { loadFilesWithStatus, refreshFilesPanel } from './admin/files-manager.js';
+import { previewFile, makeDefault, renameFile, deleteFile } from './admin/file-actions.js';
+import { uploadFiles, copyFile } from './admin/upload-manager.js';
+import { clearDetail, clearFilesPane, openDevice as openDeviceHelper } from './admin/ui-helpers.js';
 
 const socket = io();
 const grid = document.getElementById('grid');
@@ -93,9 +99,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadDevices() {
-  const res = await adminFetch('/api/devices');
-  devicesCache = await res.json();
-  devicesCache = sortDevices(devicesCache, nodeNames);
+  devicesCache = await loadDevicesModule(adminFetch, sortDevices, nodeNames);
 }
 
 function renderTVList() {

@@ -1,79 +1,11 @@
 import { initThemeToggle } from './theme.js';
 import { sortDevices, debounce, getPageSize, loadNodeNames } from './utils.js';
+import { DEVICE_ICONS, DEVICE_TYPE_NAMES } from './shared/constants.js';
+import { ensureAuth, adminFetch, setXhrAuth } from './admin/auth.js';
+import { setupSocketListeners } from './admin/socket-listeners.js';
 
 const socket = io();
 const grid = document.getElementById('grid');
-
-const DEVICE_ICONS = {
-  'browser': '🌐',
-  'vlc': '🎬',
-  'mpv': '🎥',
-  'android': '📱',
-  'kodi': '📺',
-  'webos': '📺',
-  'tizen': '📺'
-};
-
-const DEVICE_TYPE_NAMES = {
-  'browser': 'Browser',
-  'vlc': 'VLC Player',
-  'mpv': 'MPV Player',
-  'android': 'Android TV',
-  'kodi': 'Kodi',
-  'webos': 'WebOS',
-  'tizen': 'Tizen'
-};
-
-const ADMIN_AUTH_KEY = 'adminBasicAuth';
-let adminAuth = sessionStorage.getItem(ADMIN_AUTH_KEY) || null;
-
-async function askLogin(retry = false) {
-  const u = prompt('Логин администратора:');
-  const p = prompt('Пароль администратора:');
-  if (u && p) {
-    adminAuth = 'Basic ' + btoa(`${u}:${p}`);
-    sessionStorage.setItem(ADMIN_AUTH_KEY, adminAuth);
-    return true;
-  }
-  if (!retry) alert('Требуется авторизация для доступа к админке');
-  return false;
-}
-
-async function ensureAuth() {
-  if (!adminAuth) {
-    const ok = await askLogin();
-    if (!ok) {
-      document.body.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100vh; background:var(--bg); color:var(--text); font-family:var(--font-family); font-size:var(--font-size-lg); text-align:center; padding:var(--space-xl)"><div><h1 style="color:var(--danger); margin-bottom:var(--space-md)">Доступ запрещен</h1><p>Требуется авторизация для доступа к админ-панели.</p><p style="margin-top:var(--space-md)"><button onclick="location.reload()" class="primary">Повторить</button></p></div></div>';
-      throw new Error('Authorization required');
-    }
-    return ok;
-  }
-  return true;
-}
-
-async function adminFetch(url, opts = {}) {
-  await ensureAuth();
-  const init = {
-    ...opts,
-    headers: {
-      ...(opts.headers || {}),
-      Authorization: adminAuth
-    }
-  };
-  const res = await fetch(url, init);
-  if (res.status === 401) {
-    sessionStorage.removeItem(ADMIN_AUTH_KEY);
-    adminAuth = null;
-    const ok = await askLogin(true);
-    if (!ok) throw new Error('Unauthorized');
-    return adminFetch(url, opts);
-  }
-  return res;
-}
-
-function setXhrAuth(xhr) {
-  if (adminAuth) xhr.setRequestHeader('Authorization', adminAuth);
-}
 
 let readyDevices = new Set();
 let devicesCache = [];
@@ -82,78 +14,68 @@ let tvPage = 0;
 let filePage = 0;
 let nodeNames = {};
 
-socket.on('devices/updated', debounce(async () => {
-  const prev = currentDeviceId;
-  await loadDevices();
-  const pageSize = getPageSize();
-  const totalPages = Math.max(1, Math.ceil(devicesCache.length / pageSize));
-  if (tvPage >= totalPages) tvPage = totalPages - 1;
-  if (prev && devicesCache.find(d => d.device_id === prev)) {
-    openDevice(prev);
-  } else {
-    clearDetail();
-    clearFilesPane();
+// Настройка Socket.IO обработчиков
+setupSocketListeners(socket, {
+  onDevicesUpdated: async () => {
+    const prev = currentDeviceId;
+    await loadDevices();
+    const pageSize = getPageSize();
+    const totalPages = Math.max(1, Math.ceil(devicesCache.length / pageSize));
+    if (tvPage >= totalPages) tvPage = totalPages - 1;
+    if (prev && devicesCache.find(d => d.device_id === prev)) {
+      openDevice(prev);
+    } else {
+      clearDetail();
+      clearFilesPane();
+    }
+    renderTVList();
+  },
+  onFileProcessing: (device_id, file) => {
+    if (currentDeviceId === device_id) {
+      const panel = document.getElementById('filesPanel');
+      if (panel) refreshFilesPanel(device_id, panel);
+    }
+  },
+  onFileProgress: (device_id, file, progress) => {
+    if (currentDeviceId === device_id) {
+      const panel = document.getElementById('filesPanel');
+      if (panel) refreshFilesPanel(device_id, panel);
+    }
+  },
+  onFileReady: (device_id, file) => {
+    if (currentDeviceId === device_id) {
+      const panel = document.getElementById('filesPanel');
+      if (panel) refreshFilesPanel(device_id, panel);
+    }
+  },
+  onFileError: (device_id, file, error) => {
+    if (currentDeviceId === device_id) {
+      const panel = document.getElementById('filesPanel');
+      if (panel) refreshFilesPanel(device_id, panel);
+    }
+  },
+  onPreviewRefresh: async () => {
+    if (currentDeviceId) await renderFilesPane(currentDeviceId);
+  },
+  onPlayerOnline: (device_id) => {
+    readyDevices.add(device_id);
+    renderTVList();
+    if (currentDeviceId === device_id) openDevice(device_id);
+  },
+  onPlayerOffline: (device_id) => {
+    readyDevices.delete(device_id);
+    renderTVList();
+    if (currentDeviceId === device_id) openDevice(device_id);
+  },
+  onPlayersSnapshot: (list) => {
+    try {
+      readyDevices = new Set(Array.isArray(list) ? list : []);
+    } catch {
+      readyDevices = new Set();
+    }
+    renderTVList();
+    if (currentDeviceId) openDevice(currentDeviceId);
   }
-  renderTVList();
-}, 150));
-
-// НОВОЕ: Обработчики событий оптимизации видео
-socket.on('file/processing', ({ device_id, file }) => {
-  console.log(`[Admin] ⏳ Файл в обработке: ${file} (${device_id})`);
-  if (currentDeviceId === device_id) {
-    const panel = document.getElementById('filesPanel');
-    if (panel) refreshFilesPanel(device_id, panel);
-  }
-});
-
-socket.on('file/progress', ({ device_id, file, progress }) => {
-  console.log(`[Admin] 📊 Прогресс: ${file} - ${progress}% (${device_id})`);
-  if (currentDeviceId === device_id) {
-    const panel = document.getElementById('filesPanel');
-    if (panel) refreshFilesPanel(device_id, panel);
-  }
-});
-
-socket.on('file/ready', ({ device_id, file }) => {
-  console.log(`[Admin] ✅ Файл готов: ${file} (${device_id})`);
-  if (currentDeviceId === device_id) {
-    const panel = document.getElementById('filesPanel');
-    if (panel) refreshFilesPanel(device_id, panel);
-  }
-});
-
-socket.on('file/error', ({ device_id, file, error }) => {
-  console.error(`[Admin] ❌ Ошибка обработки: ${file} (${device_id}):`, error);
-  if (currentDeviceId === device_id) {
-    const panel = document.getElementById('filesPanel');
-    if (panel) refreshFilesPanel(device_id, panel);
-  }
-});
-
-socket.on('preview/refresh', debounce(async () => {
-  if (currentDeviceId) await renderFilesPane(currentDeviceId);
-}, 150));
-
-socket.on('player/online', ({ device_id }) => {
-  readyDevices.add(device_id);
-  renderTVList();
-  if (currentDeviceId === device_id) openDevice(device_id);
-});
-
-socket.on('player/offline', ({ device_id }) => {
-  readyDevices.delete(device_id);
-  renderTVList();
-  if (currentDeviceId === device_id) openDevice(device_id);
-});
-
-socket.on('players/onlineSnapshot', (list) => {
-  try {
-    readyDevices = new Set(Array.isArray(list) ? list : []);
-  } catch {
-    readyDevices = new Set();
-  }
-  renderTVList();
-  if (currentDeviceId) openDevice(currentDeviceId);
 });
 
 document.addEventListener('DOMContentLoaded', async () => {

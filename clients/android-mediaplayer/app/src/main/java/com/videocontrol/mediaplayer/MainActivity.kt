@@ -487,6 +487,10 @@ class MainActivity : AppCompatActivity() {
         // Останавливаем текущее воспроизведение
         player?.stop()
         
+        // КРИТИЧНО: Скрываем imageView сразу (для изображений)
+        imageView.visibility = View.GONE
+        playerView.visibility = View.GONE
+        
         // Запрашиваем заглушку с сервера
         CoroutineScope(Dispatchers.IO).launch {
             try {

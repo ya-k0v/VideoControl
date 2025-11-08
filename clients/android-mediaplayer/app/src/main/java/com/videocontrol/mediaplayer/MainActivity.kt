@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private var socket: Socket? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var simpleCache: SimpleCache? = null
+    private var pingTimer: java.util.Timer? = null
 
     private val TAG = "VCMediaPlayer"
     private var SERVER_URL = ""
@@ -195,13 +196,17 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     showStatus("Подключено")
                     registerDevice()
+                    startPingTimer()
                 }
             }
 
             socket?.on(Socket.EVENT_DISCONNECT) { args ->
                 val reason = if (args.isNotEmpty()) args[0].toString() else "unknown"
                 Log.w(TAG, "⚠️ Socket disconnected: $reason")
-                runOnUiThread { showStatus("Отключено") }
+                runOnUiThread {
+                    showStatus("Отключено")
+                    stopPingTimer()
+                }
             }
 
             socket?.on("player/play") { args ->
@@ -507,8 +512,30 @@ class MainActivity : AppCompatActivity() {
         statusText.visibility = View.GONE
     }
 
+    private fun startPingTimer() {
+        stopPingTimer() // Останавливаем предыдущий таймер если был
+        
+        pingTimer = java.util.Timer().apply {
+            scheduleAtFixedRate(object : java.util.TimerTask() {
+                override fun run() {
+                    socket?.emit("player/ping")
+                    Log.d(TAG, "🏓 Ping sent")
+                }
+            }, 0, 20000) // Каждые 20 секунд (меньше чем 30 сек timeout на сервере)
+        }
+        
+        Log.d(TAG, "✅ Ping timer started")
+    }
+    
+    private fun stopPingTimer() {
+        pingTimer?.cancel()
+        pingTimer = null
+        Log.d(TAG, "⏹️ Ping timer stopped")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        stopPingTimer()
         player?.release()
         socket?.disconnect()
         wakeLock?.release()

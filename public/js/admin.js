@@ -353,28 +353,7 @@ function initSelectionFromUrl() {
   }
 }
 
-// ------ Очистка центральной и правой панелей ------
-function clearDetail() {
-  const pane = document.getElementById('detailPane');
-  if (!pane) return;
-  pane.innerHTML = `
-    <div class="card" style="min-height:200px">
-      <div class="header">
-        <div>
-          <div class="title">Не выбрано</div>
-          <div class="meta">Выберите слева</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function clearFilesPane() {
-  const meta = document.getElementById('filesPaneMeta');
-  const panel = document.getElementById('filesPanel');
-  if (meta) meta.textContent = 'Выберите слева';
-  if (panel) panel.innerHTML = '';
-}
+// clearDetail, clearFilesPane перенесены в ui-helpers.js
 
 // ------ Открыть выбранную ноду ------
 function openDevice(id) {

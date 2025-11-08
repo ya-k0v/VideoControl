@@ -140,9 +140,18 @@ if (!device_id || !device_id.trim()) {
             // Проверяем, что видео ДЕЙСТВИТЕЛЬНО закончилось
             const currentTime = vjsPlayer.currentTime();
             const duration = vjsPlayer.duration();
-            const isActuallyEnded = duration > 0 && currentTime >= duration - 0.5; // 0.5s запас
+            const isActuallyEnded = duration > 0 && currentTime >= duration - 0.5;
+            const isLooping = vjsPlayer.loop();
             
-            console.log('[Player] 🔍 Проверка ended:', { currentTime, duration, isActuallyEnded, paused: vjsPlayer.paused() });
+            console.log('[Player] 🔍 Проверка ended:', { currentTime, duration, isActuallyEnded, paused: vjsPlayer.paused(), loop: isLooping });
+            
+            // КРИТИЧНО: Если включен loop - НЕ показываем placeholder!
+            if (isLooping && isActuallyEnded) {
+              console.log('[Player] 🔄 Loop видео, начинаем сначала БЕЗ черного экрана');
+              vjsPlayer.currentTime(0);
+              vjsPlayer.play();
+              return;
+            }
             
             if (!preview && isActuallyEnded && (currentFileState.type === null || currentFileState.type === 'video')) {
               showPlaceholder();
@@ -804,7 +813,7 @@ if (!device_id || !device_id.trim()) {
         
         console.log('[Player] 🔍 Проверка файла:', { file, currentSrc, isSameFile });
         
-        if (isSameFile && vjsPlayer && !vjsPlayer.ended()) {
+        if (isSameFile && vjsPlayer) {
           // Тот же файл - просто возобновляем (это нажатие Play после паузы)
           console.log('[Player] ⏯️ Тот же файл, возобновляем с текущей позиции');
           currentFileState = { type: 'video', file, page: 1 };
@@ -817,13 +826,11 @@ if (!device_id || !device_id.trim()) {
             show(videoContainer);
           }
           
-          if (vjsPlayer.paused() || vjsPlayer.ended()) {
-            if (vjsPlayer.ended()) {
-              vjsPlayer.currentTime(0); // Если закончилось - начинаем с начала
-            }
-            // Иначе продолжаем с текущей позиции (currentTime сохраняется автоматически)
+          // КРИТИЧНО: НЕ проверяем ended() на Android - он врет после паузы!
+          // Просто возобновляем с текущей позиции (currentTime сохраняется)
+          if (vjsPlayer.paused()) {
             vjsPlayer.play().then(() => {
-              console.log('[Player] ✅ Resume того же файла успешен');
+              console.log('[Player] ✅ Resume с позиции:', vjsPlayer.currentTime());
             }).catch(err => {
               console.error('[Player] ❌ Ошибка resume:', err);
             });

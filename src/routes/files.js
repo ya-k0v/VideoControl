@@ -207,7 +207,8 @@ export function createFilesRouter(deps) {
         console.log(`[copy-file] 🗑️ Файл удален из источника: ${fileName} (${sourceId})`);
       }
       
-      // КРИТИЧНО: Обновляем devices.files для обоих устройств
+      // КРИТИЧНО: Обновляем devices.files для обоих устройств ВСЕГДА
+      // (не только при move, но и при copy!)
       const scanDeviceFiles = (deviceId) => {
         const folder = path.join(DEVICES, devices[deviceId].folder);
         const result = [];
@@ -238,6 +239,7 @@ export function createFilesRouter(deps) {
       console.log(`[copy-file] ✅ Файлы обновлены: source=${devices[sourceId].files.length}, target=${devices[targetId].files.length}`);
       
       io.emit('devices/updated');
+      
       res.json({ ok: true, action: move ? 'moved' : 'copied', file: fileName, from: sourceId, to: targetId });
       
     } catch (e) {

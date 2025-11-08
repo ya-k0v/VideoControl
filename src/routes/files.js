@@ -207,8 +207,38 @@ export function createFilesRouter(deps) {
         console.log(`[copy-file] 🗑️ Файл удален из источника: ${fileName} (${sourceId})`);
       }
       
+      // КРИТИЧНО: Обновляем devices.files для обоих устройств
+      const scanDeviceFiles = (deviceId) => {
+        const folder = path.join(DEVICES, devices[deviceId].folder);
+        const result = [];
+        if (fs.existsSync(folder)) {
+          const entries = fs.readdirSync(folder);
+          for (const entry of entries) {
+            const entryPath = path.join(folder, entry);
+            const stat = fs.statSync(entryPath);
+            if (stat.isFile() && !isSystemFile(entry)) {
+              result.push(entry);
+            } else if (stat.isDirectory()) {
+              const folderContents = fs.readdirSync(entryPath);
+              const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
+              if (originalFile) result.push(originalFile);
+            }
+          }
+        }
+        return result;
+      };
+      
+      devices[sourceId].files = scanDeviceFiles(sourceId);
+      devices[targetId].files = scanDeviceFiles(targetId);
+      
+      // Обновляем fileNames
+      devices[sourceId].fileNames = devices[sourceId].files.map(f => fileNamesMap[sourceId]?.[f] || f);
+      devices[targetId].fileNames = devices[targetId].files.map(f => fileNamesMap[targetId]?.[f] || f);
+      
+      console.log(`[copy-file] ✅ Файлы обновлены: source=${devices[sourceId].files.length}, target=${devices[targetId].files.length}`);
+      
       io.emit('devices/updated');
-      res.json({ ok: true, action: move ? 'moved' : 'copied' });
+      res.json({ ok: true, action: move ? 'moved' : 'copied', file: fileName, from: sourceId, to: targetId });
       
     } catch (e) {
       console.error(`[copy-file] ❌ Ошибка: ${e}`);

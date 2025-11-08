@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var simpleCache: SimpleCache? = null
     private var pingTimer: java.util.Timer? = null
+    private var isPlayingPlaceholder: Boolean = false
 
     private val TAG = "VCMediaPlayer"
     private var SERVER_URL = ""

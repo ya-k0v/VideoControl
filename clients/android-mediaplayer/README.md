@@ -5,12 +5,14 @@
 ## Почему нативное приложение?
 
 WebView имеет ограничения:
+
 - ❌ Зависания на больших файлах (>1GB)
 - ❌ Агрессивное энергосбережение (suspend)
 - ❌ Ограничения памяти для буферизации
 - ❌ Проблемы с pixel format декодированием
 
 ExoPlayer:
+
 - ✅ Оптимизирован для Android
 - ✅ Стабильная работа с файлами любого размера
 - ✅ Эффективная буферизация
@@ -38,6 +40,7 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 ## Настройка
 
 Откройте `MainActivity.kt` и измените:
+
 ```kotlin
 private val SERVER_URL = "http://10.172.0.151"  // IP сервера
 private val DEVICE_ID = "ATV001"                // ID устройства

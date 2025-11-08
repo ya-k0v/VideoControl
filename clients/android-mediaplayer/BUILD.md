@@ -8,17 +8,17 @@
    ```
 
 2. **Откройте проект:**
-   - Запустите Android Studio
-   - File → Open → выберите `/vid/videocontrol/clients/android-mediaplayer`
-   - Дождитесь синхронизации Gradle
+    - Запустите Android Studio
+    - File → Open → выберите `/vid/videocontrol/clients/android-mediaplayer`
+    - Дождитесь синхронизации Gradle
 
 3. **Настройте:**
-   - Откройте `MainActivity.kt`
-   - Измените `SERVER_URL` и `DEVICE_ID`
+    - Откройте `MainActivity.kt`
+    - Измените `SERVER_URL` и `DEVICE_ID`
 
 4. **Соберите APK:**
-   - Build → Build Bundle(s) / APK(s) → Build APK(s)
-   - APK будет в `app/build/outputs/apk/debug/`
+    - Build → Build Bundle(s) / APK(s) → Build APK(s)
+    - APK будет в `app/build/outputs/apk/debug/`
 
 5. **Установите:**
    ```bash
@@ -48,11 +48,13 @@ gradle wrapper --gradle-version 8.1.1
 ## Быстрое решение
 
 Если срочно нужен APK:
+
 1. Скопируйте папку `android-mediaplayer` на машину с Android Studio
 2. Соберите там
 3. Скопируйте APK обратно
 
 Или используйте Docker:
+
 ```bash
 docker run --rm -v $(pwd):/project mingc/android-build-box bash -c "cd /project && ./gradlew assembleDebug"
 ```

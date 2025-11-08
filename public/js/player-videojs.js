@@ -269,7 +269,13 @@ if (!device_id || !device_id.trim()) {
                   vjsPlayer.play().then(() => {
                     console.log('[Player] ✅ Preview видео запущено:', previewFile);
                   }).catch(err => {
-                    console.error('[Player] ❌ Preview ошибка:', err);
+                    // КРИТИЧНО: Игнорируем AbortError - браузер блокирует autoplay на фоновых вкладках
+                    // Видео всё равно загружено и показан первый кадр
+                    if (err.name === 'AbortError') {
+                      console.log('[Player] ℹ️ Preview видео загружен (autoplay заблокирован браузером - это нормально для фоновых вкладок)');
+                    } else {
+                      console.warn('[Player] ⚠️ Preview ошибка:', err.name, err.message);
+                    }
                   });
                 }, 150);
               } else {

@@ -18,15 +18,15 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
       return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true, resolution: null };
     }
     return { 
-      safeName: item.name, 
-      originalName: item.originalName,
+      safeName: item.name || item.safeName || '',
+      originalName: item.originalName || item.name || item.safeName || 'unknown',
       status: item.status || 'ready',
       progress: item.progress || 100,
       canPlay: item.canPlay !== false,
       error: item.error || null,
       resolution: item.resolution || null
     };
-  });
+  }).filter(f => f.safeName); // Фильтруем пустые имена
   
   if (!allFiles || allFiles.length === 0) {
     panelEl.innerHTML = `
@@ -53,7 +53,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
       ${files.map(({ safeName, originalName, status, progress, canPlay, error, resolution }) => {
         // placeholders allowed only for image/video (no pdf/pptx)
         const isEligible = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i.test(safeName);
-        const ext = safeName.split('.').pop().toLowerCase();
+        const ext = (safeName || '').split('.').pop().toLowerCase();
         const typeLabel = ext === 'pdf' ? 'PDF' : ext === 'pptx' ? 'PPTX' : ['png','jpg','jpeg','gif','webp'].includes(ext) ? 'IMG' : 'VID';
         
         // НОВОЕ: Определяем статус для видео

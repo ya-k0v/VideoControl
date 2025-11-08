@@ -98,20 +98,4 @@ export function setXhrAuth(xhr) {
   }
 }
 
-/**
- * Проверить авторизован ли пользователь
- * @returns {boolean} true если есть токен
- */
-export function isAuthorized() {
-  return !!adminAuth;
-}
-
-/**
- * Выйти (очистить авторизацию)
- */
-export function logout() {
-  sessionStorage.removeItem(ADMIN_AUTH_KEY);
-  adminAuth = null;
-  location.reload();
-}
 

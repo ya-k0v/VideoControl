@@ -6,8 +6,7 @@ export async function loadFilesWithStatus(deviceId) {
   return await res.json();
 }
 
-export 
-async function refreshFilesPanel(deviceId, panelEl) {
+export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage, socket) {
   // НОВОЕ: Используем API с статусами файлов
   const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files-with-status`);
   const filesData = await res.json();

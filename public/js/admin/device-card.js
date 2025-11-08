@@ -66,6 +66,7 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
   card.querySelector('.delBtn').onclick = async () => {
     if (!confirm(`Удалить устройство ${d.device_id}?`)) return;
     await adminFetch(`/api/devices/${encodeURIComponent(d.device_id)}`, { method:'DELETE' });
+    // loadDevices, renderTVList, clearDetail, clearFilesPane - переданы как параметры
     await loadDevices();
     clearDetail();
     clearFilesPane();

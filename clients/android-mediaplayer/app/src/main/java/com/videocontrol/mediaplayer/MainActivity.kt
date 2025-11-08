@@ -28,6 +28,9 @@ import java.io.File
 import io.socket.client.IO
 import io.socket.client.Socket
 import org.json.JSONObject
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.engine.DiskCacheStrategy
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import java.net.URISyntaxException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -457,28 +460,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadImageToView(imageUrl: String) {
-        // Простая загрузка через корутины
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val connection = java.net.URL(imageUrl).openConnection() as java.net.HttpURLConnection
-                connection.connectTimeout = 30000
-                connection.readTimeout = 30000
-                connection.connect()
-
-                if (connection.responseCode == 200) {
-                    val bitmap = android.graphics.BitmapFactory.decodeStream(connection.inputStream)
-                    withContext(Dispatchers.Main) {
-                        imageView.setImageBitmap(bitmap)
-                        Log.d(TAG, "✅ Image loaded successfully")
-                    }
-                } else {
-                    Log.e(TAG, "❌ Failed to load image: HTTP ${connection.responseCode}")
-                }
-                connection.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Error loading image: ${e.message}", e)
-            }
-        }
+        // Glide для плавной загрузки изображений с кэшем и crossfade
+        Log.d(TAG, "🖼️ Loading image with Glide: $imageUrl")
+        
+        Glide.with(this)
+            .load(imageUrl)
+            .diskCacheStrategy(DiskCacheStrategy.ALL)  // Кэш на диск
+            .transition(DrawableTransitionOptions.withCrossFade(300))  // Плавный переход 300ms
+            .timeout(30000)  // Таймаут 30 сек
+            .error(android.R.drawable.ic_dialog_alert)  // Показываем иконку при ошибке
+            .into(imageView)
+        
+        Log.d(TAG, "✅ Glide started loading image")
     }
 
     private fun loadPlaceholder() {

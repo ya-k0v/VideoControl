@@ -2,8 +2,9 @@
 import { DEVICE_ICONS, DEVICE_TYPE_NAMES } from '../shared/constants.js';
 import { adminFetch } from './auth.js';
 import { clearDetail, clearFilesPane } from './ui-helpers.js';
+import { setupUploadUI } from './upload-ui.js';
 
-export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, renderTVList, openDevice, setupUploadUI) {
+export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, renderTVList, openDevice, renderFilesPane, socket) {
   const did = encodeURIComponent(d.device_id);
   const card = document.createElement('div');
   card.className = 'card';
@@ -167,7 +168,7 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
   }
 
   // Инициализация загрузки
-  setupUploadUI(card, d.device_id, document.getElementById('filesPanel'));
+  setupUploadUI(card, d.device_id, document.getElementById('filesPanel'), renderFilesPane, socket);
 
   return card;
 }

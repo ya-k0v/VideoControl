@@ -222,6 +222,12 @@ class MainActivity : AppCompatActivity() {
 
             socket?.on("player/pause") {
                 runOnUiThread {
+                    // КРИТИЧНО: Заглушка НЕ реагирует на паузу
+                    if (isPlayingPlaceholder) {
+                        Log.d(TAG, "⏸️ Pause игнорируется - играет заглушка")
+                        return@runOnUiThread
+                    }
+                    
                     // КРИТИЧНО: Сохраняем позицию перед паузой
                     savedPosition = player?.currentPosition ?: 0
                     player?.pause()
@@ -231,6 +237,12 @@ class MainActivity : AppCompatActivity() {
 
             socket?.on("player/stop") {
                 runOnUiThread {
+                    // КРИТИЧНО: Заглушка НЕ реагирует на stop
+                    if (isPlayingPlaceholder) {
+                        Log.d(TAG, "⏹️ Stop игнорируется - играет заглушка")
+                        return@runOnUiThread
+                    }
+                    
                     player?.stop()
                     loadPlaceholder()
                 }
@@ -238,6 +250,12 @@ class MainActivity : AppCompatActivity() {
 
             socket?.on("player/restart") {
                 runOnUiThread {
+                    // КРИТИЧНО: Заглушка НЕ реагирует на restart
+                    if (isPlayingPlaceholder) {
+                        Log.d(TAG, "🔄 Restart игнорируется - играет заглушка")
+                        return@runOnUiThread
+                    }
+                    
                     player?.seekTo(0)
                     player?.play()
                 }

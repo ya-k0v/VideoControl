@@ -11,15 +11,15 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files-with-status`);
   const filesData = await res.json();
   
-  // Файлы уже в формате { name, originalName, status, progress, canPlay, error }
+  // Файлы уже в формате { safeName, originalName, status, progress, canPlay, error, resolution }
   const allFiles = filesData.map(item => {
     if (typeof item === 'string') {
       // Старый формат (для обратной совместимости)
       return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true, resolution: null };
     }
     return { 
-      safeName: item.name || item.safeName || '',
-      originalName: item.originalName || item.name || item.safeName || 'unknown',
+      safeName: item.safeName || item.name || '',
+      originalName: item.originalName || item.safeName || item.name || 'unknown',
       status: item.status || 'ready',
       progress: item.progress || 100,
       canPlay: item.canPlay !== false,

@@ -208,10 +208,12 @@ export function createFilesRouter(deps) {
       }
       
       // КРИТИЧНО: Обновляем devices.files для обоих устройств ВСЕГДА
-      // (не только при move, но и при copy!)
+      console.log(`[copy-file] 🔄 Начинаем обновление devices.files...`);
+      
       const scanDeviceFiles = (deviceId) => {
         const folder = path.join(DEVICES, devices[deviceId].folder);
         const result = [];
+        console.log(`[copy-file] 📂 Сканируем: ${folder}`);
         if (fs.existsSync(folder)) {
           const entries = fs.readdirSync(folder);
           for (const entry of entries) {
@@ -226,6 +228,7 @@ export function createFilesRouter(deps) {
             }
           }
         }
+        console.log(`[copy-file] 📊 Найдено ${result.length} файлов в ${deviceId}`);
         return result;
       };
       
@@ -237,9 +240,11 @@ export function createFilesRouter(deps) {
       devices[targetId].fileNames = devices[targetId].files.map(f => fileNamesMap[targetId]?.[f] || f);
       
       console.log(`[copy-file] ✅ Файлы обновлены: source=${devices[sourceId].files.length}, target=${devices[targetId].files.length}`);
+      console.log(`[copy-file] 📡 Отправляем devices/updated...`);
       
       io.emit('devices/updated');
       
+      console.log(`[copy-file] ✅ Успешно завершено: ${move ? 'moved' : 'copied'} ${fileName}`);
       res.json({ ok: true, action: move ? 'moved' : 'copied', file: fileName, from: sourceId, to: targetId });
       
     } catch (e) {

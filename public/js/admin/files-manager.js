@@ -157,8 +157,8 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
     `;
     const prev = filePagerAdmin.querySelector('#filePrevAdmin');
     const next = filePagerAdmin.querySelector('#fileNextAdmin');
-    if (prev) prev.onclick = () => { if (filePage>0) { filePage--; refreshFilesPanel(deviceId, panelEl); } };
-    if (next) next.onclick = () => { if (filePage<totalPages-1) { filePage++; refreshFilesPanel(deviceId, panelEl); } };
+    if (prev) prev.onclick = () => { if (filePage>0) { refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage-1, socket); } };
+    if (next) next.onclick = () => { if (filePage<totalPages-1) { refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage+1, socket); } };
   } else if (filePagerAdmin) {
     filePagerAdmin.innerHTML = '';
   }
@@ -206,7 +206,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
         // Preview iframe обновится через событие placeholder/refresh от сервера
         await new Promise(resolve => setTimeout(resolve, 600));
         
-        await refreshFilesPanel(deviceId, panelEl);
+        await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage, socket);
         socket.emit('devices/updated');
       } catch (e) { console.error(e); }
     };
@@ -218,7 +218,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
       const originalName = decodeURIComponent(btn.getAttribute('data-original'));
       if (!confirm(`Удалить файл ${originalName}?`)) return;
       await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files/${encodeURIComponent(safeName)}`, { method: 'DELETE' });
-      await refreshFilesPanel(deviceId, panelEl);
+      await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage, socket);
       socket.emit('devices/updated');
     };
   });
@@ -314,7 +314,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
           isEditing = false;
           nameEl.contentEditable = 'false';
           if (saveBtn) saveBtn.style.display = 'none';
-          await refreshFilesPanel(deviceId, panelEl);
+          await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage, socket);
           socket.emit('devices/updated');
         } else {
           alert(`Ошибка переименования: ${data.error || 'Неизвестная ошибка'}`);

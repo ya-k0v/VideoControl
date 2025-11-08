@@ -41,25 +41,25 @@ setupSocketListeners(socket, {
   onFileProcessing: (device_id, file) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel);
+      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
     }
   },
   onFileProgress: (device_id, file, progress) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel);
+      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
     }
   },
   onFileReady: (device_id, file) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel);
+      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
     }
   },
   onFileError: (device_id, file, error) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel);
+      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
     }
   },
   onPreviewRefresh: async () => {

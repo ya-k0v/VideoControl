@@ -108,6 +108,9 @@ class MainActivity : AppCompatActivity() {
 
         initializePlayer()
         connectSocket()
+        
+        // КРИТИЧНО: Загружаем заглушку при старте (постоянно показываем заглушку)
+        loadPlaceholder()
     }
 
     private fun initializePlayer() {
@@ -154,13 +157,13 @@ class MainActivity : AppCompatActivity() {
 
                             Player.STATE_ENDED -> {
                                 Log.d(TAG, "Player STATE_ENDED")
-                                // КРИТИЧНО: Проверяем repeatMode перед показом placeholder
-                                if (exoPlayer.repeatMode != Player.REPEAT_MODE_ONE && 
-                                    exoPlayer.repeatMode != Player.REPEAT_MODE_ALL) {
-                                    Log.d(TAG, "Видео закончилось, показываем заглушку")
+                                // КРИТИЧНО: Заглушка зацикливается (ExoPlayer сам перезапустит)
+                                // Обычное видео - показываем заглушку
+                                if (!isPlayingPlaceholder) {
+                                    Log.d(TAG, "Контент закончился, возврат на заглушку")
                                     loadPlaceholder()
                                 } else {
-                                    Log.d(TAG, "Loop режим, видео начнется сначала автоматически")
+                                    Log.d(TAG, "Заглушка зациклена, ExoPlayer перезапустит автоматически")
                                 }
                             }
                         }
@@ -292,15 +295,15 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "📡 player/play: type=$type, file=$file, page=$page")
 
         when (type) {
-            "video" -> playVideo(file)
-            "image" -> showImage(file)
+            "video" -> playVideo(file, isPlaceholder = false)
+            "image" -> showImage(file, isPlaceholder = false)
             "pdf" -> showPdfPage(file, page)
             "pptx" -> showPptxSlide(file, page)
             else -> Log.w(TAG, "Unknown type: $type")
         }
     }
 
-    private fun playVideo(fileName: String) {
+    private fun playVideo(fileName: String, isPlaceholder: Boolean = false) {
         val videoUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
         Log.d(TAG, "🎬 Playing video: $videoUrl")
 
@@ -350,13 +353,16 @@ class MainActivity : AppCompatActivity() {
 
         player?.apply {
             setMediaSource(mediaSource)
-            // КРИТИЧНО: Зацикливание для обычных видео (не placeholder)
-            repeatMode = Player.REPEAT_MODE_ONE
+            // КРИТИЧНО: Заглушка зацикливается, контент - нет
+            repeatMode = if (isPlaceholder) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             prepare()
             playWhenReady = true
         }
         
-        Log.d(TAG, "✅ Video prepared with loop mode and buffering")
+        // Отмечаем тип контента
+        isPlayingPlaceholder = isPlaceholder
+        
+        Log.d(TAG, "✅ Video prepared: isPlaceholder=$isPlaceholder, loop=$isPlaceholder")
     }
 
     private var currentPdfFile: String? = null
@@ -366,7 +372,7 @@ class MainActivity : AppCompatActivity() {
     private var currentVideoFile: String? = null
     private var savedPosition: Long = 0
 
-    private fun showImage(fileName: String) {
+    private fun showImage(fileName: String, isPlaceholder: Boolean = false) {
         val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
         Log.d(TAG, "🖼️ Showing image: $imageUrl")
 
@@ -376,8 +382,13 @@ class MainActivity : AppCompatActivity() {
         playerView.visibility = View.GONE
         imageView.visibility = View.VISIBLE
 
+        // Отмечаем тип контента
+        isPlayingPlaceholder = isPlaceholder
+
         // Загружаем изображение
         loadImageToView(imageUrl)
+        
+        Log.d(TAG, "✅ Image shown: isPlaceholder=$isPlaceholder")
     }
 
     private fun showPdfPage(fileName: String?, page: Int) {
@@ -389,6 +400,9 @@ class MainActivity : AppCompatActivity() {
 
         currentPdfFile = file
         currentPdfPage = page
+        
+        // Презентация - НЕ заглушка, при stop вернемся на заглушку
+        isPlayingPlaceholder = false
 
         val pageUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/page/$page"
         Log.d(TAG, "📄 Showing PDF page: $pageUrl (page $page)")
@@ -409,6 +423,9 @@ class MainActivity : AppCompatActivity() {
 
         currentPptxFile = file
         currentPptxSlide = slide
+        
+        // Презентация - НЕ заглушка, при stop вернемся на заглушку
+        isPlayingPlaceholder = false
 
         val slideUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/slide/$slide"
         Log.d(TAG, "📊 Showing PPTX slide: $slideUrl (slide $slide)")
@@ -474,11 +491,12 @@ class MainActivity : AppCompatActivity() {
                         withContext(Dispatchers.Main) {
                             when {
                                 ext in listOf("mp4", "webm", "ogg", "mkv", "mov", "avi") -> {
-                                    playVideo(placeholderFile)
+                                    // КРИТИЧНО: Заглушка-видео с loop
+                                    playVideo(placeholderFile, isPlaceholder = true)
                                 }
                                 ext in listOf("png", "jpg", "jpeg", "gif", "webp") -> {
-                                    val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(placeholderFile)}"
-                                    loadImageToView(imageUrl)
+                                    // КРИТИЧНО: Заглушка-изображение
+                                    showImage(placeholderFile, isPlaceholder = true)
                                 }
                                 else -> {
                                     Log.w(TAG, "⚠️ Unknown placeholder type: $ext")

@@ -50,8 +50,30 @@ echo ""
 echo "Installing npm packages..."
 npm install
 
-# Create content directory
+# Create necessary directories
+echo ""
+echo "Creating directories..."
 mkdir -p public/content
+mkdir -p config
+mkdir -p archive
+mkdir -p docs/reports/{backend,frontend,android,fixes}
+mkdir -p docs/status
+
+# Create default config files if not exist
+if [ ! -f config/devices.json ]; then
+    echo '{}' > config/devices.json
+    echo "Created config/devices.json"
+fi
+
+if [ ! -f config/file-names-map.json ]; then
+    echo '{}' > config/file-names-map.json
+    echo "Created config/file-names-map.json"
+fi
+
+if [ ! -f config/video-optimization.json ]; then
+    echo '{"enabled": true, "targetResolution": "1080p"}' > config/video-optimization.json
+    echo "Created config/video-optimization.json"
+fi
 
 # Setup systemd service
 echo ""
@@ -107,13 +129,26 @@ echo "==================================="
 echo "Installation Complete!"
 echo "==================================="
 echo ""
-echo "Start server:"
+echo "📁 Project structure created:"
+echo "  ✅ config/ - configuration files"
+echo "  ✅ public/content/ - device content"
+echo "  ✅ docs/reports/ - refactoring reports"
+echo "  ✅ archive/ - old files"
+echo ""
+echo "🚀 Start server:"
 echo "  Development: npm start"
 echo "  Production: sudo systemctl start videocontrol"
 echo ""
-echo "Access URLs:"
-echo "  Admin: http://localhost/admin.html"
-echo "  Player: http://localhost/player.html?device_id=YOUR_ID"
-echo "  Speaker: http://localhost/speaker.html"
+echo "🌐 Access URLs:"
+echo "  Admin Panel:  http://localhost/admin.html"
+echo "  Speaker Panel: http://localhost/speaker.html"
+echo "  Player: http://localhost/player-videojs.html?device_id=YOUR_ID"
+echo ""
+echo "📊 Monitoring:"
+echo "  Status: sudo systemctl status videocontrol"
+echo "  Logs: sudo journalctl -u videocontrol -f"
+echo ""
+echo "📖 Documentation:"
+echo "  See docs/INSTALL.md for detailed instructions"
 echo ""
 

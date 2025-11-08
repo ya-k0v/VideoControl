@@ -1,19 +1,55 @@
-# Быстрая установка Video Control
+# Установка VideoControl v2.5
 
-## Сервер
+## 📦 Быстрая установка сервера
 
-### Production (с автозапуском)
+### Production (с автозапуском):
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-server.sh | sudo bash
-sudo systemctl start videocontrol
-sudo systemctl enable videocontrol
+# Клонировать репозиторий
+git clone https://github.com/ya-k0v/VideoControl.git
+cd VideoControl
+
+# Запустить установку
+cd scripts
+./install-server.sh
+
+# Сервер установлен и настроен!
+# Запустить: sudo systemctl start videocontrol
 ```
 
-### Development
+### Development:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-server.sh | bash
-cd ~/videocontrol
+# Клонировать репозиторий
+git clone https://github.com/ya-k0v/VideoControl.git
+cd VideoControl
+
+# Установить зависимости
+npm install
+
+# Создать структуру
+mkdir -p public/content config
+
+# Создать конфиги
+echo '{}' > config/devices.json
+echo '{}' > config/file-names-map.json
+
+# Запустить
 npm start
+```
+
+---
+
+## 📁 Структура после установки
+
+```
+VideoControl/
+├── config/                   Конфигурационные файлы
+├── src/                      Backend (21 модуль)
+├── public/                   Frontend (17 модулей)
+├── docs/                     Документация
+├── scripts/                  Скрипты
+└── clients/                  Android & VLC клиенты
 ```
 
 ## VLC Клиент

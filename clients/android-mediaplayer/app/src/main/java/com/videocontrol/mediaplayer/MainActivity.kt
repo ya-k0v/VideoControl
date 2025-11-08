@@ -153,8 +153,14 @@ class MainActivity : AppCompatActivity() {
 
                             Player.STATE_ENDED -> {
                                 Log.d(TAG, "Player STATE_ENDED")
-                                // Показываем заглушку
-                                loadPlaceholder()
+                                // КРИТИЧНО: Проверяем repeatMode перед показом placeholder
+                                if (exoPlayer.repeatMode != Player.REPEAT_MODE_ONE && 
+                                    exoPlayer.repeatMode != Player.REPEAT_MODE_ALL) {
+                                    Log.d(TAG, "Видео закончилось, показываем заглушку")
+                                    loadPlaceholder()
+                                } else {
+                                    Log.d(TAG, "Loop режим, видео начнется сначала автоматически")
+                                }
                             }
                         }
                     }
@@ -206,7 +212,12 @@ class MainActivity : AppCompatActivity() {
             }
 
             socket?.on("player/pause") {
-                runOnUiThread { player?.pause() }
+                runOnUiThread {
+                    // КРИТИЧНО: Сохраняем позицию перед паузой
+                    savedPosition = player?.currentPosition ?: 0
+                    player?.pause()
+                    Log.d(TAG, "⏸️ Пауза на позиции: $savedPosition ms")
+                }
             }
 
             socket?.on("player/stop") {
@@ -291,6 +302,25 @@ class MainActivity : AppCompatActivity() {
         imageView.visibility = View.GONE
         playerView.visibility = View.VISIBLE
 
+        // КРИТИЧНО: Проверяем тот же ли файл воспроизводится
+        val isSameFile = currentVideoFile == fileName
+        
+        if (isSameFile && player != null) {
+            // Тот же файл - продолжаем с сохраненной позиции
+            Log.d(TAG, "⏯️ Тот же файл, продолжаем с позиции: $savedPosition ms")
+            player?.apply {
+                seekTo(savedPosition)
+                playWhenReady = true
+                play()
+            }
+            return
+        }
+        
+        // Новый файл - загружаем с начала
+        Log.d(TAG, "🎬 Загрузка НОВОГО видео: $fileName")
+        currentVideoFile = fileName
+        savedPosition = 0
+
         // HTTP Data Source с увеличенными таймаутами для больших файлов
         val httpDataSourceFactory = DefaultHttpDataSource.Factory().apply {
             setAllowCrossProtocolRedirects(true)
@@ -315,27 +345,34 @@ class MainActivity : AppCompatActivity() {
 
         player?.apply {
             setMediaSource(mediaSource)
+            // КРИТИЧНО: Зацикливание для обычных видео (не placeholder)
+            repeatMode = Player.REPEAT_MODE_ONE
             prepare()
             playWhenReady = true
         }
         
-        Log.d(TAG, "✅ Video prepared with caching and optimized buffering")
+        Log.d(TAG, "✅ Video prepared with loop mode and buffering")
     }
 
     private var currentPdfFile: String? = null
     private var currentPdfPage: Int = 1
     private var currentPptxFile: String? = null
     private var currentPptxSlide: Int = 1
+    private var currentVideoFile: String? = null
+    private var savedPosition: Long = 0
 
     private fun showImage(fileName: String) {
         val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
         Log.d(TAG, "🖼️ Showing image: $imageUrl")
 
+        // Останавливаем видео если играет
+        player?.pause()
+
         playerView.visibility = View.GONE
         imageView.visibility = View.VISIBLE
 
-        // TODO: Загрузка изображения через Glide/Picasso
-        // Сейчас просто показываем placeholder
+        // Загружаем изображение
+        loadImageToView(imageUrl)
     }
 
     private fun showPdfPage(fileName: String?, page: Int) {

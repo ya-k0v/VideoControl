@@ -45,7 +45,7 @@ export function setupStaticFiles(app) {
   app.use(express.static(PUBLIC));
   
   // devices.json доступен по прямой ссылке
-  app.use('/devices.json', express.static(path.join(ROOT, 'devices.json')));
+  app.use('/devices.json', express.static(path.join(ROOT, 'config', 'devices.json')));
   
   // Контент устройств с настройками кэширования
   app.use('/content', express.static(DEVICES, {

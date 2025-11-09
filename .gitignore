@@ -35,3 +35,22 @@ public/content/*/
 
 # System
 Thumbs.db
+
+# Android build files
+clients/android-mediaplayer/app/build/
+clients/android-mediaplayer/.gradle/
+clients/android-mediaplayer/local.properties
+clients/android-mediaplayer/.cxx/
+clients/android-mediaplayer/captures/
+clients/android-mediaplayer/*.iml
+clients/android-mediaplayer/*.apk
+clients/android-mediaplayer/*.ap_
+clients/android-mediaplayer/*.aab
+
+# Gradle
+*.gradle
+!gradle-wrapper.jar
+!clients/android-mediaplayer/gradle/
+!clients/android-mediaplayer/build.gradle
+!clients/android-mediaplayer/app/build.gradle
+!clients/android-mediaplayer/settings.gradle

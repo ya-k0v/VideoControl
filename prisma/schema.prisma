@@ -1,0 +1,242 @@
+// Prisma schema for VideoControl
+// Supports SQLite (default) and PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = env("DATABASE_PROVIDER") // "sqlite" or "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Device model - represents a display/player device
+model Device {
+  id            String   @id
+  name          String
+  type          String   @default("DISPLAY") // DISPLAY, ANDROID_TV, VLC_PLAYER
+  status        String   @default("OFFLINE") // ONLINE, OFFLINE, ERROR
+  lastSeen      DateTime?
+  placeholder   String?
+  metadata      Json?    // Additional device info (resolution, manufacturer, etc.)
+  
+  // Multi-tenancy
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  files         File[]
+  playlists     PlaylistDevice[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([status])
+  @@index([organizationId])
+  @@map("devices")
+}
+
+// File model - represents uploaded media files
+model File {
+  id            String   @id @default(uuid())
+  deviceId      String
+  fileName      String
+  displayName   String?  // User-friendly name
+  fileType      String   // video, image, pdf, pptx
+  fileSize      Int
+  duration      Int?     // For videos, in seconds
+  resolution    String?  // e.g., "1920x1080"
+  optimized     Boolean  @default(false)
+  conversionStatus String? // null, "processing", "completed", "error"
+  
+  device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  playlistItems PlaylistItem[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([deviceId, fileName])
+  @@index([deviceId])
+  @@index([fileType])
+  @@map("files")
+}
+
+// Playlist model - scheduled playlists
+model Playlist {
+  id            String   @id @default(uuid())
+  name          String
+  description   String?
+  loop          Boolean  @default(true)
+  shuffle       Boolean  @default(false)
+  schedule      Json?    // Cron-like schedule or time ranges
+  
+  items         PlaylistItem[]
+  devices       PlaylistDevice[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("playlists")
+}
+
+// Playlist items - files in a playlist
+model PlaylistItem {
+  id            String   @id @default(uuid())
+  playlistId    String
+  fileId        String
+  order         Int
+  duration      Int?     // Override duration for images
+  
+  playlist      Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  file          File     @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([playlistId, order])
+  @@index([playlistId])
+  @@map("playlist_items")
+}
+
+// Many-to-many relation between playlists and devices
+model PlaylistDevice {
+  playlistId    String
+  deviceId      String
+  priority      Int      @default(0)
+  active        Boolean  @default(true)
+  
+  playlist      Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  device        Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  
+  assignedAt    DateTime @default(now())
+  
+  @@id([playlistId, deviceId])
+  @@index([deviceId])
+  @@map("playlist_devices")
+}
+
+// File names mapping (for legacy support)
+model FileNameMap {
+  id            String   @id @default(uuid())
+  originalName  String
+  sanitizedName String
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([originalName])
+  @@map("file_name_maps")
+}
+
+// Activity log for audit trail
+model ActivityLog {
+  id            String   @id @default(uuid())
+  deviceId      String?
+  action        String   // UPLOAD, DELETE, PLAY, STOP, etc.
+  details       Json?
+  userId        String?  // For future auth system
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([deviceId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+// System configuration
+model SystemConfig {
+  key           String   @id
+  value         String
+  description   String?
+  
+  updatedAt     DateTime @updatedAt
+  
+  @@map("system_config")
+}
+
+// Organization model for multi-tenancy
+model Organization {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  plan          String   @default("FREE") // FREE, STARTER, PRO, ENTERPRISE
+  maxDevices    Int      @default(5)
+  maxUsers      Int      @default(3)
+  isActive      Boolean  @default(true)
+  settings      Json?    // Organization-specific settings
+  
+  // Relations
+  users         User[]
+  devices       Device[]
+  apiKeys       ApiKey[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([slug])
+  @@map("organizations")
+}
+
+// User model for authentication
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String   @unique
+  password      String   // hashed with bcrypt
+  role          String   @default("VIEWER") // ADMIN, OPERATOR, VIEWER
+  isActive      Boolean  @default(true)
+  lastLogin     DateTime?
+  
+  // Multi-tenancy
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  sessions      Session[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([email])
+  @@index([role])
+  @@index([organizationId])
+  @@map("users")
+}
+
+// Session model for JWT token management
+model Session {
+  id            String   @id @default(uuid())
+  userId        String
+  token         String   @unique
+  refreshToken  String?  @unique
+  expiresAt     DateTime
+  ipAddress     String?
+  userAgent     String?
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+// API Keys for external integrations
+model ApiKey {
+  id            String   @id @default(uuid())
+  name          String
+  key           String   @unique
+  permissions   Json     // Array of permissions
+  isActive      Boolean  @default(true)
+  lastUsed      DateTime?
+  expiresAt     DateTime?
+  
+  // Multi-tenancy
+  organizationId String
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+  
+  @@index([key])
+  @@index([organizationId])
+  @@map("api_keys")
+}
+

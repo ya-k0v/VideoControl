@@ -1,0 +1,111 @@
+{
+  "dashboard": {
+    "title": "VideoControl Dashboard",
+    "tags": ["videocontrol", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Devices Online",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "videocontrol_devices_online",
+            "legendFormat": "Devices Online"
+          }
+        ],
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Total Devices",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "videocontrol_devices_total",
+            "legendFormat": "Total Devices"
+          }
+        ],
+        "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Active Socket Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "videocontrol_socket_connections",
+            "legendFormat": "Connections"
+          }
+        ],
+        "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 }
+      },
+      {
+        "id": 4,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(videocontrol_http_requests_total[5m])",
+            "legendFormat": "{{method}} {{route}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 }
+      },
+      {
+        "id": 5,
+        "title": "Request Duration (95th percentile)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(videocontrol_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{method}} {{route}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 }
+      },
+      {
+        "id": 6,
+        "title": "File Uploads",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(videocontrol_file_uploads_total[5m])",
+            "legendFormat": "{{file_type}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 }
+      },
+      {
+        "id": 7,
+        "title": "Video Optimizations",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(videocontrol_video_optimizations_total[5m])",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 }
+      },
+      {
+        "id": 8,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(videocontrol_errors_total[5m])",
+            "legendFormat": "{{type}}"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 }
+      }
+    ],
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
+

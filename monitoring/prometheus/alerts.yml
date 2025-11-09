@@ -1,0 +1,76 @@
+# Prometheus alert rules for VideoControl
+
+groups:
+  - name: videocontrol_alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(videocontrol_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/second"
+
+      # No devices online
+      - alert: NoDevicesOnline
+        expr: videocontrol_devices_online == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No devices are currently online"
+          description: "All devices appear to be offline"
+
+      # High request latency
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(videocontrol_http_request_duration_seconds_bucket[5m])) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency detected"
+          description: "95th percentile latency is {{ $value }} seconds"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job="videocontrol"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VideoControl service is down"
+          description: "The VideoControl service has been down for more than 2 minutes"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (videocontrol_process_resident_memory_bytes / videocontrol_process_heap_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is at {{ $value | humanizePercentage }}"
+
+      # Database connection issues
+      - alert: DatabaseConnectionIssues
+        expr: rate(videocontrol_database_query_duration_seconds_sum[5m]) / rate(videocontrol_database_query_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database queries are slow"
+          description: "Average query duration is {{ $value }} seconds"
+
+      # Too many failed authentication attempts
+      - alert: HighAuthFailureRate
+        expr: rate(videocontrol_auth_attempts_total{result="failure"}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate"
+          description: "{{ $value }} failed auth attempts per second - possible brute force attack"
+

@@ -1,37 +1,58 @@
 # Dependencies
 node_modules/
+package-lock.json
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Playwright
+playwright-report/
+test-results/
 
 # Logs
+logs/
 *.log
 npm-debug.log*
 
-# Runtime data
-*.pid
-*.seed
-.converted/
+# OS files
+.DS_Store
+Thumbs.db
 
-# Production
-public/content/*/
-!public/content/.gitkeep
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
 # Environment
 .env
 .env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
 
 # Temporary files
+tmp/
+temp/
 *.tmp
-*.swp
-*.swo
-*~
-.DS_Store
 
-# Archives
-*.tar.gz
-*.zip
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
-# IDE
-.vscode/
-.idea/
+# Content directories (device files)
+public/content/*/
+!public/content/.gitkeep
 
-# System
-Thumbs.db
+# Converted cache
+public/converted-cache/*/
+!public/converted-cache/.gitkeep
+
+# Config backups
+config/*.backup
+config/*.bak

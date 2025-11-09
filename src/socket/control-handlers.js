@@ -19,18 +19,24 @@ export function setupControlHandlers(socket, deps) {
     if (!d) return;
     
     if (file) {
-      const ext = file.split('.').pop().toLowerCase();
+      // Проверяем есть ли расширение у файла
+      const hasExtension = file.includes('.');
+      const ext = hasExtension ? file.split('.').pop().toLowerCase() : '';
       
       // Определяем тип контента
       let type = 'video'; // По умолчанию
-      if (ext === 'pdf') type = 'pdf';
-      else if (ext === 'pptx') type = 'pptx';
-      else if (['png','jpg','jpeg','gif','webp'].includes(ext)) type = 'image';
-      else if (ext === 'zip') type = 'folder'; // ZIP = папка с изображениями
-      // Если файла с расширением нет, проверяем, может это папка
-      else if (!ext || ext === file) {
-        // Это может быть папка (имя без расширения)
+      
+      if (!hasExtension) {
+        // Нет расширения = это папка с изображениями
         type = 'folder';
+      } else if (ext === 'pdf') {
+        type = 'pdf';
+      } else if (ext === 'pptx') {
+        type = 'pptx';
+      } else if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+        type = 'image';
+      } else if (ext === 'zip') {
+        type = 'folder'; // ZIP = папка с изображениями
       }
       
       // Используем переданный номер страницы или 1 по умолчанию

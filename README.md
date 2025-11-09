@@ -1,11 +1,14 @@
 # Video Control System v2.1
 
 Система управления видео-контентом для множественных устройств (ТВ, проекторы, дисплеи) с поддержкой видео, изображений, PDF и PowerPoint презентаций.
+<img width="1914" height="802" alt="image" src="https://github.com/user-attachments/assets/4df5918d-1591-4d02-b8f9-cbcfeb2aa869" />
+<img width="1179" height="820" alt="image" src="https://github.com/user-attachments/assets/50c36e5d-5a29-40a8-b552-413d2c0a1ada" />
 
 **📥 Быстрая установка:** [INSTALL.md](INSTALL.md)  
 **📊 Аудит проекта:** [AUDIT-REPORT.md](AUDIT-REPORT.md)
 
 ## 🚀 Установка
+
 
 ### Сервер - одна команда (Ubuntu/Debian/CentOS/RHEL)
 

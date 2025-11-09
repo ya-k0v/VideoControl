@@ -10,6 +10,7 @@ import { DEVICES, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
 import { extractZipToFolder } from '../converters/folder-converter.js';
 import { makeSafeFolderName } from '../utils/transliterate.js';
+import { scanDeviceFiles } from '../utils/file-scanner.js';
 
 const router = express.Router();
 
@@ -328,51 +329,19 @@ export function createFilesRouter(deps) {
       // КРИТИЧНО: Обновляем devices.files для обоих устройств ВСЕГДА
       console.log(`[copy-file] 🔄 Начинаем обновление devices.files...`);
       
-      const scanDeviceFiles = (deviceId) => {
-        const folder = path.join(DEVICES, devices[deviceId].folder);
-        const result = [];
-        console.log(`[copy-file] 📂 Сканируем: ${folder}`);
-        if (fs.existsSync(folder)) {
-          const entries = fs.readdirSync(folder);
-          for (const entry of entries) {
-            const entryPath = path.join(folder, entry);
-            const stat = fs.statSync(entryPath);
-            if (stat.isFile() && !isSystemFile(entry)) {
-              result.push(entry);
-            } else if (stat.isDirectory()) {
-              const folderContents = fs.readdirSync(entryPath);
-              const pdfPptx = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-              const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
-              
-              if (pdfPptx) {
-                // Папка с PDF/PPTX
-                result.push(pdfPptx);
-              } else if (hasImages) {
-                // Папка с изображениями - добавляем имя папки
-                result.push(entry);
-              }
-            }
-          }
-        }
-        console.log(`[copy-file] 📊 Найдено ${result.length} файлов в ${deviceId}`);
-        return result;
-      };
+      // Обновляем списки файлов обоих устройств используя общую утилиту
+      const sourceFolder = path.join(DEVICES, devices[sourceId].folder);
+      const targetFolder = path.join(DEVICES, devices[targetId].folder);
       
-      devices[sourceId].files = scanDeviceFiles(sourceId);
-      devices[targetId].files = scanDeviceFiles(targetId);
+      console.log(`[copy-file] 📂 Сканируем source: ${sourceFolder}`);
+      const sourceResult = scanDeviceFiles(sourceId, sourceFolder, fileNamesMap);
+      devices[sourceId].files = sourceResult.files;
+      devices[sourceId].fileNames = sourceResult.fileNames;
       
-      // Обновляем fileNames с учетом папок
-      devices[sourceId].fileNames = devices[sourceId].files.map(f => {
-        // Для PDF/PPTX проверяем маппинг по имени папки (без расширения)
-        const folderName = f.replace(/\.(pdf|pptx)$/i, '');
-        return fileNamesMap[sourceId]?.[folderName] || fileNamesMap[sourceId]?.[f] || f;
-      });
-      
-      devices[targetId].fileNames = devices[targetId].files.map(f => {
-        // Для PDF/PPTX проверяем маппинг по имени папки (без расширения)
-        const folderName = f.replace(/\.(pdf|pptx)$/i, '');
-        return fileNamesMap[targetId]?.[folderName] || fileNamesMap[targetId]?.[f] || f;
-      });
+      console.log(`[copy-file] 📂 Сканируем target: ${targetFolder}`);
+      const targetResult = scanDeviceFiles(targetId, targetFolder, fileNamesMap);
+      devices[targetId].files = targetResult.files;
+      devices[targetId].fileNames = targetResult.fileNames;
       
       console.log(`[copy-file] ✅ Файлы обновлены: source=${devices[sourceId].files.length}, target=${devices[targetId].files.length}`);
       console.log(`[copy-file] 📡 Отправляем devices/updated...`);
@@ -487,45 +456,10 @@ export function createFilesRouter(deps) {
       
       saveFileNamesMap(fileNamesMap);
       
-      // Обновляем список файлов устройства
-      const scanResult = [];
-      const scanFileNames = [];
-      const entries = fs.readdirSync(deviceFolder);
-      
-      for (const entry of entries) {
-        const entryPath = path.join(deviceFolder, entry);
-        const stat = fs.statSync(entryPath);
-        
-        if (stat.isFile() && !isSystemFile(entry)) {
-          scanResult.push(entry);
-          scanFileNames.push(fileNamesMap[id]?.[entry] || entry);
-        } else if (stat.isDirectory()) {
-          const folderContents = fs.readdirSync(entryPath);
-          const pdfPptx = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-          const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
-          
-          if (pdfPptx) {
-            // Для PDF/PPTX добавляем файл с расширением, маппинг по имени папки
-            scanResult.push(pdfPptx);
-            const displayName = fileNamesMap[id]?.[entry] || fileNamesMap[id]?.[pdfPptx] || pdfPptx;
-            scanFileNames.push(displayName);
-            
-            // Обновляем маппинг: и для файла, и для папки
-            if (fileNamesMap[id]?.[entry]) {
-              fileNamesMap[id][pdfPptx] = fileNamesMap[id][entry];
-              fileNamesMap[id][entry] = fileNamesMap[id][entry]; // Сохраняем маппинг папки
-              saveFileNamesMap(fileNamesMap);
-            }
-          } else if (hasImages) {
-            // Для папок с изображениями добавляем имя папки
-            scanResult.push(entry);
-            scanFileNames.push(fileNamesMap[id]?.[entry] || entry);
-          }
-        }
-      }
-      
-      d.files = scanResult;
-      d.fileNames = scanFileNames;
+      // Обновляем список файлов устройства используя общую утилиту
+      const scanned = scanDeviceFiles(id, deviceFolder, fileNamesMap);
+      d.files = scanned.files;
+      d.fileNames = scanned.fileNames;
       
       io.emit('devices/updated');
       res.json({ success: true, oldName: actualOldName, newName: finalName });

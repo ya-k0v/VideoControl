@@ -40,9 +40,9 @@ echo ""
 echo "Installing system dependencies..."
 if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
     sudo apt-get update
-    sudo apt-get install -y libreoffice graphicsmagick
+    sudo apt-get install -y ffmpeg libreoffice imagemagick unzip
 elif [ "$OS" = "centos" ] || [ "$OS" = "rhel" ]; then
-    sudo yum install -y libreoffice GraphicsMagick
+    sudo yum install -y ffmpeg libreoffice ImageMagick unzip
 fi
 
 # Install npm packages
@@ -55,9 +55,7 @@ echo ""
 echo "Creating directories..."
 mkdir -p public/content
 mkdir -p config
-mkdir -p archive
-mkdir -p docs/reports/{backend,frontend,android,fixes}
-mkdir -p docs/status
+mkdir -p .converted
 
 # Create default config files if not exist
 if [ ! -f config/devices.json ]; then
@@ -132,8 +130,7 @@ echo ""
 echo "📁 Project structure created:"
 echo "  ✅ config/ - configuration files"
 echo "  ✅ public/content/ - device content"
-echo "  ✅ docs/reports/ - refactoring reports"
-echo "  ✅ archive/ - old files"
+echo "  ✅ .converted/ - converted PDF/PPTX cache"
 echo ""
 echo "🚀 Start server:"
 echo "  Development: npm start"
@@ -149,6 +146,8 @@ echo "  Status: sudo systemctl status videocontrol"
 echo "  Logs: sudo journalctl -u videocontrol -f"
 echo ""
 echo "📖 Documentation:"
-echo "  See docs/INSTALL.md for detailed instructions"
+echo "  📘 Installation: docs/INSTALL.md"
+echo "  📁 Folders feature: docs/FOLDERS_FEATURE.md"
+echo "  📱 Android app: docs/ANDROID.md"
 echo ""
 

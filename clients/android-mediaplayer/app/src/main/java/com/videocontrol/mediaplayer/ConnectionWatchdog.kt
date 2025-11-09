@@ -19,6 +19,9 @@ class ConnectionWatchdog(
     private var isConnected: Boolean = false
     private var checkInterval: Long = 60000 // Проверка каждую минуту
     
+    // Callback для проверки идет ли воспроизведение контента
+    private var isPlayingContentCallback: (() -> Boolean)? = null
+    
     /**
      * Запустить watchdog
      */
@@ -69,6 +72,13 @@ class ConnectionWatchdog(
     }
     
     /**
+     * Установить callback для проверки воспроизведения контента
+     */
+    fun setContentPlayingCallback(callback: () -> Boolean) {
+        isPlayingContentCallback = callback
+    }
+    
+    /**
      * Проверить подключение
      */
     private fun checkConnection() {
@@ -78,8 +88,16 @@ class ConnectionWatchdog(
             Log.w(TAG, "Disconnected for ${disconnectDuration}ms (max: ${maxDisconnectTime}ms)")
             
             if (disconnectDuration > maxDisconnectTime) {
-                Log.e(TAG, "Connection lost for too long, restarting app...")
-                restartApp()
+                // КРИТИЧНО: Не перезапускаем если играет контент (не заглушка)!
+                val isPlayingContent = isPlayingContentCallback?.invoke() ?: false
+                
+                if (isPlayingContent) {
+                    Log.w(TAG, "Connection lost but content is playing - NOT restarting, waiting for connection...")
+                    // Не перезапускаем, ждем восстановления связи
+                } else {
+                    Log.e(TAG, "Connection lost for too long, restarting app...")
+                    restartApp()
+                }
             }
         }
     }

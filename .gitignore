@@ -40,6 +40,12 @@ tmp/
 temp/
 *.tmp
 
+# Archives
+*.tar.gz
+*.tar
+*.zip
+*.rar
+
 # Database
 *.db
 *.sqlite

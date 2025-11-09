@@ -437,6 +437,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            socket?.on("player/folderPage") { args ->
+                if (args.isNotEmpty()) {
+                    val imageNum = args[0] as? Int ?: 1
+                    runOnUiThread { showFolderImage(null, imageNum) }
+                }
+            }
+
             socket?.connect()
             Log.d(TAG, "Socket connecting to $SERVER_URL")
 
@@ -484,6 +491,7 @@ class MainActivity : AppCompatActivity() {
                 "image" -> showImage(file, isPlaceholder = false)
                 "pdf" -> showPdfPage(file, page)
                 "pptx" -> showPptxSlide(file, page)
+                "folder" -> showFolderImage(file, page)
                 else -> {
                     Log.w(TAG, "Unknown content type: $type")
                     showStatus("Неподдерживаемый тип контента")
@@ -571,6 +579,8 @@ class MainActivity : AppCompatActivity() {
     private var currentPdfPage: Int = 1
     private var currentPptxFile: String? = null
     private var currentPptxSlide: Int = 1
+    private var currentFolderName: String? = null
+    private var currentFolderImage: Int = 1
     private var currentVideoFile: String? = null
     private var savedPosition: Long = 0
 
@@ -693,6 +703,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showFolderImage(folderName: String?, imageNum: Int) {
+        try {
+            val folder = folderName ?: currentFolderName
+            if (folder == null) {
+                Log.w(TAG, "⚠️ Folder name is null")
+                return
+            }
+
+            currentFolderName = folder
+            currentFolderImage = imageNum
+            
+            // Папка с изображениями - НЕ заглушка, при stop вернемся на заглушку
+            isPlayingPlaceholder = false
+
+            val imageUrl = "$SERVER_URL/api/devices/$DEVICE_ID/folder/${Uri.encode(folder)}/image/$imageNum"
+            Log.i(TAG, "📁 Showing folder image: $imageUrl (image $imageNum)")
+
+            // КРИТИЧНО: Полностью останавливаем видео
+            player?.stop()
+            player?.clearMediaItems()
+            
+            // Сбрасываем currentVideoFile для корректного возврата к видео
+            currentVideoFile = null
+            savedPosition = 0
+
+            // Плавный переход только если переходим С ВИДЕО на изображение
+            val useFade = (playerView.visibility == View.VISIBLE)
+
+            playerView.visibility = View.GONE
+            imageView.visibility = View.VISIBLE
+
+            // Загружаем изображение из папки (fade только при переходе с видео)
+            loadImageToView(imageUrl, useFade)
+            
+            // Предзагружаем соседние изображения для быстрого переключения
+            preloadAdjacentSlides(folder, imageNum, 999, "folder")  // 999 как max (не знаем точное кол-во)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error showing folder image", e)
+            showStatus("Ошибка загрузки изображения")
+        }
+    }
+
     private fun loadImageToView(imageUrl: String, useFade: Boolean = false) {
         try {
             // Glide для быстрой загрузки изображений
@@ -733,6 +786,7 @@ class MainActivity : AppCompatActivity() {
                 val url = when (type) {
                     "pdf" -> "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/page/$page"
                     "pptx" -> "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/slide/$page"
+                    "folder" -> "$SERVER_URL/api/devices/$DEVICE_ID/folder/${Uri.encode(file)}/image/$page"
                     else -> return
                 }
                 

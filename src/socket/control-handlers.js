@@ -3,6 +3,8 @@
  * @module socket/control-handlers
  */
 
+import { getFolderImagesCount } from '../converters/folder-converter.js';
+
 /**
  * Настраивает обработчики управления плеером
  * @param {Socket} socket - Socket.IO сокет
@@ -18,16 +20,24 @@ export function setupControlHandlers(socket, deps) {
     
     if (file) {
       const ext = file.split('.').pop().toLowerCase();
-      const type = ext === 'pdf' ? 'pdf' 
-        : ext === 'pptx' ? 'pptx' 
-        : ['png','jpg','jpeg','gif','webp'].includes(ext) ? 'image' 
-        : 'video';
+      
+      // Определяем тип контента
+      let type = 'video'; // По умолчанию
+      if (ext === 'pdf') type = 'pdf';
+      else if (ext === 'pptx') type = 'pptx';
+      else if (['png','jpg','jpeg','gif','webp'].includes(ext)) type = 'image';
+      else if (ext === 'zip') type = 'folder'; // ZIP = папка с изображениями
+      // Если файла с расширением нет, проверяем, может это папка
+      else if (!ext || ext === file) {
+        // Это может быть папка (имя без расширения)
+        type = 'folder';
+      }
       
       d.current = { 
         type, 
         file, 
         state: 'playing', 
-        page: (type === 'pdf' || type === 'pptx') ? 1 : undefined 
+        page: (type === 'pdf' || type === 'pptx' || type === 'folder') ? 1 : undefined 
       };
       
       io.to(`device:${device_id}`).emit('player/play', d.current);
@@ -79,7 +89,7 @@ export function setupControlHandlers(socket, deps) {
     io.emit('preview/refresh', { device_id });
   });
 
-  // control/pdfPrev - Предыдущая страница/слайд
+  // control/pdfPrev - Предыдущая страница/слайд/изображение
   socket.on('control/pdfPrev', ({ device_id }) => {
     const d = devices[device_id];
     if (!d) return;
@@ -90,10 +100,13 @@ export function setupControlHandlers(socket, deps) {
     } else if (d.current.type === 'pptx') {
       d.current.page = Math.max(1, (d.current.page || 1) - 1);
       io.to(`device:${device_id}`).emit('player/pptxPage', d.current.page);
+    } else if (d.current.type === 'folder') {
+      d.current.page = Math.max(1, (d.current.page || 1) - 1);
+      io.to(`device:${device_id}`).emit('player/folderPage', d.current.page);
     }
   });
 
-  // control/pdfNext - Следующая страница/слайд
+  // control/pdfNext - Следующая страница/слайд/изображение
   socket.on('control/pdfNext', async ({ device_id }) => {
     const d = devices[device_id];
     if (!d) return;
@@ -114,6 +127,17 @@ export function setupControlHandlers(socket, deps) {
         if (nextSlide !== d.current.page) {
           d.current.page = nextSlide;
           io.to(`device:${device_id}`).emit('player/pptxPage', d.current.page);
+        }
+      }
+    } else if (d.current.type === 'folder' && d.current.file) {
+      // Получаем количество изображений в папке
+      const folderName = d.current.file.replace(/\.zip$/i, ''); // Убираем .zip если есть
+      const maxImages = await getFolderImagesCount(device_id, folderName);
+      if (maxImages > 0) {
+        const nextImage = Math.min((d.current.page || 1) + 1, maxImages);
+        if (nextImage !== d.current.page) {
+          d.current.page = nextImage;
+          io.to(`device:${device_id}`).emit('player/folderPage', d.current.page);
         }
       }
     }

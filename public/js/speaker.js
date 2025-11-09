@@ -213,8 +213,19 @@ async function loadFiles() {
   const files = allFiles.slice(start, end);
 
   fileList.innerHTML = files.map(({ safeName, originalName, resolution }) => {
-    const ext = safeName.split('.').pop().toLowerCase();
-    const type = ext === 'pdf' ? 'PDF' : ext === 'pptx' ? 'PPTX' : ['png','jpg','jpeg','gif','webp'].includes(ext) ? 'IMG' : 'VID';
+    // Определяем расширение файла
+    const hasExtension = safeName.includes('.');
+    const ext = hasExtension ? safeName.split('.').pop().toLowerCase() : '';
+    
+    // Определяем тип файла (включая папки)
+    let type = 'VID'; // По умолчанию
+    if (ext === 'pdf') type = 'PDF';
+    else if (ext === 'pptx') type = 'PPTX';
+    else if (['png','jpg','jpeg','gif','webp'].includes(ext)) type = 'IMG';
+    else if (ext === 'zip' || !hasExtension) {
+      // ZIP или папка без расширения - это папка с изображениями
+      type = 'FOLDER';
+    }
     
     // НОВОЕ: Определяем разрешение для видео
     let resolutionLabel = '';

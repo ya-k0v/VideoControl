@@ -47,14 +47,16 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
     <div class="uploadBox card" style="margin-top:var(--space-md)">
       <div class="header">
         <div style="display:flex; gap:var(--space-sm); flex-wrap:wrap; width:100%">
-          <input type="file" class="fileInput" multiple accept=".mp4,.webm,.ogg,.mkv,.mov,.avi,.mp3,.wav,.m4a,.png,.jpg,.jpeg,.gif,.webp,.pdf,.pptx" style="display:none"/>
-          <button class="secondary pickBtn" style="flex:1; min-width:120px">Выбрать файлы</button>
-          <button class="secondary clearBtn" style="flex:1; min-width:120px">Очистить</button>
-          <button class="primary uploadBtn" style="flex:1; min-width:120px">Загрузить</button>
+          <input type="file" class="fileInput" multiple accept=".mp4,.webm,.ogg,.mkv,.mov,.avi,.mp3,.wav,.m4a,.png,.jpg,.jpeg,.gif,.webp,.pdf,.pptx,.zip" style="display:none"/>
+          <input type="file" class="folderInput" webkitdirectory directory multiple style="display:none"/>
+          <button class="secondary pickBtn" style="flex:1; min-width:110px">📄 Файлы</button>
+          <button class="secondary pickFolderBtn" style="flex:1; min-width:110px">📁 Папка</button>
+          <button class="secondary clearBtn" style="flex:1; min-width:110px">Очистить</button>
+          <button class="primary uploadBtn" style="flex:1; min-width:110px">Загрузить</button>
         </div>
       </div>
       <div class="dropZone">
-        Перетащите файлы сюда или нажмите "Выбрать файлы"
+        Перетащите файлы/папки сюда или нажмите "📄 Файлы" / "📁 Папка"
       </div>
       <ul class="queue"></ul>
     </div>

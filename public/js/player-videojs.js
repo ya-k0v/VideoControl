@@ -693,6 +693,158 @@ if (!device_id || !device_id.trim()) {
     }
   }
 
+  // Предзагрузка всех изображений из папки в кэш
+  async function preloadAllFolderImages(folderName) {
+    try {
+      console.log(`[Player] 🔄 Предзагрузка изображений из папки: ${folderName}`);
+      
+      // Получаем список изображений через API
+      const response = await fetch(`/api/devices/${encodeURIComponent(device_id)}/folder/${encodeURIComponent(folderName)}/images`);
+      if (!response.ok) {
+        console.warn('[Player] ⚠️ Не удалось получить список изображений из папки');
+        return;
+      }
+      
+      const data = await response.json();
+      const imageList = data.images || [];
+      const count = imageList.length;
+      
+      if (count === 0) {
+        console.warn('[Player] ⚠️ Нет изображений для предзагрузки');
+        return;
+      }
+      
+      console.log(`[Player] 📊 Найдено изображений: ${count}. Начинаем предзагрузку...`);
+      
+      // Создаем массив Image объектов
+      const images = [];
+      
+      // Предзагружаем все изображения параллельно
+      const preloadPromises = [];
+      for (let i = 1; i <= count; i++) {
+        const imageUrl = `/api/devices/${encodeURIComponent(device_id)}/folder/${encodeURIComponent(folderName)}/image/${i}`;
+        const imgObj = new Image();
+        images[i - 1] = imgObj;
+        
+        const promise = new Promise((resolve, reject) => {
+          imgObj.onload = () => {
+            console.log(`[Player] ✅ Изображение ${i}/${count} загружено`);
+            resolve();
+          };
+          imgObj.onerror = () => {
+            console.warn(`[Player] ⚠️ Ошибка загрузки изображения ${i}/${count}`);
+            resolve(); // Не прерываем весь процесс из-за одного изображения
+          };
+          imgObj.src = imageUrl;
+        });
+        
+        preloadPromises.push(promise);
+      }
+      
+      // Ждем загрузки всех изображений
+      await Promise.all(preloadPromises);
+      
+      // Сохраняем в кэш
+      slidesCache[folderName] = { count, images, type: 'folder' };
+      console.log(`[Player] 🎉 Все изображения загружены в кэш: ${folderName} (${count} изображений)`);
+      
+    } catch (error) {
+      console.error('[Player] ❌ Ошибка предзагрузки изображений из папки:', error);
+    }
+  }
+
+  // Показать изображение из папки
+  function showFolderImage(folderName, num) {
+    if (vjsPlayer) vjsPlayer.pause();
+    pdf.removeAttribute('src');
+    
+    const { current, next } = getImageBuffers();
+    
+    // Определяем, это первый показ папки или переключение изображений
+    const isFirstShow = !current.classList.contains('visible') && !next.classList.contains('visible');
+    
+    // Проверяем кэш
+    if (slidesCache[folderName] && slidesCache[folderName].images) {
+      const cached = slidesCache[folderName];
+      const index = Math.max(0, Math.min(num - 1, cached.count - 1));
+      const cachedImage = cached.images[index];
+      
+      if (cachedImage && cachedImage.complete && cachedImage.naturalWidth > 0) {
+        console.log(`[Player] ⚡ Изображение ${num} из кэша (двойная буферизация)`);
+        
+        // Загружаем в следующий буфер
+        next.src = cachedImage.src;
+        
+        // Первый показ - сразу черный, потом fade in; переключение - мгновенно
+        if (isFirstShow) {
+          console.log(`[Player] 🎬 Первый показ папки - через черный`);
+          // Сразу черный экран
+          [videoContainer, img1, img2, pdf].forEach(e => {
+            if (e) e.classList.remove('visible', 'preloading');
+          });
+          idle.classList.add('visible');
+          
+          // Затем fade in изображения
+          setTimeout(() => {
+            next.classList.add('visible');
+            idle.classList.remove('visible');
+          }, 300);
+        } else {
+          console.log(`[Player] ⚡ Переключение изображения - мгновенно`);
+          show(next, true); // skipTransition = true для мгновенной смены
+        }
+        
+        // Переключаем активный буфер
+        currentImgBuffer = currentImgBuffer === 1 ? 2 : 1;
+        console.log(`[Player] 🔄 Переключен буфер на: ${currentImgBuffer}`);
+        return;
+      }
+    }
+    
+    // Fallback: загружаем через API если нет в кэше
+    console.log(`[Player] 🌐 Изображение ${num} загружается через API (двойная буферизация)`);
+    const imageUrl = `/api/devices/${encodeURIComponent(device_id)}/folder/${encodeURIComponent(folderName)}/image/${num}`;
+    
+    // Предзагружаем в следующий буфер
+    const tempImg = new Image();
+    tempImg.onload = () => {
+      console.log(`[Player] ✅ Изображение ${num} загружено в буфер ${currentImgBuffer === 1 ? 2 : 1}`);
+      
+      // Устанавливаем в следующий буфер
+      next.src = imageUrl;
+      
+      // Первый показ - сразу черный, потом fade in; переключение - мгновенно
+      if (isFirstShow) {
+        console.log(`[Player] 🎬 Первый показ папки - через черный`);
+        // Сразу черный экран
+        [videoContainer, img1, img2, pdf].forEach(e => {
+          if (e) e.classList.remove('visible', 'preloading');
+        });
+        idle.classList.add('visible');
+        
+        // Затем fade in изображения
+        setTimeout(() => {
+          next.classList.add('visible');
+          idle.classList.remove('visible');
+        }, 300);
+      } else {
+        console.log(`[Player] ⚡ Переключение изображения - мгновенно`);
+        show(next, true); // skipTransition = true для мгновенной смены
+      }
+      
+      // Переключаем активный буфер
+      currentImgBuffer = currentImgBuffer === 1 ? 2 : 1;
+      console.log(`[Player] 🔄 Переключен буфер на: ${currentImgBuffer}`);
+    };
+    tempImg.onerror = () => {
+      console.error(`[Player] ❌ Ошибка загрузки изображения ${num}`);
+      next.src = imageUrl;
+      show(next, isFirstShow ? false : true);
+      currentImgBuffer = currentImgBuffer === 1 ? 2 : 1;
+    };
+    tempImg.src = imageUrl;
+  }
+
   function showConvertedPage(file, type, num) {
     if (vjsPlayer) vjsPlayer.pause();
     pdf.removeAttribute('src');
@@ -955,6 +1107,17 @@ if (!device_id || !device_id.trim()) {
       if (!slidesCache[file]) {
         preloadAllSlides(file, 'pptx');
       }
+    } else if (type === 'folder' && file) {
+      // Папка с изображениями
+      const imageNum = page || 1;
+      const folderName = file.replace(/\.zip$/i, ''); // Убираем .zip если есть
+      currentFileState = { type: 'folder', file: folderName, page: imageNum };
+      showFolderImage(folderName, imageNum);
+      
+      // КРИТИЧНО: Предзагружаем ВСЕ изображения в кэш для мгновенного переключения
+      if (!slidesCache[folderName]) {
+        preloadAllFolderImages(folderName);
+      }
     }
   });
 
@@ -1045,6 +1208,12 @@ if (!device_id || !device_id.trim()) {
     if (!currentFileState.file || currentFileState.type !== 'pptx') return;
     currentFileState.page = slide;
     showConvertedPage(currentFileState.file, 'slide', slide);
+  });
+
+  socket.on('player/folderPage', (imageNum) => {
+    if (!currentFileState.file || currentFileState.type !== 'folder') return;
+    currentFileState.page = imageNum;
+    showFolderImage(currentFileState.file, imageNum);
   });
 
   socket.on('player/state', (cur) => {

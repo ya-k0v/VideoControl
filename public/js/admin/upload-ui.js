@@ -4,23 +4,44 @@ import { setXhrAuth } from './auth.js';
 export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, socket) {
   const dropZone = card.querySelector('.dropZone');
   const fileInput = card.querySelector('.fileInput');
+  const folderInput = card.querySelector('.folderInput');
   const pickBtn = card.querySelector('.pickBtn');
+  const pickFolderBtn = card.querySelector('.pickFolderBtn');
   const clearBtn = card.querySelector('.clearBtn');
   const uploadBtn = card.querySelector('.uploadBtn');
   const queue = card.querySelector('.queue');
   if (!fileInput || !pickBtn || !clearBtn || !uploadBtn || !queue) return;
 
   let pending = [];
-  const allowed = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i;
+  let folderName = null; // Имя выбранной папки
+  const allowed = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx|zip)$/i;
+  const imageExtensions = /\.(png|jpg|jpeg|gif|webp)$/i;
 
   function renderQueue() {
-    if (!pending.length) { queue.innerHTML = ''; return; }
-    queue.innerHTML = pending.map((f,i) => `
-      <li style="display:flex; justify-content:space-between; align-items:center; padding:6px 0">
-        <span>${f.name} <span class="meta">(${(f.size/1024/1024).toFixed(2)} MB)</span></span>
-        <span class="meta" id="p_${deviceId}_${i}">0%</span>
-      </li>
-    `).join('');
+    if (!pending.length) { 
+      queue.innerHTML = ''; 
+      folderName = null;
+      return; 
+    }
+    
+    // Если это папка с изображениями, показываем специальное сообщение
+    if (folderName) {
+      const imageCount = pending.filter(f => imageExtensions.test(f.name)).length;
+      const totalSize = pending.reduce((sum, f) => sum + f.size, 0);
+      queue.innerHTML = `
+        <li style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:var(--panel-2); border-radius:var(--radius-sm)">
+          <span>📁 <strong>${folderName}</strong> <span class="meta">(${imageCount} изображений, ${(totalSize/1024/1024).toFixed(2)} MB)</span></span>
+          <span class="meta" id="p_${deviceId}_folder">0%</span>
+        </li>
+      `;
+    } else {
+      queue.innerHTML = pending.map((f,i) => `
+        <li style="display:flex; justify-content:space-between; align-items:center; padding:6px 0">
+          <span>${f.name} <span class="meta">(${(f.size/1024/1024).toFixed(2)} MB)</span></span>
+          <span class="meta" id="p_${deviceId}_${i}">0%</span>
+        </li>
+      `).join('');
+    }
   }
 
   function addToQueue(files) {
@@ -32,8 +53,52 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
   }
 
   pickBtn.onclick = () => fileInput.click();
-  clearBtn.onclick = () => { pending = []; renderQueue(); };
-  fileInput.onchange = e => { addToQueue(Array.from(e.target.files || [])); fileInput.value=''; };
+  pickFolderBtn.onclick = () => {
+    if (folderInput) {
+      folderInput.click();
+    }
+  };
+  clearBtn.onclick = () => { 
+    pending = []; 
+    folderName = null;
+    renderQueue(); 
+  };
+  fileInput.onchange = e => { 
+    folderName = null; // Сбрасываем режим папки
+    addToQueue(Array.from(e.target.files || [])); 
+    fileInput.value=''; 
+  };
+  
+  // Обработка выбора папки
+  if (folderInput) {
+    folderInput.onchange = e => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      
+      // Фильтруем только изображения
+      const imageFiles = files.filter(f => imageExtensions.test(f.name));
+      
+      if (imageFiles.length === 0) {
+        alert('В выбранной папке нет изображений! Поддерживаются форматы: PNG, JPG, JPEG, GIF, WEBP');
+        folderInput.value = '';
+        return;
+      }
+      
+      // Определяем имя папки из первого файла
+      // webkitRelativePath имеет формат "folder/subfolder/file.jpg"
+      const firstFile = imageFiles[0];
+      if (firstFile.webkitRelativePath) {
+        const pathParts = firstFile.webkitRelativePath.split('/');
+        folderName = pathParts[0]; // Имя корневой папки
+      } else {
+        folderName = 'uploaded_folder';
+      }
+      
+      pending = imageFiles;
+      renderQueue();
+      folderInput.value = '';
+    };
+  }
 
   if (dropZone) {
     ['dragenter','dragover','dragleave','drop'].forEach(ev => {
@@ -42,17 +107,88 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
     dropZone.addEventListener('dragenter', () => dropZone.classList.add('hover'));
     dropZone.addEventListener('dragover', () => dropZone.classList.add('hover'));
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
-    dropZone.addEventListener('drop', e => {
+    dropZone.addEventListener('drop', async e => {
+      dropZone.classList.remove('hover');
       const dt = e.dataTransfer;
       if (!dt) return;
+      
+      const items = dt.items;
+      if (items && items.length > 0) {
+        // Проверяем, есть ли папки в перетаскиваемых элементах
+        let hasFolder = false;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.kind === 'file') {
+            const entry = item.webkitGetAsEntry?.() || item.getAsEntry?.();
+            if (entry && entry.isDirectory) {
+              hasFolder = true;
+              // Обрабатываем первую найденную папку с изображениями
+              const files = await readDirectoryRecursive(entry);
+              const imageFiles = files.filter(f => imageExtensions.test(f.name));
+              
+              if (imageFiles.length > 0) {
+                folderName = entry.name;
+                pending = imageFiles;
+                renderQueue();
+                return;
+              }
+            }
+          }
+        }
+      }
+      
+      // Если папок не было, обрабатываем как обычные файлы
+      folderName = null;
       addToQueue(Array.from(dt.files || []));
     });
+  }
+  
+  // Рекурсивное чтение папки
+  async function readDirectoryRecursive(dirEntry) {
+    const files = [];
+    const reader = dirEntry.createReader();
+    
+    const readEntries = () => new Promise((resolve, reject) => {
+      reader.readEntries((entries) => resolve(entries), (error) => reject(error));
+    });
+    
+    let entries = await readEntries();
+    while (entries.length > 0) {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          const file = await new Promise((resolve, reject) => {
+            entry.file((file) => resolve(file), (error) => reject(error));
+          });
+          files.push(file);
+        } else if (entry.isDirectory) {
+          const subFiles = await readDirectoryRecursive(entry);
+          files.push(...subFiles);
+        }
+      }
+      entries = await readEntries();
+    }
+    
+    return files;
   }
 
   uploadBtn.onclick = async () => {
     if (!pending.length) return;
     const form = new FormData();
-    pending.forEach(f => form.append('files', f));
+    
+    // Если это папка, добавляем метаданные
+    if (folderName) {
+      form.append('folderName', folderName);
+      // Для файлов из папки добавляем относительные пути
+      pending.forEach(f => {
+        // Используем webkitRelativePath если доступен, иначе просто имя файла
+        const relativePath = f.webkitRelativePath || f.name;
+        // Создаем новый File объект с сохранением относительного пути
+        const blob = new Blob([f], { type: f.type });
+        form.append('files', blob, relativePath);
+      });
+    } else {
+      pending.forEach(f => form.append('files', f));
+    }
 
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -61,7 +197,12 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
       xhr.upload.onprogress = e => {
         if (!e.lengthComputable) return;
         const percent = Math.round((e.loaded / e.total) * 100);
-        queue.querySelectorAll(`[id^="p_${deviceId}_"]`).forEach(el => el.textContent = `${percent}%`);
+        if (folderName) {
+          const el = queue.querySelector(`#p_${deviceId}_folder`);
+          if (el) el.textContent = `${percent}%`;
+        } else {
+          queue.querySelectorAll(`[id^="p_${deviceId}_"]`).forEach(el => el.textContent = `${percent}%`);
+        }
       };
       xhr.onload = () => xhr.status<300 ? resolve() : reject(new Error(xhr.statusText));
       xhr.onerror = () => reject(new Error('Network error'));
@@ -69,6 +210,7 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
     });
 
     pending = [];
+    folderName = null;
     renderQueue();
     // После загрузки — обновить правую колонку файлов
     await renderFilesPane(deviceId);

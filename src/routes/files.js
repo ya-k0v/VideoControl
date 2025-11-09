@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { DEVICES, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
+import { extractZipToFolder } from '../converters/folder-converter.js';
 
 const router = express.Router();
 
@@ -47,17 +48,58 @@ export function createFilesRouter(deps) {
       }
       
       const uploaded = (req.files || []).map(f => f.filename);
+      const folderName = req.body.folderName; // Имя папки если загружается через выбор папки
       
-      // КРИТИЧНО: Устанавливаем права 644 на все загруженные файлы
-      // Чтобы Nginx (www-data) мог их прочитать
       const folder = path.join(DEVICES, devices[id].folder);
-      for (const file of (req.files || [])) {
-        try {
-          const filePath = path.join(folder, file.filename);
-          fs.chmodSync(filePath, 0o644);
-          console.log(`[upload] ✅ Права 644 установлены: ${file.filename}`);
-        } catch (e) {
-          console.warn(`[upload] ⚠️ Не удалось установить права на ${file.filename}: ${e}`);
+      
+      // Если это загрузка папки, создаем структуру папки
+      if (folderName && req.files && req.files.length > 0) {
+        console.log(`[upload] 📁 Обнаружена загрузка папки: ${folderName}`);
+        
+        // Создаем папку для изображений
+        const targetFolder = path.join(folder, folderName);
+        if (!fs.existsSync(targetFolder)) {
+          fs.mkdirSync(targetFolder, { recursive: true });
+          fs.chmodSync(targetFolder, 0o755);
+        }
+        
+        // Перемещаем файлы из временной папки в целевую
+        for (const file of req.files) {
+          try {
+            const sourcePath = path.join(folder, file.filename);
+            
+            // Получаем оригинальное имя файла из originalname
+            // originalname может содержать путь "folder/subfolder/file.jpg"
+            let targetFileName = file.originalname;
+            if (targetFileName.includes('/')) {
+              // Убираем путь папки, оставляем только имя файла
+              const parts = targetFileName.split('/');
+              targetFileName = parts[parts.length - 1];
+            }
+            
+            const targetPath = path.join(targetFolder, targetFileName);
+            
+            // Перемещаем файл
+            fs.renameSync(sourcePath, targetPath);
+            fs.chmodSync(targetPath, 0o644);
+            console.log(`[upload] ✅ Перемещен: ${file.filename} -> ${folderName}/${targetFileName}`);
+          } catch (e) {
+            console.warn(`[upload] ⚠️ Ошибка перемещения ${file.filename}:`, e);
+          }
+        }
+        
+        console.log(`[upload] 📁 Папка создана: ${folderName} (${req.files.length} файлов)`);
+      } else {
+        // КРИТИЧНО: Устанавливаем права 644 на все загруженные файлы
+        // Чтобы Nginx (www-data) мог их прочитать
+        for (const file of (req.files || [])) {
+          try {
+            const filePath = path.join(folder, file.filename);
+            fs.chmodSync(filePath, 0o644);
+            console.log(`[upload] ✅ Права 644 установлены: ${file.filename}`);
+          } catch (e) {
+            console.warn(`[upload] ⚠️ Не удалось установить права на ${file.filename}: ${e}`);
+          }
         }
       }
       
@@ -69,20 +111,44 @@ export function createFilesRouter(deps) {
         saveFileNamesMap(fileNamesMap);
       }
       
-      for (const fileName of uploaded) {
-        const ext = path.extname(fileName).toLowerCase();
-        if (ext === '.pdf' || ext === '.pptx') {
-          autoConvertFileWrapper(id, fileName).catch(() => {});
-        }
-        // Автоматическая оптимизация видео
-        else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
-          autoOptimizeVideoWrapper(id, fileName).then(result => {
-            if (result.success) {
-              console.log(`[upload] 🎬 Видео обработано: ${fileName} (optimized=${result.optimized})`);
-            }
-          }).catch(err => {
-            console.error(`[upload] ❌ Ошибка оптимизации ${fileName}:`, err);
-          });
+      // Если загружена папка, сохраняем её оригинальное имя
+      if (folderName) {
+        if (!fileNamesMap[id]) fileNamesMap[id] = {};
+        fileNamesMap[id][folderName] = folderName; // Имя папки совпадает с оригинальным
+        saveFileNamesMap(fileNamesMap);
+      }
+      
+      // Обрабатываем файлы ТОЛЬКО если это не прямая загрузка папки
+      if (!folderName) {
+        for (const fileName of uploaded) {
+          const ext = path.extname(fileName).toLowerCase();
+          if (ext === '.pdf' || ext === '.pptx') {
+            autoConvertFileWrapper(id, fileName).catch(() => {});
+          }
+          // Автоматическая обработка ZIP архивов с изображениями
+          else if (ext === '.zip') {
+            extractZipToFolder(id, fileName).then(result => {
+              if (result.success) {
+                console.log(`[upload] 📦 ZIP распакован: ${fileName} -> ${result.folderName}/ (${result.imagesCount} изображений)`);
+                // Обновляем список файлов после распаковки
+                io.emit('devices/updated');
+              } else {
+                console.error(`[upload] ❌ Ошибка распаковки ZIP ${fileName}:`, result.error);
+              }
+            }).catch(err => {
+              console.error(`[upload] ❌ Ошибка обработки ZIP ${fileName}:`, err);
+            });
+          }
+          // Автоматическая оптимизация видео
+          else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+            autoOptimizeVideoWrapper(id, fileName).then(result => {
+              if (result.success) {
+                console.log(`[upload] 🎬 Видео обработано: ${fileName} (optimized=${result.optimized})`);
+              }
+            }).catch(err => {
+              console.error(`[upload] ❌ Ошибка оптимизации ${fileName}:`, err);
+            });
+          }
         }
       }
       
@@ -104,10 +170,22 @@ export function createFilesRouter(deps) {
           } else if (stat.isDirectory()) {
             const folderContents = fs.readdirSync(entryPath);
             const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
+            
             if (originalFile) {
+              // Папка с PDF/PPTX
               result.push(originalFile);
               const originalName = fileNamesMap[id]?.[entry] || originalFile;
               fileNames.push(originalName);
+            } else {
+              // Проверяем, есть ли изображения в папке (папка изображений)
+              const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
+              if (hasImages) {
+                // Это папка с изображениями - добавляем её как файл
+                result.push(entry); // Добавляем имя папки
+                // Используем оригинальное имя если есть маппинг
+                const originalName = fileNamesMap[id]?.[entry] || entry;
+                fileNames.push(originalName);
+              }
             }
           }
         }

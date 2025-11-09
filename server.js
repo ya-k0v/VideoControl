@@ -33,6 +33,7 @@ import { createFilesRouter } from './src/routes/files.js';
 import { createVideoInfoRouter } from './src/routes/video-info.js';
 import { createConversionRouter } from './src/routes/conversion.js';
 import { createSystemInfoRouter } from './src/routes/system-info.js';
+import { createFoldersRouter } from './src/routes/folders.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
@@ -118,11 +119,16 @@ const conversionRouter = createConversionRouter({
   autoConvertFileWrapper
 });
 
+const foldersRouter = createFoldersRouter({
+  devices
+});
+
 app.use('/api/devices', devicesRouter);
 app.use('/api/devices', placeholderRouter);
 app.use('/api/devices', filesRouter);
 app.use('/api/devices', videoInfoRouter);
 app.use('/api/devices', conversionRouter);
+app.use('/api/devices', foldersRouter);
 
 // System info router
 const systemInfoRouter = createSystemInfoRouter();

@@ -118,6 +118,16 @@ export function scan(devices, savedNames, fileNamesMap) {
             // Для PDF/PPTX используем имя папки или оригинальное имя
             const originalName = fileNamesMap[id]?.[entry] || originalFile;
             fileNames.push(originalName);
+          } else {
+            // Проверяем, есть ли изображения в папке (папка изображений)
+            const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
+            if (hasImages) {
+              // Это папка с изображениями - добавляем её как файл
+              result.push(entry); // Добавляем имя папки
+              // Используем оригинальное имя если есть маппинг
+              const originalName = fileNamesMap[id]?.[entry] || entry;
+              fileNames.push(originalName);
+            }
           }
         }
       }

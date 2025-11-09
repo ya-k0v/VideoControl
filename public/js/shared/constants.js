@@ -30,7 +30,8 @@ export const FILE_EXTENSIONS = {
   video: ['mp4', 'webm', 'ogg', 'mkv', 'mov', 'avi'],
   audio: ['mp3', 'wav', 'm4a'],
   image: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
-  document: ['pdf', 'pptx']
+  document: ['pdf', 'pptx'],
+  folder: ['zip'] // ZIP архивы с изображениями - папки
 };
 
 // Метки разрешения видео
@@ -58,13 +59,14 @@ export function getResolutionLabel(width, height) {
 /**
  * Определить тип файла по расширению
  * @param {string} fileName - Имя файла
- * @returns {string} Тип файла (VID, IMG, PDF, PPTX)
+ * @returns {string} Тип файла (VID, IMG, PDF, PPTX, FOLDER)
  */
 export function getFileTypeLabel(fileName) {
   const ext = fileName.split('.').pop().toLowerCase();
   
   if (ext === 'pdf') return 'PDF';
   if (ext === 'pptx') return 'PPTX';
+  if (ext === 'zip') return 'FOLDER';
   if (FILE_EXTENSIONS.image.includes(ext)) return 'IMG';
   if (FILE_EXTENSIONS.video.includes(ext)) return 'VID';
   if (FILE_EXTENSIONS.audio.includes(ext)) return 'AUD';

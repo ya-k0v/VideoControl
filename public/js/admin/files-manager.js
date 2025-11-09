@@ -51,10 +51,22 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   panelEl.innerHTML = `
     <ul class="list" style="display:grid; gap:var(--space-sm)">
       ${files.map(({ safeName, originalName, status, progress, canPlay, error, resolution }) => {
-        // placeholders allowed only for image/video (no pdf/pptx)
+        // placeholders allowed only for image/video (no pdf/pptx/folders)
         const isEligible = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i.test(safeName);
-        const ext = (safeName || '').split('.').pop().toLowerCase();
-        const typeLabel = ext === 'pdf' ? 'PDF' : ext === 'pptx' ? 'PPTX' : ['png','jpg','jpeg','gif','webp'].includes(ext) ? 'IMG' : 'VID';
+        
+        // Определяем расширение файла
+        const hasExtension = safeName.includes('.');
+        const ext = hasExtension ? safeName.split('.').pop().toLowerCase() : '';
+        
+        // Определяем метку типа файла (включая папки)
+        let typeLabel = 'VID'; // По умолчанию
+        if (ext === 'pdf') typeLabel = 'PDF';
+        else if (ext === 'pptx') typeLabel = 'PPTX';
+        else if (['png','jpg','jpeg','gif','webp'].includes(ext)) typeLabel = 'IMG';
+        else if (ext === 'zip' || !hasExtension) {
+          // ZIP или папка без расширения - это папка с изображениями
+          typeLabel = 'FOLDER';
+        }
         
         // НОВОЕ: Определяем статус для видео
         const isVideo = ['mp4','webm','ogg','mkv','mov','avi'].includes(ext);

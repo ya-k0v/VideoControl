@@ -14,7 +14,7 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
   card.style.minHeight = '0';
   const name = d.name || nodeNames[d.device_id] || d.device_id;
   card.innerHTML = `
-    <div class="header" style="margin-bottom:var(--space-sm)">
+    <div class="header" style="margin-bottom:0">
       <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-sm)">
         <div class="title" id="deviceName" style="flex:1; cursor:pointer; padding:var(--space-sm) var(--space-md); border-radius:var(--radius-sm); transition:all 0.2s; display:flex; align-items:center; min-height:36px; font-size:var(--font-size-base); margin:0" contenteditable="false">${name}</div>
         <button class="primary" id="renameSaveBtn" style="display:none; min-width:36px; width:36px; height:36px; padding:0; border-radius:var(--radius-sm); flex-shrink:0; align-items:center; justify-content:center; font-size:var(--font-size-lg); line-height:1; transition:all 0.2s; box-shadow:var(--shadow-sm)" title="Сохранить">
@@ -23,13 +23,13 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
           </svg>
         </button>
       </div>
-      <div class="meta" style="margin-top:var(--space-xs); margin-bottom:0">
-        ${DEVICE_ICONS[d.deviceType] || '📺'} <strong>${DEVICE_TYPE_NAMES[d.deviceType] || d.deviceType || 'Browser'}</strong>
-        ${d.platform && d.platform !== 'Unknown' ? `• ${d.platform}` : ''}
-        • ID: ${d.device_id}
-        • Файлов: ${d.files?.length || 0}
-        • ${readyDevices.has(d.device_id) ? '✓ Готов' : '✗ Не готов'}
-      </div>
+    </div>
+    <div class="meta" style="margin-top:var(--space-sm); margin-bottom:var(--space-sm)">
+      ${DEVICE_ICONS[d.deviceType] || '📺'} <strong>${DEVICE_TYPE_NAMES[d.deviceType] || d.deviceType || 'Browser'}</strong>
+      ${d.platform && d.platform !== 'Unknown' ? `• ${d.platform}` : ''}
+      • ID: ${d.device_id}
+      • Файлов: ${d.files?.length || 0}
+      • ${readyDevices.has(d.device_id) ? '✓ Готов' : '✗ Не готов'}
     </div>
 
     <div style="display:flex; flex-wrap:wrap; gap:var(--space-sm); align-items:center; margin-top:var(--space-md)">

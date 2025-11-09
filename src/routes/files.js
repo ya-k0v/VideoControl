@@ -9,6 +9,7 @@ import path from 'path';
 import { DEVICES, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
 import { extractZipToFolder } from '../converters/folder-converter.js';
+import { makeSafeFolderName } from '../utils/transliterate.js';
 
 const router = express.Router();
 
@@ -56,8 +57,12 @@ export function createFilesRouter(deps) {
       if (folderName && req.files && req.files.length > 0) {
         console.log(`[upload] 📁 Обнаружена загрузка папки: ${folderName}`);
         
-        // Создаем папку для изображений
-        const targetFolder = path.join(folder, folderName);
+        // Создаем безопасное имя папки через транслитерацию
+        const safeFolderName = makeSafeFolderName(folderName);
+        const targetFolder = path.join(folder, safeFolderName);
+        
+        console.log(`[upload] 📝 Имя папки: "${folderName}" → "${safeFolderName}"`);
+        
         if (!fs.existsSync(targetFolder)) {
           fs.mkdirSync(targetFolder, { recursive: true });
           fs.chmodSync(targetFolder, 0o755);
@@ -82,13 +87,18 @@ export function createFilesRouter(deps) {
             // Перемещаем файл
             fs.renameSync(sourcePath, targetPath);
             fs.chmodSync(targetPath, 0o644);
-            console.log(`[upload] ✅ Перемещен: ${file.filename} -> ${folderName}/${targetFileName}`);
+            console.log(`[upload] ✅ Перемещен: ${file.filename} -> ${safeFolderName}/${targetFileName}`);
           } catch (e) {
             console.warn(`[upload] ⚠️ Ошибка перемещения ${file.filename}:`, e);
           }
         }
         
-        console.log(`[upload] 📁 Папка создана: ${folderName} (${req.files.length} файлов)`);
+        console.log(`[upload] 📁 Папка создана: ${safeFolderName} (${req.files.length} файлов)`);
+        
+        // Сохраняем маппинг оригинального имени папки
+        if (!fileNamesMap[id]) fileNamesMap[id] = {};
+        fileNamesMap[id][safeFolderName] = folderName; // Оригинальное имя для отображения
+        saveFileNamesMap(fileNamesMap);
       } else {
         // КРИТИЧНО: Устанавливаем права 644 на все загруженные файлы
         // Чтобы Nginx (www-data) мог их прочитать
@@ -111,12 +121,7 @@ export function createFilesRouter(deps) {
         saveFileNamesMap(fileNamesMap);
       }
       
-      // Если загружена папка, сохраняем её оригинальное имя
-      if (folderName) {
-        if (!fileNamesMap[id]) fileNamesMap[id] = {};
-        fileNamesMap[id][folderName] = folderName; // Имя папки совпадает с оригинальным
-        saveFileNamesMap(fileNamesMap);
-      }
+      // Маппинг папки уже сохранен выше при создании папки
       
       // Обрабатываем файлы ТОЛЬКО если это не прямая загрузка папки
       if (!folderName) {
@@ -125,20 +130,29 @@ export function createFilesRouter(deps) {
           if (ext === '.pdf' || ext === '.pptx') {
             autoConvertFileWrapper(id, fileName).catch(() => {});
           }
-          // Автоматическая обработка ZIP архивов с изображениями
-          else if (ext === '.zip') {
-            extractZipToFolder(id, fileName).then(result => {
-              if (result.success) {
-                console.log(`[upload] 📦 ZIP распакован: ${fileName} -> ${result.folderName}/ (${result.imagesCount} изображений)`);
-                // Обновляем список файлов после распаковки
-                io.emit('devices/updated');
-              } else {
-                console.error(`[upload] ❌ Ошибка распаковки ZIP ${fileName}:`, result.error);
+        // Автоматическая обработка ZIP архивов с изображениями
+        else if (ext === '.zip') {
+          extractZipToFolder(id, fileName).then(result => {
+            if (result.success) {
+              console.log(`[upload] 📦 ZIP распакован: ${fileName} -> ${result.folderName}/ (${result.imagesCount} изображений)`);
+              
+              // Сохраняем маппинг оригинального имени папки
+              if (result.originalFolderName && result.folderName !== result.originalFolderName) {
+                if (!fileNamesMap[id]) fileNamesMap[id] = {};
+                fileNamesMap[id][result.folderName] = result.originalFolderName;
+                saveFileNamesMap(fileNamesMap);
+                console.log(`[upload] 📝 Маппинг папки: "${result.folderName}" → "${result.originalFolderName}"`);
               }
-            }).catch(err => {
-              console.error(`[upload] ❌ Ошибка обработки ZIP ${fileName}:`, err);
-            });
-          }
+              
+              // Обновляем список файлов после распаковки
+              io.emit('devices/updated');
+            } else {
+              console.error(`[upload] ❌ Ошибка распаковки ZIP ${fileName}:`, result.error);
+            }
+          }).catch(err => {
+            console.error(`[upload] ❌ Ошибка обработки ZIP ${fileName}:`, err);
+          });
+        }
           // Автоматическая оптимизация видео
           else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
             autoOptimizeVideoWrapper(id, fileName).then(result => {
@@ -221,6 +235,7 @@ export function createFilesRouter(deps) {
     
     let sourceFile = path.join(sourceFolder, fileName);
     let isDirectory = false;
+    let actualFileName = fileName;
     
     // Проверяем PDF/PPTX папки
     const folderName = fileName.replace(/\.(pdf|pptx)$/i, '');
@@ -229,6 +244,16 @@ export function createFilesRouter(deps) {
     if (fs.existsSync(possibleFolder) && fs.statSync(possibleFolder).isDirectory()) {
       sourceFile = possibleFolder;
       isDirectory = true;
+      actualFileName = folderName;
+    } 
+    // Проверяем папки с изображениями (без расширения)
+    else if (!fileName.includes('.')) {
+      const folderPath = path.join(sourceFolder, fileName);
+      if (fs.existsSync(folderPath) && fs.statSync(folderPath).isDirectory()) {
+        sourceFile = folderPath;
+        isDirectory = true;
+        actualFileName = fileName;
+      }
     }
     
     if (!fs.existsSync(sourceFile)) {
@@ -236,12 +261,11 @@ export function createFilesRouter(deps) {
     }
     
     try {
-      const targetFile = isDirectory 
-        ? path.join(targetFolder, folderName)
-        : path.join(targetFolder, fileName);
+      const targetFileName = isDirectory ? actualFileName : fileName;
+      const targetFile = path.join(targetFolder, targetFileName);
       
       if (isDirectory) {
-        // Копируем всю папку (для PDF/PPTX)
+        // Копируем всю папку (для PDF/PPTX или папок с изображениями)
         if (!fs.existsSync(targetFolder)) {
           fs.mkdirSync(targetFolder, { recursive: true });
         }
@@ -250,8 +274,21 @@ export function createFilesRouter(deps) {
           return res.status(409).json({ error: 'target already exists' });
         }
         
+        console.log(`[copy-file] 📁 Копирование папки: ${actualFileName} (${sourceId} -> ${targetId})`);
         fs.cpSync(sourceFile, targetFile, { recursive: true });
         fs.chmodSync(targetFile, 0o755);
+        
+        // Устанавливаем права на все файлы внутри папки
+        const items = fs.readdirSync(targetFile);
+        for (const item of items) {
+          const itemPath = path.join(targetFile, item);
+          const stat = fs.statSync(itemPath);
+          if (stat.isFile()) {
+            fs.chmodSync(itemPath, 0o644);
+          }
+        }
+        
+        console.log(`[copy-file] ✅ Папка скопирована: ${actualFileName}`);
       } else {
         // Копируем обычный файл
         fs.copyFileSync(sourceFile, targetFile);
@@ -259,30 +296,33 @@ export function createFilesRouter(deps) {
       }
       
       // Копируем маппинг имени (если есть)
-      if (fileNamesMap[sourceId] && fileNamesMap[sourceId][fileName]) {
+      const sourceMappingKey = isDirectory ? actualFileName : fileName;
+      if (fileNamesMap[sourceId] && fileNamesMap[sourceId][sourceMappingKey]) {
         if (!fileNamesMap[targetId]) fileNamesMap[targetId] = {};
-        fileNamesMap[targetId][fileName] = fileNamesMap[sourceId][fileName];
+        fileNamesMap[targetId][sourceMappingKey] = fileNamesMap[sourceId][sourceMappingKey];
         saveFileNamesMap(fileNamesMap);
       }
       
       // Если перемещение - удаляем из источника
       if (move) {
         if (isDirectory) {
+          console.log(`[copy-file] 🗑️ Удаление папки из источника: ${actualFileName} (${sourceId})`);
           fs.rmSync(sourceFile, { recursive: true, force: true });
         } else {
           fs.unlinkSync(sourceFile);
         }
         
         // Удаляем маппинг из источника
-        if (fileNamesMap[sourceId] && fileNamesMap[sourceId][fileName]) {
-          delete fileNamesMap[sourceId][fileName];
+        const sourceMappingKey = isDirectory ? actualFileName : fileName;
+        if (fileNamesMap[sourceId] && fileNamesMap[sourceId][sourceMappingKey]) {
+          delete fileNamesMap[sourceId][sourceMappingKey];
           if (Object.keys(fileNamesMap[sourceId]).length === 0) {
             delete fileNamesMap[sourceId];
           }
           saveFileNamesMap(fileNamesMap);
         }
         
-        console.log(`[copy-file] 🗑️ Файл удален из источника: ${fileName} (${sourceId})`);
+        console.log(`[copy-file] 🗑️ Файл удален из источника: ${isDirectory ? actualFileName : fileName} (${sourceId})`);
       }
       
       // КРИТИЧНО: Обновляем devices.files для обоих устройств ВСЕГДА
@@ -301,8 +341,16 @@ export function createFilesRouter(deps) {
               result.push(entry);
             } else if (stat.isDirectory()) {
               const folderContents = fs.readdirSync(entryPath);
-              const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-              if (originalFile) result.push(originalFile);
+              const pdfPptx = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
+              const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
+              
+              if (pdfPptx) {
+                // Папка с PDF/PPTX
+                result.push(pdfPptx);
+              } else if (hasImages) {
+                // Папка с изображениями - добавляем имя папки
+                result.push(entry);
+              }
             }
           }
         }
@@ -313,9 +361,18 @@ export function createFilesRouter(deps) {
       devices[sourceId].files = scanDeviceFiles(sourceId);
       devices[targetId].files = scanDeviceFiles(targetId);
       
-      // Обновляем fileNames
-      devices[sourceId].fileNames = devices[sourceId].files.map(f => fileNamesMap[sourceId]?.[f] || f);
-      devices[targetId].fileNames = devices[targetId].files.map(f => fileNamesMap[targetId]?.[f] || f);
+      // Обновляем fileNames с учетом папок
+      devices[sourceId].fileNames = devices[sourceId].files.map(f => {
+        // Для PDF/PPTX проверяем маппинг по имени папки (без расширения)
+        const folderName = f.replace(/\.(pdf|pptx)$/i, '');
+        return fileNamesMap[sourceId]?.[folderName] || fileNamesMap[sourceId]?.[f] || f;
+      });
+      
+      devices[targetId].fileNames = devices[targetId].files.map(f => {
+        // Для PDF/PPTX проверяем маппинг по имени папки (без расширения)
+        const folderName = f.replace(/\.(pdf|pptx)$/i, '');
+        return fileNamesMap[targetId]?.[folderName] || fileNamesMap[targetId]?.[f] || f;
+      });
       
       console.log(`[copy-file] ✅ Файлы обновлены: source=${devices[sourceId].files.length}, target=${devices[targetId].files.length}`);
       console.log(`[copy-file] 📡 Отправляем devices/updated...`);
@@ -331,7 +388,7 @@ export function createFilesRouter(deps) {
     }
   });
   
-  // POST /api/devices/:id/files/:name/rename - Переименование файла
+  // POST /api/devices/:id/files/:name/rename - Переименование файла или папки
   router.post('/:id/files/:name/rename', express.json(), (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
@@ -352,11 +409,45 @@ export function createFilesRouter(deps) {
     }
     
     const deviceFolder = path.join(DEVICES, d.folder);
-    const oldPath = path.join(deviceFolder, oldName);
-    const newPath = path.join(deviceFolder, newName);
+    let oldPath = path.join(deviceFolder, oldName);
+    let isFolder = false;
+    let actualOldName = oldName;
+    
+    // Проверяем, может это PDF/PPTX файл с папкой
+    const folderNamePdf = oldName.replace(/\.(pdf|pptx)$/i, '');
+    const possiblePdfFolder = path.join(deviceFolder, folderNamePdf);
+    
+    if (fs.existsSync(possiblePdfFolder) && fs.statSync(possiblePdfFolder).isDirectory()) {
+      // Это PDF/PPTX с папкой - переименовываем папку
+      oldPath = possiblePdfFolder;
+      isFolder = true;
+      actualOldName = folderNamePdf;
+      console.log(`[rename] 📁 Переименование папки PDF/PPTX: ${folderNamePdf}`);
+    } 
+    // Проверяем, может это папка с изображениями (без расширения)
+    else if (!oldName.includes('.')) {
+      const folderPath = path.join(deviceFolder, oldName);
+      if (fs.existsSync(folderPath) && fs.statSync(folderPath).isDirectory()) {
+        oldPath = folderPath;
+        isFolder = true;
+        actualOldName = oldName;
+        console.log(`[rename] 📁 Переименование папки с изображениями: ${oldName}`);
+      }
+    }
     
     if (!fs.existsSync(oldPath)) {
-      return res.status(404).json({ error: 'file not found' });
+      console.error(`[rename] ❌ Не найден: ${oldPath}`);
+      return res.status(404).json({ error: 'file not found', path: oldPath });
+    }
+    
+    // Определяем новый путь
+    let newPath;
+    if (isFolder) {
+      // Для папок используем новое имя без расширения
+      const newFolderName = newName.replace(/\.(pdf|pptx)$/i, '');
+      newPath = path.join(deviceFolder, newFolderName);
+    } else {
+      newPath = path.join(deviceFolder, newName);
     }
     
     if (fs.existsSync(newPath) && oldPath !== newPath) {
@@ -364,24 +455,87 @@ export function createFilesRouter(deps) {
     }
     
     try {
+      console.log(`[rename] 🔄 ${oldPath} -> ${newPath}`);
       fs.renameSync(oldPath, newPath);
+      
+      // Обновляем маппинг имен
       if (!fileNamesMap[id]) fileNamesMap[id] = {};
-      if (fileNamesMap[id][oldName]) delete fileNamesMap[id][oldName];
+      
+      // Удаляем старое имя из маппинга
+      if (fileNamesMap[id][actualOldName]) {
+        delete fileNamesMap[id][actualOldName];
+      }
+      // Для PDF/PPTX также удаляем маппинг файла
+      if (isFolder && oldName.match(/\.(pdf|pptx)$/i)) {
+        if (fileNamesMap[id][oldName]) {
+          delete fileNamesMap[id][oldName];
+        }
+      }
+      
+      // Добавляем новое имя в маппинг
+      const finalName = isFolder ? path.basename(newPath) : newName;
+      fileNamesMap[id][finalName] = newName;
+      
+      // Для PDF/PPTX папки также добавляем маппинг для файла с расширением
+      if (isFolder) {
+        const pdfExt = oldName.match(/\.(pdf|pptx)$/i);
+        if (pdfExt) {
+          const newFileWithExt = newName;
+          fileNamesMap[id][newFileWithExt] = newName;
+        }
+      }
+      
       saveFileNamesMap(fileNamesMap);
       
-      // КРИТИЧНО: Фильтруем системные файлы
-      d.files = fs.readdirSync(deviceFolder).filter(f => ALLOWED_EXT.test(f) && !isSystemFile(f));
-      d.fileNames = d.files.map(f => fileNamesMap[id]?.[f] || f);
+      // Обновляем список файлов устройства
+      const scanResult = [];
+      const scanFileNames = [];
+      const entries = fs.readdirSync(deviceFolder);
+      
+      for (const entry of entries) {
+        const entryPath = path.join(deviceFolder, entry);
+        const stat = fs.statSync(entryPath);
+        
+        if (stat.isFile() && !isSystemFile(entry)) {
+          scanResult.push(entry);
+          scanFileNames.push(fileNamesMap[id]?.[entry] || entry);
+        } else if (stat.isDirectory()) {
+          const folderContents = fs.readdirSync(entryPath);
+          const pdfPptx = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
+          const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
+          
+          if (pdfPptx) {
+            // Для PDF/PPTX добавляем файл с расширением, маппинг по имени папки
+            scanResult.push(pdfPptx);
+            const displayName = fileNamesMap[id]?.[entry] || fileNamesMap[id]?.[pdfPptx] || pdfPptx;
+            scanFileNames.push(displayName);
+            
+            // Обновляем маппинг: и для файла, и для папки
+            if (fileNamesMap[id]?.[entry]) {
+              fileNamesMap[id][pdfPptx] = fileNamesMap[id][entry];
+              fileNamesMap[id][entry] = fileNamesMap[id][entry]; // Сохраняем маппинг папки
+              saveFileNamesMap(fileNamesMap);
+            }
+          } else if (hasImages) {
+            // Для папок с изображениями добавляем имя папки
+            scanResult.push(entry);
+            scanFileNames.push(fileNamesMap[id]?.[entry] || entry);
+          }
+        }
+      }
+      
+      d.files = scanResult;
+      d.fileNames = scanFileNames;
       
       io.emit('devices/updated');
-      res.json({ ok: true });
+      res.json({ success: true, oldName: actualOldName, newName: finalName });
     } catch (e) {
       console.error(`[rename] Ошибка:`, e);
-      res.status(500).json({ error: 'rename failed' });
+      res.status(500).json({ error: 'rename failed', details: e.message });
     }
   });
   
-  // DELETE /api/devices/:id/files/:name - Удаление файла
+  // DELETE /api/devices/:id/files/:name - Удаление файла или папки
   router.delete('/:id/files/:name', (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
@@ -401,15 +555,33 @@ export function createFilesRouter(deps) {
     const possibleFolder = path.join(deviceFolder, folderName);
     
     let deletedFileName = name;
+    let isFolder = false;
     
     // Проверяем PDF/PPTX папку
     if (fs.existsSync(possibleFolder) && fs.statSync(possibleFolder).isDirectory()) {
       try {
         fs.rmSync(possibleFolder, { recursive: true, force: true });
-        console.log(`[DELETE file] Удалена папка: ${folderName}`);
+        deletedFileName = folderName;
+        isFolder = true;
+        console.log(`[DELETE file] Удалена папка PDF/PPTX: ${folderName}`);
       } catch (e) {
         console.error(`[DELETE file] Ошибка удаления папки ${folderName}:`, e);
         return res.status(500).json({ error: 'failed to delete folder' });
+      }
+    } 
+    // Проверяем папку с изображениями (без расширения)
+    else if (!name.includes('.')) {
+      const imageFolderPath = path.join(deviceFolder, name);
+      if (fs.existsSync(imageFolderPath) && fs.statSync(imageFolderPath).isDirectory()) {
+        try {
+          fs.rmSync(imageFolderPath, { recursive: true, force: true });
+          deletedFileName = name;
+          isFolder = true;
+          console.log(`[DELETE file] Удалена папка с изображениями: ${name}`);
+        } catch (e) {
+          console.error(`[DELETE file] Ошибка удаления папки ${name}:`, e);
+          return res.status(500).json({ error: 'failed to delete image folder' });
+        }
       }
     } else {
       // Обычный файл

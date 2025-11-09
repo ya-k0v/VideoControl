@@ -11,7 +11,9 @@ export const DEVICE_ICONS = {
   'android': '📱',
   'kodi': '📺',
   'webos': '📺',
-  'tizen': '📺'
+  'tizen': '📺',
+  'VJC': '🎬',
+  'NATIVE_MEDIAPLAYER': '📱'
 };
 
 // Названия типов устройств
@@ -22,7 +24,9 @@ export const DEVICE_TYPE_NAMES = {
   'android': 'Android TV',
   'kodi': 'Kodi',
   'webos': 'WebOS',
-  'tizen': 'Tizen'
+  'tizen': 'Tizen',
+  'VJC': 'Video.js Player',
+  'NATIVE_MEDIAPLAYER': 'Android MediaPlayer'
 };
 
 // Расширения файлов по типам

@@ -8,6 +8,7 @@ import path from 'path';
 import { exec as execCallback } from 'child_process';
 import util from 'util';
 import { DEVICES, CONVERTED_CACHE } from '../config/constants.js';
+import { makeSafeFolderName } from '../utils/transliterate.js';
 
 const exec = util.promisify(execCallback);
 
@@ -27,8 +28,11 @@ export async function extractZipToFolder(deviceId, zipFileName) {
     }
     
     // Создаем папку для изображений (без расширения .zip)
-    const folderName = zipFileName.replace(/\.zip$/i, '');
+    const originalFolderName = zipFileName.replace(/\.zip$/i, '');
+    const folderName = makeSafeFolderName(originalFolderName); // Транслитерация
     const outputFolder = path.join(deviceFolder, folderName);
+    
+    console.log(`[FolderConverter] 📝 Имя папки: "${originalFolderName}" → "${folderName}"`);
     
     // Если папка уже существует, удаляем её
     if (fs.existsSync(outputFolder)) {
@@ -139,7 +143,8 @@ export async function extractZipToFolder(deviceId, zipFileName) {
     return { 
       success: true, 
       imagesCount: allFiles.length,
-      folderName: folderName
+      folderName: folderName,
+      originalFolderName: originalFolderName
     };
     
   } catch (error) {

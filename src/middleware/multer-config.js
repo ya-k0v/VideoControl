@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { DEVICES, MAX_FILE_SIZE, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId } from '../utils/sanitize.js';
 import { fixEncoding } from '../utils/encoding.js';
+import { makeSafeFilename } from '../utils/transliterate.js';
 
 /**
  * Создает настроенный Multer middleware для загрузки файлов
@@ -63,8 +64,8 @@ export function createUploadMiddleware(devices) {
       // Сохраняем маппинг оригинального имени
       req.originalFileNames = req.originalFileNames || new Map();
       
-      // Создаем безопасное имя файла (только латиница, цифры, дефисы, подчеркивания)
-      const safe = base.replace(/[^\w.\- ()\[\]]+/g, '_');
+      // Создаем безопасное имя файла через транслитерацию
+      const safe = makeSafeFilename(base);
       const folder = path.join(DEVICES, devices[id].folder);
       const dest = path.join(folder, safe);
       
@@ -74,11 +75,12 @@ export function createUploadMiddleware(devices) {
       if (fs.existsSync(dest)) {
         const ext = path.extname(safe);
         const name = path.basename(safe, ext);
-        const suffix = '-' + crypto.randomBytes(3).toString('hex');
+        const suffix = '_' + crypto.randomBytes(3).toString('hex');
         finalSafeName = `${name}${suffix}${ext}`;
       }
       
       req.originalFileNames.set(finalSafeName, base);
+      console.log(`[Multer] 📝 "${base}" → "${finalSafeName}"`);
       cb(null, finalSafeName);
     }
   });

@@ -262,6 +262,7 @@ if (!device_id || !device_id.trim()) {
                 vjsPlayer.muted(true);
                 vjsPlayer.volume(0);
                 vjsPlayer.src({ src: content(previewFile), type: 'video/mp4' });
+                videoContainer.style.display = ''; // КРИТИЧНО: Сбрасываем display:none
                 show(videoContainer);
                 
                 // Даем время для загрузки src
@@ -614,6 +615,7 @@ if (!device_id || !device_id.trim()) {
               hideVideoJsControls();
               
               // Показываем с плавным появлением
+              videoContainer.style.display = ''; // КРИТИЧНО: Сбрасываем display:none
               show(videoContainer);
               
               // Запускаем воспроизведение
@@ -755,8 +757,18 @@ if (!device_id || !device_id.trim()) {
 
   // Показать изображение из папки
   function showFolderImage(folderName, num) {
-    if (vjsPlayer) vjsPlayer.pause();
+    // КРИТИЧНО: Полностью останавливаем и скрываем Video.js плеер
+    if (vjsPlayer) {
+      vjsPlayer.pause();
+      vjsPlayer.currentTime(0);
+      // Скрываем все контролы Video.js
+      hideVideoJsControls();
+    }
     pdf.removeAttribute('src');
+    
+    // Убеждаемся что videoContainer полностью скрыт
+    videoContainer.classList.remove('visible', 'preloading');
+    videoContainer.style.display = 'none';
     
     const { current, next } = getImageBuffers();
     
@@ -846,8 +858,18 @@ if (!device_id || !device_id.trim()) {
   }
 
   function showConvertedPage(file, type, num) {
-    if (vjsPlayer) vjsPlayer.pause();
+    // КРИТИЧНО: Полностью останавливаем и скрываем Video.js плеер
+    if (vjsPlayer) {
+      vjsPlayer.pause();
+      vjsPlayer.currentTime(0);
+      // Скрываем все контролы Video.js
+      hideVideoJsControls();
+    }
     pdf.removeAttribute('src');
+    
+    // Убеждаемся что videoContainer полностью скрыт
+    videoContainer.classList.remove('visible', 'preloading');
+    videoContainer.style.display = 'none';
     
     const { current, next } = getImageBuffers();
     
@@ -981,6 +1003,7 @@ if (!device_id || !device_id.trim()) {
           
           // Показываем videoContainer если он скрыт
           if (!videoContainer.classList.contains('visible')) {
+            videoContainer.style.display = ''; // Сбрасываем display:none
             show(videoContainer);
           }
           
@@ -1024,6 +1047,7 @@ if (!device_id || !device_id.trim()) {
             hideVideoJsControls();
             
             // Переводим в preloading для плавного перехода из черного
+            videoContainer.style.display = ''; // КРИТИЧНО: Сбрасываем display:none
             videoContainer.classList.remove('visible');
             videoContainer.classList.add('preloading');
             

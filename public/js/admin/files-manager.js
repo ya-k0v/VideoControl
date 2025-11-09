@@ -176,27 +176,88 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   }
 
   panelEl.querySelectorAll('.previewFileBtn').forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = async () => {
       const safeName = decodeURIComponent(btn.getAttribute('data-safe'));
-      const frame = document.querySelector('#detailPane iframe');
-      if (frame) {
-        // Определяем тип файла по расширению
-        const ext = safeName.split('.').pop().toLowerCase();
+      const previewContainer = document.querySelector('#detailPane .previewHolder');
+      
+      if (!previewContainer) return;
+      
+      // Определяем тип файла
+      const hasExtension = safeName.includes('.');
+      const ext = hasExtension ? safeName.split('.').pop().toLowerCase() : '';
+      
+      // Для папок, PDF и PPTX показываем сетку миниатюр
+      if (!hasExtension || ext === 'pdf' || ext === 'pptx') {
+        let images = [];
+        let folderName = safeName;
+        
+        if (!hasExtension) {
+          // Это папка с изображениями
+          try {
+            const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/folder/${encodeURIComponent(safeName)}/images`);
+            const data = await res.json();
+            images = data.images || [];
+            // Создаем URLs для изображений из папки
+            images = images.map((_, idx) => 
+              `/api/devices/${encodeURIComponent(deviceId)}/folder/${encodeURIComponent(safeName)}/image/${idx + 1}`
+            );
+          } catch (e) {
+            console.error('[Admin] Ошибка загрузки изображений папки:', e);
+          }
+        } else if (ext === 'pdf' || ext === 'pptx') {
+          // Это презентация
+          try {
+            const urlType = ext === 'pdf' ? 'page' : 'slide';
+            const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/slides-count?file=${encodeURIComponent(safeName)}`);
+            const data = await res.json();
+            const count = data.count || 0;
+            // Создаем URLs для слайдов
+            for (let i = 1; i <= Math.min(count, 20); i++) { // Максимум 20 миниатюр
+              images.push(`/api/devices/${encodeURIComponent(deviceId)}/converted/${encodeURIComponent(safeName)}/${urlType}/${i}`);
+            }
+          } catch (e) {
+            console.error('[Admin] Ошибка загрузки слайдов:', e);
+          }
+        }
+        
+        // Показываем сетку миниатюр (только для просмотра, без кликов)
+        if (images.length > 0) {
+          previewContainer.innerHTML = `
+            <div style="width:100%; height:100%; overflow-y:auto; padding:var(--space-md); background:var(--panel)">
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:var(--space-sm)">
+                ${images.map((url, idx) => `
+                  <div style="aspect-ratio:16/9; background:var(--panel-2); border-radius:var(--radius-sm); overflow:hidden; position:relative">
+                    <img src="${url}" 
+                         alt="${idx + 1}" 
+                         loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; display:block"
+                         onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);font-size:10px\\'>Ошибка</div>'">
+                    <div style="position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,0.7); color:#fff; padding:2px 4px; border-radius:3px; font-size:10px">${idx + 1}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        } else {
+          previewContainer.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary)">Нет изображений для превью</div>`;
+        }
+      } else {
+        // Для видео и обычных изображений показываем в iframe
+        const frame = previewContainer.querySelector('iframe') || document.createElement('iframe');
         let u = `/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1&file=${encodeURIComponent(safeName)}`;
         
-        // КРИТИЧНО: Для PPTX, PDF и изображений добавляем параметры type и page
-        if (ext === 'pdf') {
-          u += `&type=pdf&page=1`;
-        } else if (ext === 'pptx') {
-          u += `&type=pptx&page=1`;
-        } else if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+        if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
           u += `&type=image&page=1`;
         }
         
-        // Добавляем timestamp для обхода кэша iframe
         u += `&t=${Date.now()}`;
         
-        console.log('[Admin] 📋 Preview URL:', u);
+        if (!previewContainer.querySelector('iframe')) {
+          frame.style.cssText = 'width:100%;height:100%;border:0';
+          previewContainer.innerHTML = '';
+          previewContainer.appendChild(frame);
+        }
+        
         frame.src = u;
       }
     };
@@ -326,6 +387,13 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
           isEditing = false;
           nameEl.contentEditable = 'false';
           if (saveBtn) saveBtn.style.display = 'none';
+          
+          // Очищаем превью перед обновлением списка файлов
+          const previewContainer = document.querySelector('#detailPane .previewHolder');
+          if (previewContainer) {
+            previewContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary)">Выберите файл для превью</div>';
+          }
+          
           await refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSize, filePage, socket);
           socket.emit('devices/updated');
         } else {

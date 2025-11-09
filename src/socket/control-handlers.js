@@ -14,7 +14,7 @@ export function setupControlHandlers(socket, deps) {
   const { devices, io, getPageSlideCount } = deps;
   
   // control/play - Запустить воспроизведение
-  socket.on('control/play', ({ device_id, file }) => {
+  socket.on('control/play', ({ device_id, file, page }) => {
     const d = devices[device_id];
     if (!d) return;
     
@@ -33,11 +33,14 @@ export function setupControlHandlers(socket, deps) {
         type = 'folder';
       }
       
+      // Используем переданный номер страницы или 1 по умолчанию
+      const pageNum = page || 1;
+      
       d.current = { 
         type, 
         file, 
         state: 'playing', 
-        page: (type === 'pdf' || type === 'pptx' || type === 'folder') ? 1 : undefined 
+        page: (type === 'pdf' || type === 'pptx' || type === 'folder') ? pageNum : undefined 
       };
       
       io.to(`device:${device_id}`).emit('player/play', d.current);

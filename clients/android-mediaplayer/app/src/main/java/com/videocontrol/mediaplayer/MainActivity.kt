@@ -363,6 +363,28 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            socket?.on("player/resume") {
+                runOnUiThread {
+                    // Команда resume - продолжить воспроизведение с текущей позиции
+                    // Используется когда сервер перезапустился и не знает о текущем файле
+                    if (isPlayingPlaceholder) {
+                        Log.d(TAG, "▶️ Resume игнорируется - играет заглушка")
+                        return@runOnUiThread
+                    }
+                    
+                    if (player != null && currentVideoFile != null) {
+                        // Продолжаем воспроизведение с сохраненной позиции
+                        Log.i(TAG, "▶️ Resume: продолжаем $currentVideoFile с позиции $savedPosition ms")
+                        player?.apply {
+                            playWhenReady = true
+                            play()
+                        }
+                    } else {
+                        Log.w(TAG, "⚠️ Resume: нет активного видео для продолжения")
+                    }
+                }
+            }
+
             socket?.on("player/stop") {
                 runOnUiThread {
                     // КРИТИЧНО: Заглушка НЕ реагирует на stop

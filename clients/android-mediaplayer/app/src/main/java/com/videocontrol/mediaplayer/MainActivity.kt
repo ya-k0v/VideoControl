@@ -60,6 +60,13 @@ class MainActivity : AppCompatActivity() {
     // Для retry при ошибках
     private var errorRetryCount = 0
     private val maxRetryAttempts = 3
+    
+    // Флаг первого запуска (чтобы не загружать заглушку дважды)
+    private var isFirstLaunch = true
+    
+    // Кэш информации о заглушке (чтобы не запрашивать сервер каждый раз)
+    private var cachedPlaceholderFile: String? = null
+    private var cachedPlaceholderType: String? = null
 
     private val TAG = "VCMediaPlayer"
     private var SERVER_URL = ""
@@ -136,13 +143,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun initializePlayer() {
         try {
+            // Освобождаем старый кэш если был
+            try {
+                simpleCache?.release()
+                simpleCache = null
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to release old cache: ${e.message}")
+            }
+            
             // Инициализация кэша для больших видео (используем config)
             val cacheDir = File(cacheDir, "video_cache")
-            simpleCache = SimpleCache(
-                cacheDir,
-                LeastRecentlyUsedCacheEvictor(config.cacheSize),
-                StandaloneDatabaseProvider(this)
-            )
+            
+            try {
+                simpleCache = SimpleCache(
+                    cacheDir,
+                    LeastRecentlyUsedCacheEvictor(config.cacheSize),
+                    StandaloneDatabaseProvider(this)
+                )
+            } catch (e: IllegalStateException) {
+                // Папка занята - удаляем и создаем заново
+                Log.w(TAG, "Cache folder locked, recreating...")
+                cacheDir.deleteRecursively()
+                cacheDir.mkdirs()
+                
+                simpleCache = SimpleCache(
+                    cacheDir,
+                    LeastRecentlyUsedCacheEvictor(config.cacheSize),
+                    StandaloneDatabaseProvider(this)
+                )
+            }
 
             // Настройки буферизации для тяжелых видео (используем config)
             val loadControl = DefaultLoadControl.Builder()
@@ -333,7 +362,13 @@ class MainActivity : AppCompatActivity() {
             }
 
             socket?.on("placeholder/refresh") {
-                runOnUiThread { loadPlaceholder() }
+                runOnUiThread { 
+                    // Очищаем кэш заглушки при обновлении
+                    cachedPlaceholderFile = null
+                    cachedPlaceholderType = null
+                    Log.i(TAG, "Placeholder cache cleared, reloading...")
+                    loadPlaceholder()
+                }
             }
 
             socket?.on("player/pdfPage") { args ->
@@ -413,7 +448,11 @@ class MainActivity : AppCompatActivity() {
             val videoUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
             Log.i(TAG, "🎬 Playing video: $videoUrl (isPlaceholder=$isPlaceholder)")
 
+            // КРИТИЧНО: Очищаем ImageView и останавливаем Glide загрузку
+            Glide.with(this).clear(imageView)
+            imageView.setImageDrawable(null)
             imageView.visibility = View.GONE
+            
             playerView.visibility = View.VISIBLE
 
             // КРИТИЧНО: Проверяем тот же ли файл воспроизводится
@@ -488,19 +527,27 @@ class MainActivity : AppCompatActivity() {
             val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
             Log.i(TAG, "🖼️ Showing image: $imageUrl (isPlaceholder=$isPlaceholder)")
 
-            // Останавливаем видео если играет
-            player?.pause()
+            // КРИТИЧНО: Полностью останавливаем видео для освобождения памяти
+            player?.stop()
+            player?.clearMediaItems()
+            
+            // КРИТИЧНО: Сбрасываем currentVideoFile чтобы при возврате к видео загружалось заново!
+            currentVideoFile = null
+            savedPosition = 0
 
+            // Плавный переход только если переходим С ВИДЕО на картинку
+            val useFade = (playerView.visibility == View.VISIBLE)
+            
             playerView.visibility = View.GONE
             imageView.visibility = View.VISIBLE
 
             // Отмечаем тип контента
             isPlayingPlaceholder = isPlaceholder
 
-            // Загружаем изображение
-            loadImageToView(imageUrl)
+            // Загружаем изображение (с fade если переход с видео)
+            loadImageToView(imageUrl, useFade)
             
-            Log.i(TAG, "✅ Image shown: isPlaceholder=$isPlaceholder")
+            Log.i(TAG, "✅ Image shown: isPlaceholder=$isPlaceholder (fade=$useFade)")
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error showing image: $fileName", e)
@@ -525,11 +572,25 @@ class MainActivity : AppCompatActivity() {
             val pageUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/page/$page"
             Log.i(TAG, "📄 Showing PDF page: $pageUrl (page $page)")
 
+            // КРИТИЧНО: Полностью останавливаем видео
+            player?.stop()
+            player?.clearMediaItems()
+            
+            // Сбрасываем currentVideoFile для корректного возврата к видео
+            currentVideoFile = null
+            savedPosition = 0
+
+            // Плавный переход только если переходим С ВИДЕО на PDF
+            val useFade = (playerView.visibility == View.VISIBLE)
+
             playerView.visibility = View.GONE
             imageView.visibility = View.VISIBLE
 
-            // Загружаем изображение страницы
-            loadImageToView(pageUrl)
+            // Загружаем изображение страницы (fade только при переходе с видео)
+            loadImageToView(pageUrl, useFade)
+            
+            // Предзагружаем соседние страницы для быстрого переключения
+            preloadAdjacentSlides(file, page, 999, "pdf")  // 999 как max (не знаем точное кол-во)
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error showing PDF page", e)
@@ -554,11 +615,25 @@ class MainActivity : AppCompatActivity() {
             val slideUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/slide/$slide"
             Log.i(TAG, "📊 Showing PPTX slide: $slideUrl (slide $slide)")
 
+            // КРИТИЧНО: Полностью останавливаем видео
+            player?.stop()
+            player?.clearMediaItems()
+            
+            // Сбрасываем currentVideoFile для корректного возврата к видео
+            currentVideoFile = null
+            savedPosition = 0
+
+            // Плавный переход только если переходим С ВИДЕО на PPTX
+            val useFade = (playerView.visibility == View.VISIBLE)
+
             playerView.visibility = View.GONE
             imageView.visibility = View.VISIBLE
 
-            // Загружаем изображение слайда
-            loadImageToView(slideUrl)
+            // Загружаем изображение слайда (fade только при переходе с видео)
+            loadImageToView(slideUrl, useFade)
+            
+            // Предзагружаем соседние слайды для быстрого переключения
+            preloadAdjacentSlides(file, slide, 999, "pptx")  // 999 как max (не знаем точное кол-во)
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error showing PPTX slide", e)
@@ -566,24 +641,59 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadImageToView(imageUrl: String) {
+    private fun loadImageToView(imageUrl: String, useFade: Boolean = false) {
         try {
-            // Glide для плавной загрузки изображений с кэшем и crossfade
-            Log.d(TAG, "🖼️ Loading image with Glide: $imageUrl")
+            // Glide для быстрой загрузки изображений
+            Log.d(TAG, "🖼️ Loading image with Glide: $imageUrl (fade=$useFade)")
             
-            Glide.with(this)
+            val request = Glide.with(this)
                 .load(imageUrl)
-                .diskCacheStrategy(DiskCacheStrategy.ALL)  // Кэш на диск
-                .transition(DrawableTransitionOptions.withCrossFade(300))  // Плавный переход 300ms
-                .timeout(30000)  // Таймаут 30 сек
-                .error(android.R.drawable.ic_dialog_alert)  // Показываем иконку при ошибке
-                .into(imageView)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)  // Полный кэш для презентаций
+                .skipMemoryCache(false)  // Используем memory cache для мгновенного показа
+                .timeout(10000)
+                .error(android.R.drawable.ic_dialog_alert)
             
-            Log.d(TAG, "✅ Glide started loading image")
+            // Fade только при смене типа контента (видео→картинка)
+            if (useFade) {
+                request.transition(DrawableTransitionOptions.withCrossFade(150))
+            }
+            
+            request.into(imageView)
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error loading image with Glide", e)
             showStatus("Ошибка загрузки изображения")
+        }
+    }
+    
+    /**
+     * Предзагрузка соседних слайдов в кэш для мгновенного переключения
+     */
+    private fun preloadAdjacentSlides(file: String, currentPage: Int, totalPages: Int, type: String) {
+        try {
+            // Предзагружаем предыдущий и следующий слайды
+            val pagesToPreload = mutableListOf<Int>()
+            
+            if (currentPage > 1) pagesToPreload.add(currentPage - 1)  // Предыдущий
+            if (currentPage < totalPages) pagesToPreload.add(currentPage + 1)  // Следующий
+            
+            pagesToPreload.forEach { page ->
+                val url = when (type) {
+                    "pdf" -> "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/page/$page"
+                    "pptx" -> "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/slide/$page"
+                    else -> return
+                }
+                
+                // Предзагружаем в фоне (Glide автоматически кэширует)
+                Glide.with(this)
+                    .load(url)
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .preload()
+                
+                Log.d(TAG, "📥 Preloading $type page $page")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to preload adjacent slides: ${e.message}")
         }
     }
 
@@ -593,17 +703,32 @@ class MainActivity : AppCompatActivity() {
         // Останавливаем текущее воспроизведение
         player?.stop()
         
+        // Очищаем ImageView если был показан
+        Glide.with(this).clear(imageView)
+        imageView.setImageDrawable(null)
+        
         // КРИТИЧНО: Скрываем imageView сразу (для изображений)
         imageView.visibility = View.GONE
         playerView.visibility = View.GONE
         
-        // Запрашиваем заглушку с сервера
+        // Проверяем кэш - если есть, загружаем сразу без запроса к серверу!
+        if (cachedPlaceholderFile != null && cachedPlaceholderType != null) {
+            Log.i(TAG, "✅ Using cached placeholder: $cachedPlaceholderFile ($cachedPlaceholderType)")
+            
+            when (cachedPlaceholderType) {
+                "video" -> playVideo(cachedPlaceholderFile!!, isPlaceholder = true)
+                "image" -> showImage(cachedPlaceholderFile!!, isPlaceholder = true)
+            }
+            return
+        }
+        
+        // Кэша нет - запрашиваем заглушку с сервера (только первый раз)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = java.net.URL("$SERVER_URL/api/devices/$DEVICE_ID/placeholder")
                 val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
+                connection.connectTimeout = 5000  // Уменьшен таймаут
+                connection.readTimeout = 5000
                 connection.requestMethod = "GET"
                 
                 if (connection.responseCode == 200) {
@@ -617,19 +742,21 @@ class MainActivity : AppCompatActivity() {
                         // Определяем тип заглушки (видео или изображение)
                         val ext = placeholderFile.substringAfterLast('.', "").toLowerCase()
                         
+                        // СОХРАНЯЕМ В КЭШ для быстрой загрузки в следующий раз!
+                        cachedPlaceholderFile = placeholderFile
+                        cachedPlaceholderType = when {
+                            ext in listOf("mp4", "webm", "ogg", "mkv", "mov", "avi") -> "video"
+                            ext in listOf("png", "jpg", "jpeg", "gif", "webp") -> "image"
+                            else -> null
+                        }
+                        
+                        Log.i(TAG, "💾 Cached placeholder: $cachedPlaceholderFile ($cachedPlaceholderType)")
+                        
                         withContext(Dispatchers.Main) {
-                            when {
-                                ext in listOf("mp4", "webm", "ogg", "mkv", "mov", "avi") -> {
-                                    // КРИТИЧНО: Заглушка-видео с loop
-                                    playVideo(placeholderFile, isPlaceholder = true)
-                                }
-                                ext in listOf("png", "jpg", "jpeg", "gif", "webp") -> {
-                                    // КРИТИЧНО: Заглушка-изображение
-                                    showImage(placeholderFile, isPlaceholder = true)
-                                }
-                                else -> {
-                                    Log.w(TAG, "⚠️ Unknown placeholder type: $ext")
-                                }
+                            when (cachedPlaceholderType) {
+                                "video" -> playVideo(placeholderFile, isPlaceholder = true)
+                                "image" -> showImage(placeholderFile, isPlaceholder = true)
+                                else -> Log.w(TAG, "⚠️ Unknown placeholder type: $ext")
                             }
                         }
                     } else {
@@ -712,10 +839,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        Log.d(TAG, "onResume called")
+        Log.d(TAG, "onResume called (isFirstLaunch=$isFirstLaunch)")
         
-        // Восстанавливаем воспроизведение если остановилось
-        if (player?.isPlaying == false) {
+        // КРИТИЧНО: Пропускаем onResume сразу после onCreate
+        if (isFirstLaunch) {
+            Log.d(TAG, "First launch, skipping restore (onCreate is loading placeholder)")
+            isFirstLaunch = false  // Сбрасываем ЗДЕСЬ в onResume
+            return
+        }
+        
+        // Восстанавливаем воспроизведение только если оно реально остановилось
+        if (player?.isPlaying == false && (playerView.visibility == View.VISIBLE || imageView.visibility == View.VISIBLE)) {
             Log.i(TAG, "Player not playing in onResume, restoring...")
             if (isPlayingPlaceholder) {
                 // Заглушка должна всегда играть

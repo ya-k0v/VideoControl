@@ -20,9 +20,9 @@ class RemoteConfig(private val context: Context) {
         val reconnectDelay: Int = 5000,          // Задержка переподключения
         val watchdogInterval: Int = 60000,       // Интервал проверки watchdog
         val maxDisconnectTime: Int = 180000,     // Макс время отключения перед перезапуском
-        val bufferMinMs: Int = 50000,            // Минимальный буфер видео
-        val bufferMaxMs: Int = 120000,           // Максимальный буфер видео
-        val cacheSize: Long = 500L * 1024 * 1024, // Размер кэша видео
+        val bufferMinMs: Int = 30000,            // Минимальный буфер видео (уменьшено для памяти)
+        val bufferMaxMs: Int = 60000,            // Максимальный буфер видео (уменьшено для памяти)
+        val cacheSize: Long = 200L * 1024 * 1024, // Размер кэша видео (уменьшено до 200MB)
         val showStatus: Boolean = false          // Показывать статусы
     )
     
@@ -47,9 +47,9 @@ class RemoteConfig(private val context: Context) {
                         reconnectDelay = json.optInt("reconnect_delay", 5000),
                         watchdogInterval = json.optInt("watchdog_interval", 60000),
                         maxDisconnectTime = json.optInt("max_disconnect_time", 180000),
-                        bufferMinMs = json.optInt("buffer_min_ms", 50000),
-                        bufferMaxMs = json.optInt("buffer_max_ms", 120000),
-                        cacheSize = json.optLong("cache_size", 500L * 1024 * 1024),
+                        bufferMinMs = json.optInt("buffer_min_ms", 30000),
+                        bufferMaxMs = json.optInt("buffer_max_ms", 60000),
+                        cacheSize = json.optLong("cache_size", 200L * 1024 * 1024),
                         showStatus = json.optBoolean("show_status", false)
                     )
                     
@@ -105,9 +105,9 @@ class RemoteConfig(private val context: Context) {
             reconnectDelay = prefs.getInt("reconnect_delay", 5000),
             watchdogInterval = prefs.getInt("watchdog_interval", 60000),
             maxDisconnectTime = prefs.getInt("max_disconnect_time", 180000),
-            bufferMinMs = prefs.getInt("buffer_min_ms", 50000),
-            bufferMaxMs = prefs.getInt("buffer_max_ms", 120000),
-            cacheSize = prefs.getLong("cache_size", 500L * 1024 * 1024),
+            bufferMinMs = prefs.getInt("buffer_min_ms", 30000),
+            bufferMaxMs = prefs.getInt("buffer_max_ms", 60000),
+            cacheSize = prefs.getLong("cache_size", 200L * 1024 * 1024),
             showStatus = prefs.getBoolean("show_status", false)
         )
     }

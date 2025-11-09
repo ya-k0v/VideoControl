@@ -3,6 +3,8 @@ package com.videocontrol.mediaplayer
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import android.view.View
@@ -42,14 +44,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerView: StyledPlayerView
     private lateinit var imageView: ImageView
     private lateinit var statusText: TextView
-    private lateinit var settingsButton: android.widget.Button
 
     private var player: ExoPlayer? = null
     private var socket: Socket? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var simpleCache: SimpleCache? = null
-    private var pingTimer: java.util.Timer? = null
+    private val pingHandler = Handler(Looper.getMainLooper())
     private var isPlayingPlaceholder: Boolean = false
+    
+    // Новые компоненты
+    private var config: RemoteConfig.Config = RemoteConfig.Config()
+    private var watchdog: ConnectionWatchdog? = null
+    private var showStatus: Boolean = false
+    
+    // Для retry при ошибках
+    private var errorRetryCount = 0
+    private val maxRetryAttempts = 3
 
     private val TAG = "VCMediaPlayer"
     private var SERVER_URL = ""
@@ -58,8 +68,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.i(TAG, "=== MainActivity onCreate ===")
+
         // Проверяем настройки при запуске
         if (!SettingsActivity.isConfigured(this)) {
+            Log.w(TAG, "Not configured, redirecting to settings")
             // Перенаправляем на настройки
             startActivity(Intent(this, SettingsActivity::class.java))
             finish()
@@ -69,8 +82,13 @@ class MainActivity : AppCompatActivity() {
         // Загружаем настройки
         SERVER_URL = SettingsActivity.getServerUrl(this) ?: ""
         DEVICE_ID = SettingsActivity.getDeviceId(this) ?: ""
+        showStatus = SettingsActivity.getShowStatus(this)
 
-        Log.d(TAG, "Loaded settings: SERVER_URL=$SERVER_URL, DEVICE_ID=$DEVICE_ID")
+        Log.i(TAG, "Loaded settings: SERVER_URL=$SERVER_URL, DEVICE_ID=$DEVICE_ID, showStatus=$showStatus")
+        
+        // Используем дефолтные настройки (без RemoteConfig для стабильности)
+        config = RemoteConfig.Config()
+        
         setContentView(R.layout.activity_main)
 
         // Fullscreen и не гасим экран
@@ -84,14 +102,8 @@ class MainActivity : AppCompatActivity() {
         playerView = findViewById(R.id.playerView)
         imageView = findViewById(R.id.imageView)
         statusText = findViewById(R.id.statusText)
-        settingsButton = findViewById(R.id.settingsButton)
 
-        // Кнопка настроек - открывает SettingsActivity
-        settingsButton.setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
-
-        // Длинное нажатие на экран - тоже открывает настройки
+        // Длинное нажатие на экран - открывает настройки
         playerView.setOnLongClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
             true
@@ -108,7 +120,12 @@ class MainActivity : AppCompatActivity() {
         )
         wakeLock?.acquire()
 
-        Log.d(TAG, "MainActivity onCreate")
+        Log.i(TAG, "MainActivity initialized")
+
+        // Инициализируем Watchdog для автоперезапуска при потере связи
+        watchdog = ConnectionWatchdog(this, config.maxDisconnectTime.toLong())
+        watchdog?.setCheckInterval(config.watchdogInterval.toLong())
+        Log.i(TAG, "Watchdog initialized (max disconnect: ${config.maxDisconnectTime}ms)")
 
         initializePlayer()
         connectSocket()
@@ -118,73 +135,98 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initializePlayer() {
-        // Инициализация кэша для больших видео (500 MB)
-        val cacheDir = File(cacheDir, "video_cache")
-        simpleCache = SimpleCache(
-            cacheDir,
-            LeastRecentlyUsedCacheEvictor(500 * 1024 * 1024), // 500 MB кэш
-            StandaloneDatabaseProvider(this)
-        )
-
-        // Настройки буферизации для тяжелых видео
-        val loadControl = DefaultLoadControl.Builder()
-            .setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE))
-            .setBufferDurationsMs(
-                50000,  // minBufferMs: минимум 50 секунд буфера
-                120000, // maxBufferMs: максимум 2 минуты буфера
-                2500,   // bufferForPlaybackMs: начать воспроизведение через 2.5 сек
-                5000    // bufferForPlaybackAfterRebufferMs: после паузы - 5 сек
+        try {
+            // Инициализация кэша для больших видео (используем config)
+            val cacheDir = File(cacheDir, "video_cache")
+            simpleCache = SimpleCache(
+                cacheDir,
+                LeastRecentlyUsedCacheEvictor(config.cacheSize),
+                StandaloneDatabaseProvider(this)
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
 
-        player = ExoPlayer.Builder(this)
-            .setLoadControl(loadControl)
-            .build()
-            .also { exoPlayer ->
-                playerView.player = exoPlayer
+            // Настройки буферизации для тяжелых видео (используем config)
+            val loadControl = DefaultLoadControl.Builder()
+                .setAllocator(DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE))
+                .setBufferDurationsMs(
+                    config.bufferMinMs,  // minBufferMs
+                    config.bufferMaxMs,  // maxBufferMs
+                    2500,   // bufferForPlaybackMs: начать воспроизведение через 2.5 сек
+                    5000    // bufferForPlaybackAfterRebufferMs: после паузы - 5 сек
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
 
-                // Обработчик событий
-                exoPlayer.addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        when (playbackState) {
-                            Player.STATE_IDLE -> Log.d(TAG, "Player STATE_IDLE")
-                            Player.STATE_BUFFERING -> {
-                                Log.d(TAG, "Player STATE_BUFFERING")
-                                showStatus("Буферизация...")
-                            }
+            player = ExoPlayer.Builder(this)
+                .setLoadControl(loadControl)
+                .build()
+                .also { exoPlayer ->
+                    playerView.player = exoPlayer
 
-                            Player.STATE_READY -> {
-                                Log.d(TAG, "Player STATE_READY")
-                                hideStatus()
-                            }
+                    // Обработчик событий
+                    exoPlayer.addListener(object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            when (playbackState) {
+                                Player.STATE_IDLE -> Log.d(TAG, "Player STATE_IDLE")
+                                Player.STATE_BUFFERING -> {
+                                    Log.d(TAG, "Player STATE_BUFFERING")
+                                    showStatus("Буферизация...")
+                                }
 
-                            Player.STATE_ENDED -> {
-                                Log.d(TAG, "Player STATE_ENDED")
-                                // КРИТИЧНО: Заглушка зацикливается (ExoPlayer сам перезапустит)
-                                // Обычное видео - показываем заглушку
-                                if (!isPlayingPlaceholder) {
-                                    Log.d(TAG, "Контент закончился, возврат на заглушку")
-                                    loadPlaceholder()
-                                } else {
-                                    Log.d(TAG, "Заглушка зациклена, ExoPlayer перезапустит автоматически")
+                                Player.STATE_READY -> {
+                                    Log.d(TAG, "Player STATE_READY")
+                                    errorRetryCount = 0  // Сбрасываем счетчик при успешном воспроизведении
+                                    hideStatus()
+                                }
+
+                                Player.STATE_ENDED -> {
+                                    Log.d(TAG, "Player STATE_ENDED")
+                                    // КРИТИЧНО: Заглушка зацикливается (ExoPlayer сам перезапустит)
+                                    // Обычное видео - показываем заглушку
+                                    if (!isPlayingPlaceholder) {
+                                        Log.i(TAG, "Контент закончился, возврат на заглушку")
+                                        loadPlaceholder()
+                                    } else {
+                                        Log.d(TAG, "Заглушка зациклена, ExoPlayer перезапустит автоматически")
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    override fun onPlayerError(error: com.google.android.exoplayer2.PlaybackException) {
-                        Log.e(TAG, "Player error: ${error.message}", error)
-                        showStatus("Ошибка воспроизведения")
-                    }
+                        override fun onPlayerError(error: com.google.android.exoplayer2.PlaybackException) {
+                            Log.e(TAG, "Player error: ${error.message} (attempt $errorRetryCount/$maxRetryAttempts)", error)
+                            showStatus("Ошибка воспроизведения, попытка $errorRetryCount...")
+                            
+                            // Автоматический retry для стабильности 24/7
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                if (errorRetryCount < maxRetryAttempts) {
+                                    errorRetryCount++
+                                    Log.i(TAG, "Retrying playback (attempt $errorRetryCount)...")
+                                    
+                                    try {
+                                        player?.prepare()
+                                        player?.play()
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Retry failed: ${e.message}", e)
+                                    }
+                                } else {
+                                    Log.e(TAG, "Max retry attempts reached, loading placeholder")
+                                    errorRetryCount = 0
+                                    loadPlaceholder()
+                                }
+                            }, 3000) // Ждем 3 секунды перед retry
+                        }
 
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        Log.d(TAG, "Player isPlaying: $isPlaying")
-                    }
-                })
-            }
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            Log.d(TAG, "Player isPlaying: $isPlaying")
+                        }
+                    })
+                }
 
-        Log.d(TAG, "ExoPlayer initialized")
+            Log.i(TAG, "ExoPlayer initialized (cache: ${config.cacheSize / 1024 / 1024}MB, buffer: ${config.bufferMinMs}-${config.bufferMaxMs}ms)")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error initializing player", e)
+        }
     }
 
     private fun connectSocket() {
@@ -192,16 +234,18 @@ class MainActivity : AppCompatActivity() {
             val opts = IO.Options().apply {
                 reconnection = true
                 reconnectionAttempts = Integer.MAX_VALUE
-                reconnectionDelay = 2000
+                reconnectionDelay = config.reconnectDelay.toLong()
                 timeout = 20000
             }
 
             socket = IO.socket(SERVER_URL, opts)
 
             socket?.on(Socket.EVENT_CONNECT) {
-                Log.d(TAG, "✅ Socket connected")
+                Log.i(TAG, "✅ Socket connected")
                 runOnUiThread {
                     showStatus("Подключено")
+                    watchdog?.updateConnectionStatus(true)
+                    watchdog?.start()
                     registerDevice()
                     startPingTimer()
                 }
@@ -212,7 +256,29 @@ class MainActivity : AppCompatActivity() {
                 Log.w(TAG, "⚠️ Socket disconnected: $reason")
                 runOnUiThread {
                     showStatus("Отключено")
+                    watchdog?.updateConnectionStatus(false)
                     stopPingTimer()
+                }
+            }
+            
+            socket?.on(Socket.EVENT_CONNECT_ERROR) { args ->
+                val error = if (args.isNotEmpty()) args[0].toString() else "unknown"
+                Log.e(TAG, "❌ Socket connect error: $error")
+                runOnUiThread {
+                    showStatus("Ошибка подключения")
+                }
+            }
+            
+            socket?.on("reconnect") { args ->
+                val attempt = if (args.isNotEmpty()) args[0].toString() else "?"
+                Log.i(TAG, "🔄 Socket reconnected (attempt $attempt)")
+            }
+            
+            socket?.on("reconnect_attempt") { args ->
+                val attempt = if (args.isNotEmpty()) args[0].toString() else "?"
+                Log.d(TAG, "🔄 Socket reconnection attempt $attempt")
+                runOnUiThread {
+                    showStatus("Переподключение...")
                 }
             }
 
@@ -234,7 +300,7 @@ class MainActivity : AppCompatActivity() {
                     // КРИТИЧНО: Сохраняем позицию перед паузой
                     savedPosition = player?.currentPosition ?: 0
                     player?.pause()
-                    Log.d(TAG, "⏸️ Пауза на позиции: $savedPosition ms")
+                    Log.i(TAG, "⏸️ Пауза на позиции: $savedPosition ms")
                 }
             }
 
@@ -247,6 +313,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     
                     player?.stop()
+                    Log.i(TAG, "⏹️ Stop - возврат на заглушку")
                     loadPlaceholder()
                 }
             }
@@ -261,6 +328,7 @@ class MainActivity : AppCompatActivity() {
                     
                     player?.seekTo(0)
                     player?.play()
+                    Log.i(TAG, "🔄 Restart выполнен")
                 }
             }
 
@@ -291,100 +359,121 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun registerDevice() {
-        val data = JSONObject().apply {
-            put("device_id", DEVICE_ID)
-            put("device_type", "NATIVE_MEDIAPLAYER")
-            put("platform", "Android ${android.os.Build.VERSION.RELEASE}")
-            put("capabilities", JSONObject().apply {
-                put("video", true)
-                put("audio", true)
-                put("images", true)
-                put("pdf", true)   // ✅ Теперь поддерживаем через конвертированные изображения
-                put("pptx", true)  // ✅ Теперь поддерживаем через конвертированные изображения
-                put("streaming", true)
-            })
-        }
+        try {
+            val data = JSONObject().apply {
+                put("device_id", DEVICE_ID)
+                put("device_type", "NATIVE_MEDIAPLAYER")
+                put("platform", "Android ${android.os.Build.VERSION.RELEASE}")
+                put("model", android.os.Build.MODEL)
+                put("manufacturer", android.os.Build.MANUFACTURER)
+                put("capabilities", JSONObject().apply {
+                    put("video", true)
+                    put("audio", true)
+                    put("images", true)
+                    put("pdf", true)   // ✅ Теперь поддерживаем через конвертированные изображения
+                    put("pptx", true)  // ✅ Теперь поддерживаем через конвертированные изображения
+                    put("streaming", true)
+                })
+            }
 
-        socket?.emit("player/register", data)
-        Log.d(TAG, "📡 Device registration sent: $DEVICE_ID")
+            socket?.emit("player/register", data)
+            Log.i(TAG, "📡 Device registration sent: $DEVICE_ID (${android.os.Build.MODEL})")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error registering device", e)
+        }
     }
 
     private fun handlePlay(data: JSONObject) {
-        val type = data.optString("type")
-        val file = data.optString("file")
-        val page = data.optInt("page", 1)
+        try {
+            val type = data.optString("type")
+            val file = data.optString("file")
+            val page = data.optInt("page", 1)
 
-        Log.d(TAG, "📡 player/play: type=$type, file=$file, page=$page")
+            Log.i(TAG, "📡 player/play: type=$type, file=$file, page=$page")
 
-        when (type) {
-            "video" -> playVideo(file, isPlaceholder = false)
-            "image" -> showImage(file, isPlaceholder = false)
-            "pdf" -> showPdfPage(file, page)
-            "pptx" -> showPptxSlide(file, page)
-            else -> Log.w(TAG, "Unknown type: $type")
+            when (type) {
+                "video" -> playVideo(file, isPlaceholder = false)
+                "image" -> showImage(file, isPlaceholder = false)
+                "pdf" -> showPdfPage(file, page)
+                "pptx" -> showPptxSlide(file, page)
+                else -> {
+                    Log.w(TAG, "Unknown content type: $type")
+                    showStatus("Неподдерживаемый тип контента")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling play command", e)
+            showStatus("Ошибка воспроизведения")
         }
     }
 
     private fun playVideo(fileName: String, isPlaceholder: Boolean = false) {
-        val videoUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
-        Log.d(TAG, "🎬 Playing video: $videoUrl")
+        try {
+            val videoUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            Log.i(TAG, "🎬 Playing video: $videoUrl (isPlaceholder=$isPlaceholder)")
 
-        imageView.visibility = View.GONE
-        playerView.visibility = View.VISIBLE
+            imageView.visibility = View.GONE
+            playerView.visibility = View.VISIBLE
 
-        // КРИТИЧНО: Проверяем тот же ли файл воспроизводится
-        val isSameFile = currentVideoFile == fileName
-        
-        if (isSameFile && player != null) {
-            // Тот же файл - продолжаем с сохраненной позиции
-            Log.d(TAG, "⏯️ Тот же файл, продолжаем с позиции: $savedPosition ms")
-            player?.apply {
-                seekTo(savedPosition)
-                playWhenReady = true
-                play()
+            // КРИТИЧНО: Проверяем тот же ли файл воспроизводится
+            val isSameFile = currentVideoFile == fileName
+            
+            if (isSameFile && player != null) {
+                // Тот же файл - продолжаем с сохраненной позиции
+                Log.d(TAG, "⏯️ Тот же файл, продолжаем с позиции: $savedPosition ms")
+                player?.apply {
+                    seekTo(savedPosition)
+                    playWhenReady = true
+                    play()
+                }
+                return
             }
-            return
-        }
-        
-        // Новый файл - загружаем с начала
-        Log.d(TAG, "🎬 Загрузка НОВОГО видео: $fileName")
-        currentVideoFile = fileName
-        savedPosition = 0
+            
+            // Новый файл - загружаем с начала
+            Log.i(TAG, "🎬 Загрузка НОВОГО видео: $fileName")
+            currentVideoFile = fileName
+            savedPosition = 0
 
-        // HTTP Data Source с увеличенными таймаутами для больших файлов
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory().apply {
-            setAllowCrossProtocolRedirects(true)
-            setConnectTimeoutMs(60000)   // 60 секунд на подключение
-            setReadTimeoutMs(60000)      // 60 секунд на чтение
-            setUserAgent("VideoControl/1.0")
-        }
+            // HTTP Data Source с увеличенными таймаутами для больших файлов
+            val httpDataSourceFactory = DefaultHttpDataSource.Factory().apply {
+                setAllowCrossProtocolRedirects(true)
+                setConnectTimeoutMs(60000)   // 60 секунд на подключение
+                setReadTimeoutMs(60000)      // 60 секунд на чтение
+                setUserAgent("VideoControl/1.0")
+            }
 
-        // Data Source с кэшированием
-        val cacheDataSourceFactory = if (simpleCache != null) {
-            CacheDataSource.Factory()
-                .setCache(simpleCache!!)
-                .setUpstreamDataSourceFactory(DefaultDataSource.Factory(this, httpDataSourceFactory))
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        } else {
-            DefaultDataSource.Factory(this, httpDataSourceFactory)
-        }
+            // Data Source с кэшированием
+            val cacheDataSourceFactory = if (simpleCache != null) {
+                CacheDataSource.Factory()
+                    .setCache(simpleCache!!)
+                    .setUpstreamDataSourceFactory(DefaultDataSource.Factory(this, httpDataSourceFactory))
+                    .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            } else {
+                DefaultDataSource.Factory(this, httpDataSourceFactory)
+            }
 
-        val mediaItem = MediaItem.fromUri(videoUrl)
-        val mediaSource = ProgressiveMediaSource.Factory(cacheDataSourceFactory)
-            .createMediaSource(mediaItem)
+            val mediaItem = MediaItem.fromUri(videoUrl)
+            val mediaSource = ProgressiveMediaSource.Factory(cacheDataSourceFactory)
+                .createMediaSource(mediaItem)
 
-        player?.apply {
-            setMediaSource(mediaSource)
-            // КРИТИЧНО: Заглушка зацикливается, контент - нет
-            repeatMode = if (isPlaceholder) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-            prepare()
-            playWhenReady = true
+            player?.apply {
+                setMediaSource(mediaSource)
+                // КРИТИЧНО: Заглушка зацикливается, контент - нет
+                repeatMode = if (isPlaceholder) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                prepare()
+                playWhenReady = true
+            }
+            
+            // Отмечаем тип контента
+            isPlayingPlaceholder = isPlaceholder
+            
+            Log.i(TAG, "✅ Video prepared: isPlaceholder=$isPlaceholder, loop=$isPlaceholder")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error playing video: $fileName", e)
+            showStatus("Ошибка загрузки видео")
         }
-        
-        // Отмечаем тип контента
-        isPlayingPlaceholder = isPlaceholder
-        
-        Log.d(TAG, "✅ Video prepared: isPlaceholder=$isPlaceholder, loop=$isPlaceholder")
     }
 
     private var currentPdfFile: String? = null
@@ -395,87 +484,111 @@ class MainActivity : AppCompatActivity() {
     private var savedPosition: Long = 0
 
     private fun showImage(fileName: String, isPlaceholder: Boolean = false) {
-        val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
-        Log.d(TAG, "🖼️ Showing image: $imageUrl")
+        try {
+            val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            Log.i(TAG, "🖼️ Showing image: $imageUrl (isPlaceholder=$isPlaceholder)")
 
-        // Останавливаем видео если играет
-        player?.pause()
+            // Останавливаем видео если играет
+            player?.pause()
 
-        playerView.visibility = View.GONE
-        imageView.visibility = View.VISIBLE
+            playerView.visibility = View.GONE
+            imageView.visibility = View.VISIBLE
 
-        // Отмечаем тип контента
-        isPlayingPlaceholder = isPlaceholder
+            // Отмечаем тип контента
+            isPlayingPlaceholder = isPlaceholder
 
-        // Загружаем изображение
-        loadImageToView(imageUrl)
-        
-        Log.d(TAG, "✅ Image shown: isPlaceholder=$isPlaceholder")
+            // Загружаем изображение
+            loadImageToView(imageUrl)
+            
+            Log.i(TAG, "✅ Image shown: isPlaceholder=$isPlaceholder")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error showing image: $fileName", e)
+            showStatus("Ошибка загрузки изображения")
+        }
     }
 
     private fun showPdfPage(fileName: String?, page: Int) {
-        val file = fileName ?: currentPdfFile
-        if (file == null) {
-            Log.w(TAG, "⚠️ PDF file name is null")
-            return
+        try {
+            val file = fileName ?: currentPdfFile
+            if (file == null) {
+                Log.w(TAG, "⚠️ PDF file name is null")
+                return
+            }
+
+            currentPdfFile = file
+            currentPdfPage = page
+            
+            // Презентация - НЕ заглушка, при stop вернемся на заглушку
+            isPlayingPlaceholder = false
+
+            val pageUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/page/$page"
+            Log.i(TAG, "📄 Showing PDF page: $pageUrl (page $page)")
+
+            playerView.visibility = View.GONE
+            imageView.visibility = View.VISIBLE
+
+            // Загружаем изображение страницы
+            loadImageToView(pageUrl)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error showing PDF page", e)
+            showStatus("Ошибка загрузки PDF")
         }
-
-        currentPdfFile = file
-        currentPdfPage = page
-        
-        // Презентация - НЕ заглушка, при stop вернемся на заглушку
-        isPlayingPlaceholder = false
-
-        val pageUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/page/$page"
-        Log.d(TAG, "📄 Showing PDF page: $pageUrl (page $page)")
-
-        playerView.visibility = View.GONE
-        imageView.visibility = View.VISIBLE
-
-        // Загружаем изображение страницы
-        loadImageToView(pageUrl)
     }
 
     private fun showPptxSlide(fileName: String?, slide: Int) {
-        val file = fileName ?: currentPptxFile
-        if (file == null) {
-            Log.w(TAG, "⚠️ PPTX file name is null")
-            return
+        try {
+            val file = fileName ?: currentPptxFile
+            if (file == null) {
+                Log.w(TAG, "⚠️ PPTX file name is null")
+                return
+            }
+
+            currentPptxFile = file
+            currentPptxSlide = slide
+            
+            // Презентация - НЕ заглушка, при stop вернемся на заглушку
+            isPlayingPlaceholder = false
+
+            val slideUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/slide/$slide"
+            Log.i(TAG, "📊 Showing PPTX slide: $slideUrl (slide $slide)")
+
+            playerView.visibility = View.GONE
+            imageView.visibility = View.VISIBLE
+
+            // Загружаем изображение слайда
+            loadImageToView(slideUrl)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error showing PPTX slide", e)
+            showStatus("Ошибка загрузки PPTX")
         }
-
-        currentPptxFile = file
-        currentPptxSlide = slide
-        
-        // Презентация - НЕ заглушка, при stop вернемся на заглушку
-        isPlayingPlaceholder = false
-
-        val slideUrl = "$SERVER_URL/api/devices/$DEVICE_ID/converted/${Uri.encode(file)}/slide/$slide"
-        Log.d(TAG, "📊 Showing PPTX slide: $slideUrl (slide $slide)")
-
-        playerView.visibility = View.GONE
-        imageView.visibility = View.VISIBLE
-
-        // Загружаем изображение слайда
-        loadImageToView(slideUrl)
     }
 
     private fun loadImageToView(imageUrl: String) {
-        // Glide для плавной загрузки изображений с кэшем и crossfade
-        Log.d(TAG, "🖼️ Loading image with Glide: $imageUrl")
-        
-        Glide.with(this)
-            .load(imageUrl)
-            .diskCacheStrategy(DiskCacheStrategy.ALL)  // Кэш на диск
-            .transition(DrawableTransitionOptions.withCrossFade(300))  // Плавный переход 300ms
-            .timeout(30000)  // Таймаут 30 сек
-            .error(android.R.drawable.ic_dialog_alert)  // Показываем иконку при ошибке
-            .into(imageView)
-        
-        Log.d(TAG, "✅ Glide started loading image")
+        try {
+            // Glide для плавной загрузки изображений с кэшем и crossfade
+            Log.d(TAG, "🖼️ Loading image with Glide: $imageUrl")
+            
+            Glide.with(this)
+                .load(imageUrl)
+                .diskCacheStrategy(DiskCacheStrategy.ALL)  // Кэш на диск
+                .transition(DrawableTransitionOptions.withCrossFade(300))  // Плавный переход 300ms
+                .timeout(30000)  // Таймаут 30 сек
+                .error(android.R.drawable.ic_dialog_alert)  // Показываем иконку при ошибке
+                .into(imageView)
+            
+            Log.d(TAG, "✅ Glide started loading image")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error loading image with Glide", e)
+            showStatus("Ошибка загрузки изображения")
+        }
     }
 
     private fun loadPlaceholder() {
-        Log.d(TAG, "🔍 Loading placeholder...")
+        Log.i(TAG, "🔍 Loading placeholder...")
         
         // Останавливаем текущее воспроизведение
         player?.stop()
@@ -499,7 +612,7 @@ class MainActivity : AppCompatActivity() {
                     val placeholderFile = json.optString("placeholder", null)
                     
                     if (placeholderFile != null && placeholderFile != "null") {
-                        Log.d(TAG, "✅ Placeholder found: $placeholderFile")
+                        Log.i(TAG, "✅ Placeholder found: $placeholderFile")
                         
                         // Определяем тип заглушки (видео или изображение)
                         val ext = placeholderFile.substringAfterLast('.', "").toLowerCase()
@@ -520,7 +633,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     } else {
-                        Log.d(TAG, "ℹ️ No placeholder set for this device")
+                        Log.i(TAG, "ℹ️ No placeholder set for this device")
                         withContext(Dispatchers.Main) {
                             // Показываем черный экран
                             playerView.visibility = View.GONE
@@ -532,59 +645,100 @@ class MainActivity : AppCompatActivity() {
                 }
                 connection.disconnect()
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Error loading placeholder: ${e.message}", e)
+                Log.e(TAG, "❌ Error loading placeholder", e)
             }
         }
     }
 
     private fun showStatus(message: String) {
-        statusText.text = message
-        statusText.visibility = View.VISIBLE
+        if (showStatus) {
+            statusText.text = message
+            statusText.visibility = View.VISIBLE
+        }
+        Log.d(TAG, "Status: $message")
     }
 
     private fun hideStatus() {
-        statusText.visibility = View.GONE
+        if (showStatus) {
+            statusText.visibility = View.GONE
+        }
     }
 
+    private val pingRunnable = object : Runnable {
+        override fun run() {
+            socket?.emit("player/ping")
+            Log.d(TAG, "🏓 Ping sent")
+            
+            // Планируем следующий ping
+            val interval = config.pingInterval.toLong()
+            pingHandler.postDelayed(this, interval)
+        }
+    }
+    
     private fun startPingTimer() {
         stopPingTimer() // Останавливаем предыдущий таймер если был
         
-        pingTimer = java.util.Timer().apply {
-            scheduleAtFixedRate(object : java.util.TimerTask() {
-                override fun run() {
-                    socket?.emit("player/ping")
-                    Log.d(TAG, "🏓 Ping sent")
-                }
-            }, 0, 20000) // Каждые 20 секунд (меньше чем 30 сек timeout на сервере)
-        }
+        val interval = config.pingInterval.toLong()
+        pingHandler.postDelayed(pingRunnable, interval) // Первый ping через interval
         
-        Log.d(TAG, "✅ Ping timer started")
+        Log.i(TAG, "✅ Ping timer started (interval: ${interval}ms)")
     }
     
     private fun stopPingTimer() {
-        pingTimer?.cancel()
-        pingTimer = null
+        pingHandler.removeCallbacks(pingRunnable)
         Log.d(TAG, "⏹️ Ping timer stopped")
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        Log.i(TAG, "=== MainActivity onDestroy ===")
+        
         stopPingTimer()
+        watchdog?.stop()
         player?.release()
         socket?.disconnect()
         wakeLock?.release()
         simpleCache?.release()
-        Log.d(TAG, "MainActivity onDestroy")
+        
+        Log.i(TAG, "MainActivity destroyed")
     }
 
     override fun onPause() {
         super.onPause()
-        player?.pause()
+        // НЕ паузим плеер для стабильности 24/7
+        // Управление pause/play только через команды от сервера!
+        Log.d(TAG, "onPause called, player continues running")
     }
 
     override fun onResume() {
         super.onResume()
-        // Не auto-play при resume
+        Log.d(TAG, "onResume called")
+        
+        // Восстанавливаем воспроизведение если остановилось
+        if (player?.isPlaying == false) {
+            Log.i(TAG, "Player not playing in onResume, restoring...")
+            if (isPlayingPlaceholder) {
+                // Заглушка должна всегда играть
+                player?.play()
+            } else {
+                // Если контент остановился - возвращаемся на заглушку
+                loadPlaceholder()
+            }
+        }
+    }
+    
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        
+        // Очищаем память Glide при нехватке памяти (для стабильности 24/7)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            Log.w(TAG, "Low memory detected (level $level), clearing Glide cache")
+            try {
+                Glide.get(this).clearMemory()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to clear Glide memory: ${e.message}")
+            }
+        }
     }
 }
 

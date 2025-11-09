@@ -55,9 +55,19 @@
         android:textColorHint="#888888"
         android:background="@android:color/darker_gray"
         android:padding="16dp"
-        android:layout_marginBottom="32dp"
+        android:layout_marginBottom="24dp"
         android:textSize="16sp"
         android:maxLength="50" />
+
+    <CheckBox
+        android:id="@+id/showStatusCheckbox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Показывать статусы (подключение, буферизация)"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:layout_marginBottom="32dp"
+        android:checked="false" />
 
     <Button
         android:id="@+id/saveButton"

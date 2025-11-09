@@ -6,27 +6,25 @@
 // Иконки для типов устройств
 export const DEVICE_ICONS = {
   'browser': '🌐',
-  'vlc': '🎬',
-  'mpv': '🎥',
   'android': '📱',
   'kodi': '📺',
   'webos': '📺',
   'tizen': '📺',
   'VJC': '🎬',
-  'NATIVE_MEDIAPLAYER': '📱'
+  'NATIVE_MEDIAPLAYER': '📱',
+  'NATIVE_MPV': '🖥️'
 };
 
 // Названия типов устройств
 export const DEVICE_TYPE_NAMES = {
   'browser': 'Browser',
-  'vlc': 'VLC Player',
-  'mpv': 'MPV Player',
   'android': 'Android TV',
   'kodi': 'Kodi',
   'webos': 'WebOS',
   'tizen': 'Tizen',
   'VJC': 'Video.js Player',
-  'NATIVE_MEDIAPLAYER': 'Android MediaPlayer'
+  'NATIVE_MEDIAPLAYER': 'Android MediaPlayer',
+  'NATIVE_MPV': 'Linux MPV Player'
 };
 
 // Расширения файлов по типам

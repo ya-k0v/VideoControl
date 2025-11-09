@@ -52,43 +52,41 @@ VideoControl/
 └── clients/                  Android & VLC клиенты
 ```
 
-## VLC Клиент
+## Linux MPV Клиент (рекомендуется для 24/7)
 
-**Быстрая установка (только зависимости):**
+MPV - нативный плеер для Linux с производительностью как ExoPlayer на Android.
+
+**Преимущества:**
+- ✅ Аппаратное ускорение (VAAPI/VDPAU/NVDEC)
+- ✅ Стабильность 24/7
+- ✅ Большие файлы >4GB без проблем
+- ✅ Память ~50-70 MB (vs ~350 MB у браузера)
+
+**Быстрая установка:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-vlc.sh | bash -s -- --no-systemd
-cd ~/videocontrol-vlc
-python3 vlc_client.py --server http://SERVER_IP --device vlc-001
+cd clients/mpv
+./install.sh --server http://SERVER_IP --device mpv-001
 ```
 
-**С автозапуском (systemd):**
+**Ручная установка:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-vlc.sh | bash -s -- --server http://SERVER_IP --device vlc-001
+# Установка MPV
+sudo apt install mpv python3 python3-pip
+
+# Драйверы аппаратного ускорения (Intel/AMD)
+sudo apt install vainfo libva-drm2 mesa-va-drivers
+
+# Драйверы для NVIDIA
+sudo apt install vdpauinfo libvdpau-va-gl1
+
+# Python зависимости
+pip3 install python-socketio[client] requests
+
+# Запуск
+python3 mpv_client.py --server http://SERVER_IP --device mpv-001
 ```
 
-**Если VLC уже установлен:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-vlc.sh | bash -s -- --skip-vlc --no-systemd
-```
-
-## MPV Клиент (Raspberry Pi)
-
-**Быстрая установка (только зависимости):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-mpv.sh | bash -s -- --no-systemd
-cd ~/videocontrol-mpv
-python3 mpv_client.py --server http://SERVER_IP --device rpi-001
-```
-
-**С автозапуском (systemd):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-mpv.sh | bash -s -- --server http://SERVER_IP --device rpi-001
-```
-
-**Если MPV уже установлен:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-mpv.sh | bash -s -- --skip-mpv --no-systemd
-```
+**Подробнее:** [clients/mpv/README.md](../clients/mpv/README.md)
 
 ## Доступ
 

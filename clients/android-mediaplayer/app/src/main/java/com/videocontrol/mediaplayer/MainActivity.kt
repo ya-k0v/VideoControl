@@ -205,7 +205,7 @@ class MainActivity : AppCompatActivity() {
                                 Player.STATE_IDLE -> Log.d(TAG, "Player STATE_IDLE")
                                 Player.STATE_BUFFERING -> {
                                     Log.d(TAG, "Player STATE_BUFFERING")
-                                    showStatus("Буферизация...")
+                                    showStatus("Буферизация...", autohideSeconds = 0)  // Не скрываем автоматически
                                 }
 
                                 Player.STATE_READY -> {
@@ -286,7 +286,7 @@ class MainActivity : AppCompatActivity() {
             socket?.on(Socket.EVENT_CONNECT) {
                 Log.i(TAG, "✅ Socket connected")
                 runOnUiThread {
-                    showStatus("Подключено")
+                    showStatus("Подключено", autohideSeconds = 2)  // Скрываем через 2 сек
                     watchdog?.updateConnectionStatus(true)
                     watchdog?.start()
                     registerDevice()
@@ -308,7 +308,7 @@ class MainActivity : AppCompatActivity() {
                 val reason = if (args.isNotEmpty()) args[0].toString() else "unknown"
                 Log.w(TAG, "⚠️ Socket disconnected: $reason")
                 runOnUiThread {
-                    showStatus("Отключено")
+                    showStatus("Отключено", autohideSeconds = 0)  // Не скрываем до переподключения
                     watchdog?.updateConnectionStatus(false)
                     stopPingTimer()
                     
@@ -324,7 +324,7 @@ class MainActivity : AppCompatActivity() {
                 val error = if (args.isNotEmpty()) args[0].toString() else "unknown"
                 Log.e(TAG, "❌ Socket connect error: $error")
                 runOnUiThread {
-                    showStatus("Ошибка подключения")
+                    showStatus("Ошибка подключения", autohideSeconds = 5)  // Скрываем через 5 сек
                 }
             }
             
@@ -337,7 +337,7 @@ class MainActivity : AppCompatActivity() {
                 val attempt = if (args.isNotEmpty()) args[0].toString() else "?"
                 Log.d(TAG, "🔄 Socket reconnection attempt $attempt")
                 runOnUiThread {
-                    showStatus("Переподключение...")
+                    showStatus("Переподключение...", autohideSeconds = 0)  // Не скрываем до успеха
                 }
             }
 
@@ -807,15 +807,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showStatus(message: String) {
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val hideStatusRunnable = Runnable { 
+        statusText.visibility = View.GONE
+    }
+    
+    private fun showStatus(message: String, autohideSeconds: Int = 3) {
         if (showStatus) {
+            // Отменяем предыдущий таймер скрытия
+            statusHandler.removeCallbacks(hideStatusRunnable)
+            
             statusText.text = message
             statusText.visibility = View.VISIBLE
+            
+            // Автоскрытие через N секунд
+            if (autohideSeconds > 0) {
+                statusHandler.postDelayed(hideStatusRunnable, autohideSeconds * 1000L)
+            }
         }
-        Log.d(TAG, "Status: $message")
+        Log.d(TAG, "Status: $message (autohide: ${autohideSeconds}s)")
     }
 
     private fun hideStatus() {
+        statusHandler.removeCallbacks(hideStatusRunnable)
         if (showStatus) {
             statusText.visibility = View.GONE
         }

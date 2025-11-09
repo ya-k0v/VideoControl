@@ -37,6 +37,16 @@
       min-height: 0;
     }
     
+    /* КРИТИЧНО: Ограничиваем ширину панели файлов */
+    .files-panel {
+      max-width: 100%;
+      overflow: hidden;
+    }
+    
+    .files-panel .list {
+      max-width: 100%;
+    }
+    
     /* Минимальные высоты для вертикального режима */
     .sidebar {
       min-height: 280px;
@@ -65,7 +75,13 @@
       }
       
       .speaker-main {
-        grid-template-columns: 1fr 360px;
+        grid-template-columns: minmax(0, 1fr) 360px;
+      }
+      
+      /* На десктопе также ограничиваем */
+      .files-panel {
+        max-width: 100%;
+        overflow: hidden;
       }
       
       /* Сбрасываем ограничения высоты на широких экранах */
@@ -80,7 +96,7 @@
     
   </style>
   <script src="/socket.io/socket.io.js"></script>
-  <script type="module" src="/js/speaker.js?v=2.0.0"></script>
+  <script type="module" src="/js/speaker.js?v=2.2.0"></script>
 </head>
 <body>
   <header class="toolbar">

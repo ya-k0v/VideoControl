@@ -17,7 +17,7 @@ fi
 
 SERVER_IP="$1"
 DEVICE_ID="$2"
-PLAYER_URL="http://${SERVER_IP}/player.html?device_id=${DEVICE_ID}&autoplay=1"
+PLAYER_URL="http://${SERVER_IP}/player-videojs.html?device_id=${DEVICE_ID}&autoplay=1"
 
 echo "🚀 Настройка Video Control Player"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -39,7 +39,7 @@ cat > ~/start-videocontrol-player.sh << 'SCRIPT_EOF'
 # Переменные (будут заменены при установке)
 SERVER_IP="SERVER_IP_PLACEHOLDER"
 DEVICE_ID="DEVICE_ID_PLACEHOLDER"
-PLAYER_URL="http://${SERVER_IP}/player.html?device_id=${DEVICE_ID}&autoplay=1"
+PLAYER_URL="http://${SERVER_IP}/player-videojs.html?device_id=${DEVICE_ID}&autoplay=1"
 
 export DISPLAY=:0
 

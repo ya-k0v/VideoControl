@@ -1,0 +1,3 @@
+## Скопируйте в local.properties и укажите путь к Android SDK
+sdk.dir=/home/username/Android/Sdk
+

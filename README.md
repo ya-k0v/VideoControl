@@ -1,462 +1,328 @@
-# Video Control System v2.1
+# VideoControl v2.5
 
-Система управления видео-контентом для множественных устройств (ТВ, проекторы, дисплеи) с поддержкой видео, изображений, PDF и PowerPoint презентаций.
-<img width="1914" height="802" alt="image" src="https://github.com/user-attachments/assets/4df5918d-1591-4d02-b8f9-cbcfeb2aa869" />
-<img width="1179" height="820" alt="image" src="https://github.com/user-attachments/assets/50c36e5d-5a29-40a8-b552-413d2c0a1ada" />
+> Модульная система управления видеоконтентом для дисплеев и Android TV устройств
 
-**📥 Быстрая установка:** [INSTALL.md](INSTALL.md)  
-**📊 Аудит проекта:** [AUDIT-REPORT.md](AUDIT-REPORT.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 
-## 🚀 Установка
+---
 
+## 🎯 О проекте
 
-### Сервер - одна команда (Ubuntu/Debian/CentOS/RHEL)
-
-**Через wget:**
-```bash
-wget -qO- https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-server.sh | bash
-```
-
-**Через curl:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-server.sh | bash
-```
-
-**Или через git:**
-```bash
-git clone https://github.com/ya-k0v/VideoControl.git
-cd VideoControl
-bash scripts/install-server.sh
-```
-
-Скрипты автоматически установят все зависимости и настроят систему.
-
-**Запуск сервера:**
-```bash
-# Development
-npm start
-
-# Production (systemd)
-sudo systemctl start videocontrol
-sudo systemctl enable videocontrol
-
-# Статус
-sudo systemctl status videocontrol
-```
-
-### VLC Клиент - одна команда (Windows/Linux/macOS)
-
-**Через wget:**
-```bash
-wget -qO- https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-vlc.sh | bash
-```
-
-**Через curl:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-vlc.sh | bash
-```
-
-**Или через git:**
-```bash
-git clone https://github.com/ya-k0v/VideoControl.git
-cd VideoControl
-bash scripts/install-vlc-client.sh
-```
-
-**Быстрая установка с параметрами (без вопросов):**
-```bash
-# Только установка зависимостей, без systemd
-bash scripts/install-vlc-client.sh --no-systemd
-
-# С автозапуском
-bash scripts/install-vlc-client.sh --server http://192.168.1.10 --device vlc-001
-
-# Только Python пакеты (VLC уже установлен)
-bash scripts/install-vlc-client.sh --skip-vlc --no-systemd
-```
-
-**Запуск:**
-```bash
-cd ~/videocontrol-vlc
-python3 vlc_client.py --server http://SERVER_IP --device vlc-001
-```
-
-### Android TV Client
-
-Собранный APK находится в `clients/android-tv/VideoControlTV/app/build/outputs/apk/release/`.
-
-Установка:
-```bash
-cd clients/android-tv
-# Установка на одно устройство
-adb install -r VideoControlTV/app/build/outputs/apk/release/app-release-unsigned.apk
-
-# Массовая установка
-bash mass-install.sh
-
-# Настройка всех устройств
-bash configure-devices.sh
-```
-
-## 📱 Доступ к интерфейсам
-
-- **Админ панель:** http://localhost/admin.html
-- **Плеер (Video.js):** http://localhost/player-videojs.html?device_id=YOUR_DEVICE_ID
-- **Панель спикера:** http://localhost/speaker.html
-
-## 🎯 Возможности
-
-- 🎬 **Видео** - MP4, WebM, OGG, MKV, MOV, AVI
-- 🖼️ **Изображения** - PNG, JPG, JPEG, GIF, WebP
-- 📄 **PDF** - конвертация в изображения с навигацией
-- 📊 **PowerPoint** - конвертация PPTX с навигацией
-- 📱 **Адаптивный интерфейс** - PC, планшеты, телефоны
-- 🔄 **Real-time управление** - через WebSocket
-- ⏸️ **Управление** - Play, Pause, Restart, Stop
-- 🌐 **Автономность** - Service Worker, работа офлайн
-- 🚀 **Nginx раздача** - ускорение в 5-10 раз
-- 🌍 **Русские символы** - полная поддержка
-- ⚡ **PPTX кэширование** - мгновенное переключение слайдов
-
-## 📦 Структура проекта
-
-```
-VideoControl/
-├── server.js                  # Основной сервер
-├── package.json               # Зависимости npm
-├── devices.json               # Конфигурация устройств
-├── videocontrol.service       # Systemd service
-├── AUDIT-REPORT.md            # Отчет аудита
-│
-├── scripts/                   # Скрипты установки
-│   ├── install.sh                 # Расширенная установка
-│   ├── quick-install-server.sh    # Быстрая установка сервера
-│   ├── quick-install-vlc.sh       # Быстрая установка VLC
-│   ├── install-server.sh          # Локальная установка сервера
-│   ├── install-vlc-client.sh      # Локальная установка VLC
-│   ├── setup-kiosk.sh             # Настройка kiosk режима
-│   └── generate-favicons.js       # Генерация иконок
-│
-├── nginx/                     # Конфигурация Nginx
-│   ├── videocontrol.conf
-│   └── install-nginx.sh
-│
-├── clients/                   # Клиенты
-│   ├── vlc/                   # VLC клиент v2.0
-│   │   ├── vlc_client.py
-│   │   ├── requirements.txt
-│   │   └── README.md
-│   └── android-tv/            # Android TV клиент v1.0.7 FINAL
-│       ├── VideoControlTV/
-│       ├── mass-install.sh
-│       └── configure-devices.sh
-│
-└── public/                    # Публичные файлы
-    ├── admin.html
-    ├── player-videojs.html    # Video.js плеер
-    ├── speaker.html
-    ├── css/app.css
-    ├── js/
-    │   ├── admin.js
-    │   ├── player-videojs.js  # Video.js логика
-    │   ├── speaker.js
-    │   └── utils.js
-    ├── vendor/
-    │   └── videojs/           # Локальные Video.js файлы
-    └── content/               # Медиа-контент
-```
-
-## 🛠️ Требования
-
-- **Node.js** 14+ (рекомендуется 18+)
-- **LibreOffice** - для конвертации PPTX
-- **GraphicsMagick** - для конвертации PDF/PPTX
-
-## 📖 Примеры использования
-
-### Пример 1: Установка сервера на чистую систему
-
-```bash
-# На Ubuntu/Debian сервере
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-server.sh | sudo bash
-
-# Запуск
-sudo systemctl start videocontrol
-sudo systemctl enable videocontrol
-
-# Доступ
-# http://YOUR_SERVER_IP/admin.html
-```
-
-### Пример 2: Установка VLC клиента на ПК
-
-```bash
-# На Windows/Linux/macOS ПК
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install-vlc.sh | bash -s -- --no-systemd
-
-# Запуск
-cd ~/videocontrol-vlc
-python3 vlc_client.py --server http://SERVER_IP --device office-pc
-```
-
-### Пример 3: Установка Android TV клиента
-
-```bash
-# Сборка APK
-cd clients/android-tv/VideoControlTV
-./gradlew assembleRelease
-
-# Установка на устройства
-cd ..
-bash mass-install.sh
-```
-
-### Регистрация устройства
-
-Откройте плеер с параметром device_id:
-```
-http://your-server/player-videojs.html?device_id=TV-01
-```
-
-Устройство автоматически появится в админ-панели.
-
-### Загрузка контента
-
-1. Откройте админ-панель
-2. Выберите устройство
-3. Загрузите файлы (drag & drop)
-4. Установите заглушку (default)
-
-### Управление воспроизведением
-
-В панели спикера:
-- **Preview** - предпросмотр файла
-- **Play** - воспроизведение на устройстве
-- **Pause** - пауза
-- **Restart** - перезапуск с начала
-- **Stop** - остановка, возврат к заглушке
-- **Next/Prev** - навигация по PDF/PPTX
-
-## ⚙️ Конфигурация
-
-### devices.json
-
-Имена устройств для отображения:
-```json
-{
-  "vlc-001": "Office Display 1",
-  "android-tv-01": "Conference Room TV"
-}
-```
-
-### Переменные окружения
-
-- `PORT` - порт Node.js (по умолчанию 3000)
-- `NODE_ENV` - окружение (development/production)
-
-## 🔧 Управление сервисом
-
-```bash
-# Статус
-sudo systemctl status videocontrol
-
-# Логи
-sudo journalctl -u videocontrol -f
-
-# Перезапуск
-sudo systemctl restart videocontrol
-
-# Остановка
-sudo systemctl stop videocontrol
-```
-
-## 🌐 Nginx для Production
-
-Nginx значительно ускоряет раздачу контента:
-
-```bash
-cd nginx
-sudo bash install-nginx.sh
-```
-
-**Преимущества:**
-- ⚡ Ускорение в 5-10 раз
-- 📊 100+ одновременных соединений
-- 🎯 Оптимизированные HTTP заголовки
-- 🔄 Range requests для видео
-
-## 🎬 Клиенты
-
-### VLC Client v2.0 (Windows/Linux/macOS)
-
-Упрощенный и надежный клиент для офисных ПК:
-
-```bash
-python3 vlc_client.py --server http://SERVER --device vlc-001
-```
-
-**Поддержка:**
-- ✅ Видео (mp4, webm, mkv, avi, mov, ogg)
-- ✅ Автоматическая заглушка
-- ✅ Надежный watchdog механизм
-- ✅ Real-time управление
-- ✅ Systemd автозапуск
-
-**Документация:** [clients/vlc/README.md](clients/vlc/README.md)
-
-### Android TV Client v1.0.7 FINAL
-
-Нативное Android приложение для Android TV устройств:
-
-**Поддержка:**
-- ✅ iconBIT DS2
-- ✅ Lumien LS5550SD
-- ✅ Любые Android 5.0+ устройства
+VideoControl - это профессиональная система централизованного управления медиа-контентом для множества устройств в режиме реального времени.
 
 **Особенности:**
-- Fullscreen без chrome
-- Автовоспроизведение со звуком
-- WebView с Video.js плеером
-- Настройка через ADB broadcasts
+- 🎬 Управление видео, изображениями, PDF, PPTX, **папок с изображениями**
+- 📱 Нативное Android приложение (ExoPlayer + Glide)
+- 🌐 Веб-панели управления (Admin, Speaker, Player)
+- 🔄 Синхронизация в реальном времени (Socket.IO)
+- 📊 Автоматическая оптимизация видео (FFmpeg)
+- 🎨 Drag & Drop между устройствами (включая папки)
+- 📁 **Загрузка папок**: прямой выбор или ZIP архивы
+- 🖼️ **Превью миниатюр**: сетка для папок и презентаций
+- 🔤 **Транслитерация**: кириллица → латиница автоматически
+- 📡 Поддержка offline режима (PWA)
 
-**Документация:** [clients/android-tv/README.md](clients/android-tv/README.md)
+---
 
-### Browser Player (любые устройства)
+## 📦 Быстрый старт
 
-Универсальный плеер на базе Video.js:
-
-```
-http://server/player-videojs.html?device_id=DEVICE_ID&autoplay=1&sound=1
-```
-
-**Поддержка:**
-- ✅ Видео (Video.js)
-- ✅ Изображения
-- ✅ PDF (с навигацией и кэшем)
-- ✅ PPTX (с мгновенным переключением слайдов)
-- ✅ Автоматический возврат к заглушке
-
-## 🔌 API
-
-### Устройства
-
-- `GET /api/devices` - список устройств
-- `POST /api/devices` - создать устройство
-- `DELETE /api/devices/:id` - удалить устройство
-- `POST /api/devices/:id/rename` - переименовать
-- `GET /api/devices/:id/placeholder` - получить заглушку
-
-### Файлы
-
-- `GET /api/devices/:id/files` - список файлов
-- `POST /api/devices/:id/upload` - загрузить файл
-- `DELETE /api/devices/:id/files/:name` - удалить файл
-- `POST /api/devices/:id/make-default` - установить заглушку
-- `GET /api/devices/:id/slides-count?file=` - количество слайдов PPTX/PDF
-
-### WebSocket
-
-**Клиент → Сервер:**
-- `player/register` - регистрация
-- `player/ping` - heartbeat
-- `control/play` - воспроизведение
-- `control/pause` - пауза
-- `control/stop` - остановка
-- `control/pdfNext` / `control/pdfPrev` - PDF навигация
-- `control/pptxNext` / `control/pptxPrev` - PPTX навигация
-
-**Сервер → Клиент:**
-- `player/state` - текущее состояние
-- `player/play` - команда воспроизведения
-- `player/pause` - команда паузы
-- `player/stop` - команда остановки
-- `player/pong` - heartbeat ответ
-- `placeholder/refresh` - перезагрузка заглушки
-- `player/pdfPage` / `player/pptxPage` - навигация по слайдам
-
-## 🔒 Безопасность
-
-- Валидация device_id
-- Защита от directory traversal
-- Ограничение размера файлов (1GB)
-- Санитизация имен файлов
-- CORS защита (только локальная сеть)
-
-## 🛠️ Технологии
-
-**Backend:**
-- Node.js, Express.js, Socket.IO
-- Nginx (reverse proxy)
-- Multer (file upload)
-- pdf2pic, pdf-lib (PDF processing)
-
-**Frontend:**
-- Vanilla JavaScript, HTML5, CSS3
-- Video.js 8.16.1 (видео плеер)
-- PWA (Service Worker v6)
-
-**Клиенты:**
-- Python 3.8+ (VLC client)
-- Kotlin (Android TV)
-- python-vlc, python-socketio
-
-## 🐛 Troubleshooting
-
-### Сервер не запускается
+### Автоматическая установка:
 
 ```bash
-# Проверить логи
-sudo journalctl -u videocontrol -n 50
+# 1. Клонировать репозиторий
+git clone https://github.com/ya-k0v/VideoControl.git
+cd VideoControl
 
-# Проверить порт
-sudo netstat -tlnp | grep 3000
+# 2. Запустить установку
+cd scripts
+./install-server.sh
+
+# 3. Установить Nginx (опционально)
+cd ../nginx
+./install-nginx.sh
+
+# 4. Запустить
+sudo systemctl start videocontrol
+sudo systemctl enable videocontrol
 ```
 
-### Плеер не подключается
+### Ручная установка:
 
 ```bash
-# Проверить доступность
-curl http://SERVER/api/devices
+# Зависимости
+npm install
 
-# Открыть порт
-sudo ufw allow 80/tcp
+# FFmpeg для оптимизации видео
+sudo apt-get install ffmpeg
+
+# LibreOffice для PDF/PPTX конвертации
+sudo apt-get install libreoffice
+
+# ImageMagick для ресайза изображений
+sudo apt-get install imagemagick
+
+# Запуск
+npm start
 ```
 
-### VLC клиент не показывает видео
+---
+
+## 📂 Структура проекта
+
+```
+videocontrol/
+├── server.js                 Точка входа Backend
+├── package.json              NPM конфигурация
+├── videocontrol.service      Systemd service
+│
+├── config/                   Конфигурационные файлы
+│   ├── devices.json          Список устройств
+│   ├── file-names-map.json   Маппинг имен файлов
+│   └── video-optimization.json Настройки FFmpeg
+│
+├── src/                      Backend (21 модуль)
+│   ├── config/               Константы и настройки
+│   ├── middleware/           Express middleware
+│   ├── routes/               API endpoints (17 endpoints)
+│   ├── socket/               Socket.IO обработчики
+│   ├── storage/              Работа с файлами
+│   ├── video/                FFmpeg оптимизация
+│   ├── converters/           PDF/PPTX → изображения
+│   └── utils/                Утилиты
+│
+├── public/                   Frontend
+│   ├── admin.html            Панель администратора
+│   ├── speaker.html          Панель спикера
+│   ├── player-videojs.html   Плеер (Video.js)
+│   │
+│   ├── js/
+│   │   ├── admin/            Admin модули (10)
+│   │   ├── shared/           Shared модули (2)
+│   │   ├── admin.js          Главный admin
+│   │   ├── speaker.js        Главный speaker
+│   │   ├── player-videojs.js Главный player
+│   │   ├── utils.js          Утилиты
+│   │   └── theme.js          Темы (dark/light)
+│   │
+│   ├── css/                  Стили
+│   ├── vendor/               Сторонние библиотеки
+│   └── content/              Контент устройств
+│
+├── clients/                  Клиентские приложения
+│   ├── android-mediaplayer/  Android APK (ExoPlayer + Glide)
+│   └── vlc/                  VLC клиент (deprecated)
+│
+├── scripts/                  Скрипты установки
+│   ├── install-server.sh     Установка сервера
+│   ├── install-vlc-client.sh VLC клиент
+│   ├── setup-kiosk.sh        Kiosk режим
+│   └── generate-favicons.js  Генерация иконок
+│
+├── nginx/                    NGINX конфигурация
+│   └── install-nginx.sh      Установка NGINX
+│
+├── docs/                     Документация
+│   ├── INSTALL.md            Детальная установка
+│   ├── ANDROID.md            Android приложение
+│   ├── STRUCTURE.md          Структура проекта
+│   ├── REFACTORING_ROADMAP.md Roadmap рефакторинга
+│   │
+│   ├── reports/              Отчеты рефакторинга
+│   │   ├── backend/          Backend отчеты
+│   │   ├── frontend/         Frontend отчеты
+│   │   ├── android/          Android отчеты
+│   │   └── fixes/            Отчеты о фиксах
+│   │
+│   └── status/               Финальные статусы
+│
+└── archive/                  Архивы и старые файлы
+```
+
+---
+
+## 🚀 Возможности
+
+### Backend (модульный)
+- ✅ **21 модуль** вместо монолита (server.js: 1,947 → 170 строк, -91%)
+- ✅ **17 API endpoints** - devices, files, upload, conversion, etc
+- ✅ **Socket.IO** - реальное время для всех клиентов
+- ✅ **FFmpeg** - автоматическая оптимизация видео (720p/1080p)
+- ✅ **PDF/PPTX → изображения** - LibreOffice конвертация
+- ✅ **Кэширование** - конвертированные файлы
+
+### Frontend (модульный)
+- ✅ **17 модулей** вместо монолита (admin.js: 1,094 → 267 строк, -76%)
+- ✅ **3 панели** - Admin, Speaker, Player
+- ✅ **Drag & Drop** - перемещение файлов между устройствами
+- ✅ **Live Preview** - предпросмотр в iframe
+- ✅ **Адаптивный UI** - desktop, tablet, mobile
+- ✅ **PWA** - offline поддержка, иконки
+- ✅ **Dark/Light** - переключение тем
+
+### Android MediaPlayer
+- ✅ **ExoPlayer** - стабильное воспроизведение с кэшем (500 MB)
+- ✅ **Glide** - плавная загрузка изображений с crossfade
+- ✅ **Заглушка loop** - постоянное воспроизведение placeholder
+- ✅ **Презентации** - листание PDF/PPTX слайдов
+- ✅ **Папки с изображениями** - навигация как в презентациях
+- ✅ **Pause/Resume** - сохранение позиции
+- ✅ **Ping/Pong** - постоянное соединение
+- ✅ **Autostart** - запуск при включении устройства
+
+---
+
+## 📖 Документация
+
+### Для пользователей:
+- [📘 Установка сервера](docs/INSTALL.md)
+- [📱 Android приложение](docs/ANDROID.md)
+- [📁 Папки с изображениями](docs/FOLDERS_FEATURE.md) **← NEW!**
+- [🎬 Структура проекта](docs/STRUCTURE.md)
+- [🚀 Roadmap](docs/ROADMAP.md)
+
+### Клиенты:
+- [🎬 VLC клиент](docs/VLC.md)
+
+---
+
+## 🔧 Требования
+
+### Сервер:
+- **Node.js** 18+ (рекомендуется 20+)
+- **FFmpeg** - для оптимизации видео
+- **LibreOffice** - для PDF/PPTX конвертации
+- **ImageMagick** - для ресайза изображений
+- **Nginx** 1.18+ (опционально, для production)
+- **Ubuntu/Debian** 20.04+ (или другой Linux)
+
+### Android устройства:
+- **Android** 5.0+ (API 21+)
+- **Разрешение** 720p или выше
+- **Сеть** Wi-Fi подключение к серверу
+
+---
+
+## 🌐 URL-адреса
+
+После установки доступны следующие интерфейсы:
+
+- **Admin Panel:** `http://YOUR_SERVER/admin.html`
+- **Speaker Panel:** `http://YOUR_SERVER/speaker.html`
+- **Player:** `http://YOUR_SERVER/player-videojs.html?device_id=DEVICE_ID`
+- **API:** `http://YOUR_SERVER/api/devices`
+
+---
+
+## 🛠️ Разработка
+
+### Запуск в dev режиме:
 
 ```bash
-# Проверить X server доступ
-xhost +local:
-
-# Проверить DISPLAY
-echo $DISPLAY  # должно быть :0
+npm start
+# Сервер на http://localhost:3000
 ```
 
-### Android TV не воспроизводит видео
+### Структура кода:
 
-1. Проверьте сервер доступен с устройства
-2. Убедитесь что `default.mp4` существует
-3. Проверьте настройки Device ID в приложении
-4. Переустановите APK: `adb install -r app-release-unsigned.apk`
+- **Backend:** Модульный (21 модуль в src/)
+- **Frontend:** Модульный (17 модулей в public/js/)
+- **ES6 модули:** import/export
+- **Socket.IO:** Реальное время
+- **REST API:** 17 endpoints
 
-## 📚 Версия
+### Запуск линтера:
 
-**Текущая:** v2.1 (November 2025)
+```bash
+# ESLint (если настроен)
+npm run lint
+```
 
-**Changelog:**
-- v2.1 - Android TV v1.0.7 FINAL, Registration confirmation (player/registered), Double buffering (img1/img2), Admin preview fix
-- v2.0 - Video.js integration, VLC v2.0, Android TV v1.0.4 (black screen optimization), PPTX caching, removed MPV
-- v1.0.2 - VLC/MPV клиенты, PWA, оптимизация
-- v1.0.1 - Nginx поддержка
-- v1.0.0 - Первый релиз
+---
 
-**Подробный отчет:** [AUDIT-REPORT.md](AUDIT-REPORT.md)
+## 📱 Android приложение
+
+### Сборка APK:
+
+```bash
+cd clients/android-mediaplayer
+./gradlew assembleDebug
+# APK: app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Установка:
+
+```bash
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Подробнее:** [docs/ANDROID.md](docs/ANDROID.md)
+
+---
+
+## 🔄 Обновление
+
+```bash
+# Остановить сервис
+sudo systemctl stop videocontrol
+
+# Обновить код
+git pull origin main
+
+# Установить зависимости
+npm install
+
+# Перезапустить
+sudo systemctl start videocontrol
+```
+
+---
+
+## 📊 Статистика проекта
+
+- **Backend модулей:** 21
+- **Frontend модулей:** 17
+- **Всего модулей:** 38
+- **API endpoints:** 17
+- **Socket.IO events:** 15+
+- **Строк кода:** ~5,000
+- **Рефакторинг:** server.js (-91%), admin.js (-76%)
+
+---
+
+## 🤝 Вклад
+
+Проект находится в активной разработке. Pull requests приветствуются!
+
+1. Fork репозиторий
+2. Создай feature branch (`git checkout -b feature/amazing`)
+3. Commit изменения (`git commit -m 'feat: add amazing feature'`)
+4. Push в branch (`git push origin feature/amazing`)
+5. Открой Pull Request
+
+---
+
+## 📝 Лицензия
+
+MIT License - см. LICENSE файл для деталей
+
+---
 
 ## 👨‍💻 Автор
 
-**ya-k0v**  
-GitHub: https://github.com/ya-k0v/VideoControl
+**ya-k0v** - [GitHub](https://github.com/ya-k0v)
 
-## 📄 Лицензия
+---
 
-MIT License
+## 🙏 Благодарности
+
+- **Video.js** - HTML5 видео плеер
+- **Socket.IO** - real-time коммуникация
+- **ExoPlayer** - Android медиа плеер
+- **Glide** - загрузка изображений для Android
+- **FFmpeg** - обработка видео
+- **Express.js** - web framework
+
+---
+
+**Последнее обновление:** Ноябрь 2025

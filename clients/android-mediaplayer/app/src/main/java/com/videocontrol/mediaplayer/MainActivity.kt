@@ -133,10 +133,10 @@ class MainActivity : AppCompatActivity() {
         watchdog = ConnectionWatchdog(this, config.maxDisconnectTime.toLong())
         watchdog?.setCheckInterval(config.watchdogInterval.toLong())
         
-        // КРИТИЧНО: Устанавливаем callback - НЕ перезапускать если играет контент!
+        // КРИТИЧНО: Callback - НЕ перезапускать если играет контент!
         watchdog?.setContentPlayingCallback {
-            // Возвращаем true если играет контент (не заглушка) и плеер активен
-            !isPlayingPlaceholder && (player?.isPlaying == true || savedPosition > 0)
+            // Простая проверка по флагу (без обращения к player из другого потока)
+            !isPlayingPlaceholder
         }
         
         Log.i(TAG, "Watchdog initialized (max disconnect: ${config.maxDisconnectTime}ms)")
@@ -206,22 +206,12 @@ class MainActivity : AppCompatActivity() {
                                 Player.STATE_BUFFERING -> {
                                     Log.d(TAG, "Player STATE_BUFFERING")
                                     showStatus("Буферизация...")
-                                    
-                                    // Сохраняем позицию при буферизации (на случай сетевых проблем)
-                                    if (!isPlayingPlaceholder) {
-                                        savedPosition = player?.currentPosition ?: savedPosition
-                                    }
                                 }
 
                                 Player.STATE_READY -> {
                                     Log.d(TAG, "Player STATE_READY")
                                     errorRetryCount = 0  // Сбрасываем счетчик при успешном воспроизведении
                                     hideStatus()
-                                    
-                                    // Периодически обновляем позицию для контента
-                                    if (!isPlayingPlaceholder) {
-                                        savedPosition = player?.currentPosition ?: 0
-                                    }
                                 }
 
                                 Player.STATE_ENDED -> {
@@ -253,10 +243,7 @@ class MainActivity : AppCompatActivity() {
                                     Log.i(TAG, "Retrying playback (attempt $errorRetryCount/$maxAttempts) [content=${!isPlayingPlaceholder}]...")
                                     
                                     try {
-                                        // Для контента - пытаемся продолжить с сохраненной позиции
-                                        if (!isPlayingPlaceholder && savedPosition > 0) {
-                                            player?.seekTo(savedPosition)
-                                        }
+                                        // ExoPlayer сам продолжит с текущей позиции благодаря кэшу
                                         player?.prepare()
                                         player?.play()
                                     } catch (e: Exception) {
@@ -269,7 +256,7 @@ class MainActivity : AppCompatActivity() {
                                     errorRetryCount = 0
                                     loadPlaceholder()
                                 }
-                            }, 5000) // Увеличил до 5 секунд для сетевых ошибок
+                            }, 5000) // 5 секунд для сетевых ошибок
                         }
 
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -326,12 +313,9 @@ class MainActivity : AppCompatActivity() {
                     stopPingTimer()
                     
                     // КРИТИЧНО: При потере связи НЕ останавливаем контент!
-                    // ExoPlayer продолжит воспроизведение из кэша
+                    // ExoPlayer продолжит воспроизведение из кэша и автоматически подгрузит при reconnect
                     if (!isPlayingPlaceholder) {
-                        Log.i(TAG, "Connection lost during content playback, continuing from cache...")
-                        // Сохраняем позицию на случай полного краша
-                        savedPosition = player?.currentPosition ?: 0
-                        Log.i(TAG, "Current position saved: $savedPosition ms")
+                        Log.i(TAG, "Connection lost during content, ExoPlayer will continue from cache...")
                     }
                 }
             }

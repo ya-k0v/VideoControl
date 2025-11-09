@@ -30,188 +30,191 @@
 20    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
 20-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:14:5-75
 20-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:14:22-72
-21
-22    <uses-feature
-22-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:16:5-18:36
-23        android:name="android.hardware.touchscreen"
-23-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:17:9-52
-24        android:required="false" />
-24-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:18:9-33
-25    <uses-feature
-25-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:19:5-21:36
-26        android:name="android.software.leanback"
-26-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:20:9-49
-27        android:required="false" />
-27-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:21:9-33
-28
-29    <permission
-29-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:22:5-24:47
-30        android:name="com.videocontrol.mediaplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-30-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:23:9-81
-31        android:protectionLevel="signature" />
-31-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:24:9-44
-32
-33    <uses-permission android:name="com.videocontrol.mediaplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-33-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:26:5-97
-33-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:26:22-94
-34
-35    <application
-35-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:23:5-71:19
-36        android:allowBackup="true"
-36-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:24:9-35
-37        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-37-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:28:18-86
-38        android:debuggable="true"
-39        android:extractNativeLibs="true"
-40        android:hardwareAccelerated="true"
-40-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:31:9-43
-41        android:icon="@mipmap/ic_launcher"
-41-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:25:9-43
-42        android:label="@string/app_name"
-42-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:27:9-41
-43        android:roundIcon="@mipmap/ic_launcher"
-43-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:26:9-48
-44        android:supportsRtl="true"
-44-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:28:9-35
-45        android:theme="@style/Theme.VideoControl"
-45-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:29:9-50
-46        android:usesCleartextTraffic="true" >
-46-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:30:9-44
-47
-48        <!-- Main Activity - точка входа (проверяет настройки) -->
-49        <activity
-49-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:35:9-48:20
-50            android:name="com.videocontrol.mediaplayer.MainActivity"
-50-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:36:13-41
-51            android:configChanges="orientation|screenSize|keyboardHidden"
-51-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:39:13-74
-52            android:exported="true"
-52-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:37:13-36
-53            android:screenOrientation="landscape"
-53-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:38:13-50
-54            android:theme="@style/Theme.VideoControl.Fullscreen" >
-54-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:40:13-65
-55            <intent-filter>
-55-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:42:13-47:29
-56                <action android:name="android.intent.action.MAIN" />
-56-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:43:17-69
-56-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:43:25-66
-57
-58                <category android:name="android.intent.category.LAUNCHER" />
-58-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:45:17-77
-58-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:45:27-74
-59                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-59-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:17-86
-59-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:27-83
-60            </intent-filter>
-61        </activity>
-62
-63        <!-- Settings Activity - настройки -->
-64        <activity
-64-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:51:9-55:57
-65            android:name="com.videocontrol.mediaplayer.SettingsActivity"
-65-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:52:13-45
-66            android:exported="false"
-66-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:53:13-37
-67            android:screenOrientation="landscape"
-67-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:54:13-50
-68            android:theme="@style/Theme.VideoControl" />
-68-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:55:13-54
-69
-70        <!-- Boot Receiver - автозапуск при включении -->
-71        <receiver
-71-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:58:9-70:20
-72            android:name="com.videocontrol.mediaplayer.BootReceiver"
-72-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:59:13-41
-73            android:enabled="true"
-73-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:60:13-35
-74            android:exported="true"
-74-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:61:13-36
-75            android:permission="android.permission.RECEIVE_BOOT_COMPLETED" >
-75-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:62:13-75
-76            <intent-filter>
-76-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:63:13-69:29
-77                <action android:name="android.intent.action.BOOT_COMPLETED" />
-77-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:64:17-79
-77-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:64:25-76
-78                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-78-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:17-86
-78-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:25-83
-79                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-79-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:17-82
-79-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:25-79
-80
-81                <category android:name="android.intent.category.DEFAULT" />
-81-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:68:17-76
-81-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:68:27-73
-82            </intent-filter>
-83        </receiver>
-84
-85        <provider
-85-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
-86            android:name="androidx.startup.InitializationProvider"
-86-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:25:13-67
-87            android:authorities="com.videocontrol.mediaplayer.androidx-startup"
-87-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:26:13-68
-88            android:exported="false" >
-88-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:27:13-37
-89            <meta-data
-89-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
-90                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-90-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:30:17-75
-91                android:value="androidx.startup" />
-91-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:31:17-49
-92            <meta-data
-92-->[androidx.lifecycle:lifecycle-process:2.6.1] /home/yashka/.gradle/caches/transforms-3/315cf718c9522053477bdb7b866167ac/transformed/jetified-lifecycle-process-2.6.1/AndroidManifest.xml:29:13-31:52
-93                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-93-->[androidx.lifecycle:lifecycle-process:2.6.1] /home/yashka/.gradle/caches/transforms-3/315cf718c9522053477bdb7b866167ac/transformed/jetified-lifecycle-process-2.6.1/AndroidManifest.xml:30:17-78
-94                android:value="androidx.startup" />
-94-->[androidx.lifecycle:lifecycle-process:2.6.1] /home/yashka/.gradle/caches/transforms-3/315cf718c9522053477bdb7b866167ac/transformed/jetified-lifecycle-process-2.6.1/AndroidManifest.xml:31:17-49
-95            <meta-data
-95-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
-96                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-96-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
-97                android:value="androidx.startup" />
-97-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
-98        </provider>
-99
-100        <receiver
-100-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
-101            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-101-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
-102            android:directBootAware="false"
-102-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
-103            android:enabled="true"
-103-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
-104            android:exported="true"
-104-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
-105            android:permission="android.permission.DUMP" >
-105-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
-106            <intent-filter>
-106-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
-107                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-107-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
-107-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
-108            </intent-filter>
-109            <intent-filter>
-109-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
-110                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-110-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
-110-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
-111            </intent-filter>
-112            <intent-filter>
-112-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
-113                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-113-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
-113-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
-114            </intent-filter>
-115            <intent-filter>
-115-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
-116                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-116-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
-116-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
-117            </intent-filter>
-118        </receiver>
-119    </application>
-120
-121</manifest>
+21    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+21-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:15:5-95
+21-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:15:22-92
+22
+23    <uses-feature
+23-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:17:5-19:36
+24        android:name="android.hardware.touchscreen"
+24-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:18:9-52
+25        android:required="false" />
+25-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:19:9-33
+26    <uses-feature
+26-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:20:5-22:36
+27        android:name="android.software.leanback"
+27-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:21:9-49
+28        android:required="false" />
+28-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:22:9-33
+29
+30    <permission
+30-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:22:5-24:47
+31        android:name="com.videocontrol.mediaplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+31-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:23:9-81
+32        android:protectionLevel="signature" />
+32-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:24:9-44
+33
+34    <uses-permission android:name="com.videocontrol.mediaplayer.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+34-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:26:5-97
+34-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:26:22-94
+35
+36    <application
+36-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:24:5-72:19
+37        android:allowBackup="true"
+37-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:25:9-35
+38        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+38-->[androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:28:18-86
+39        android:debuggable="true"
+40        android:extractNativeLibs="true"
+41        android:hardwareAccelerated="true"
+41-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:32:9-43
+42        android:icon="@mipmap/ic_launcher"
+42-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:26:9-43
+43        android:label="@string/app_name"
+43-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:28:9-41
+44        android:roundIcon="@mipmap/ic_launcher"
+44-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:27:9-48
+45        android:supportsRtl="true"
+45-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:29:9-35
+46        android:theme="@style/Theme.VideoControl"
+46-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:30:9-50
+47        android:usesCleartextTraffic="true" >
+47-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:31:9-44
+48
+49        <!-- Main Activity - точка входа (проверяет настройки) -->
+50        <activity
+50-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:36:9-49:20
+51            android:name="com.videocontrol.mediaplayer.MainActivity"
+51-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:37:13-41
+52            android:configChanges="orientation|screenSize|keyboardHidden"
+52-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:40:13-74
+53            android:exported="true"
+53-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:38:13-36
+54            android:screenOrientation="landscape"
+54-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:39:13-50
+55            android:theme="@style/Theme.VideoControl.Fullscreen" >
+55-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:41:13-65
+56            <intent-filter>
+56-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:43:13-48:29
+57                <action android:name="android.intent.action.MAIN" />
+57-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:44:17-69
+57-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:44:25-66
+58
+59                <category android:name="android.intent.category.LAUNCHER" />
+59-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:17-77
+59-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:27-74
+60                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+60-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:47:17-86
+60-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:47:27-83
+61            </intent-filter>
+62        </activity>
+63
+64        <!-- Settings Activity - настройки -->
+65        <activity
+65-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:52:9-56:57
+66            android:name="com.videocontrol.mediaplayer.SettingsActivity"
+66-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:53:13-45
+67            android:exported="false"
+67-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:54:13-37
+68            android:screenOrientation="landscape"
+68-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:55:13-50
+69            android:theme="@style/Theme.VideoControl" />
+69-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:56:13-54
+70
+71        <!-- Boot Receiver - автозапуск при включении -->
+72        <receiver
+72-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:59:9-71:20
+73            android:name="com.videocontrol.mediaplayer.BootReceiver"
+73-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:60:13-41
+74            android:enabled="true"
+74-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:61:13-35
+75            android:exported="true"
+75-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:62:13-36
+76            android:permission="android.permission.RECEIVE_BOOT_COMPLETED" >
+76-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:63:13-75
+77            <intent-filter>
+77-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:64:13-70:29
+78                <action android:name="android.intent.action.BOOT_COMPLETED" />
+78-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:17-79
+78-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:25-76
+79                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+79-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:17-86
+79-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:25-83
+80                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+80-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:67:17-82
+80-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:67:25-79
+81
+82                <category android:name="android.intent.category.DEFAULT" />
+82-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:69:17-76
+82-->/vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:69:27-73
+83            </intent-filter>
+84        </receiver>
+85
+86        <provider
+86-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
+87            android:name="androidx.startup.InitializationProvider"
+87-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:25:13-67
+88            android:authorities="com.videocontrol.mediaplayer.androidx-startup"
+88-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:26:13-68
+89            android:exported="false" >
+89-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:27:13-37
+90            <meta-data
+90-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
+91                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+91-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:30:17-75
+92                android:value="androidx.startup" />
+92-->[androidx.emoji2:emoji2:1.2.0] /home/yashka/.gradle/caches/transforms-3/2a7713edac9ca842f6baf4f100610d5b/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:31:17-49
+93            <meta-data
+93-->[androidx.lifecycle:lifecycle-process:2.6.1] /home/yashka/.gradle/caches/transforms-3/315cf718c9522053477bdb7b866167ac/transformed/jetified-lifecycle-process-2.6.1/AndroidManifest.xml:29:13-31:52
+94                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+94-->[androidx.lifecycle:lifecycle-process:2.6.1] /home/yashka/.gradle/caches/transforms-3/315cf718c9522053477bdb7b866167ac/transformed/jetified-lifecycle-process-2.6.1/AndroidManifest.xml:30:17-78
+95                android:value="androidx.startup" />
+95-->[androidx.lifecycle:lifecycle-process:2.6.1] /home/yashka/.gradle/caches/transforms-3/315cf718c9522053477bdb7b866167ac/transformed/jetified-lifecycle-process-2.6.1/AndroidManifest.xml:31:17-49
+96            <meta-data
+96-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:29:13-31:52
+97                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+97-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:30:17-85
+98                android:value="androidx.startup" />
+98-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:31:17-49
+99        </provider>
+100
+101        <receiver
+101-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:34:9-52:20
+102            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+102-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:35:13-76
+103            android:directBootAware="false"
+103-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:36:13-44
+104            android:enabled="true"
+104-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:37:13-35
+105            android:exported="true"
+105-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:38:13-36
+106            android:permission="android.permission.DUMP" >
+106-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:39:13-57
+107            <intent-filter>
+107-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:40:13-42:29
+108                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+108-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:17-91
+108-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:41:25-88
+109            </intent-filter>
+110            <intent-filter>
+110-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:43:13-45:29
+111                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+111-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:17-85
+111-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:44:25-82
+112            </intent-filter>
+113            <intent-filter>
+113-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:46:13-48:29
+114                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+114-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:17-88
+114-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:47:25-85
+115            </intent-filter>
+116            <intent-filter>
+116-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:49:13-51:29
+117                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+117-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:17-95
+117-->[androidx.profileinstaller:profileinstaller:1.3.0] /home/yashka/.gradle/caches/transforms-3/61d3c5190d09cb02420bb67e60d2621e/transformed/jetified-profileinstaller-1.3.0/AndroidManifest.xml:50:25-92
+118            </intent-filter>
+119        </receiver>
+120    </application>
+121
+122</manifest>

@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-73:12
-INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-73:12
-INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-73:12
-INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-73:12
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-74:12
+INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-74:12
+INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-74:12
+INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:2:1-74:12
 MERGED from [androidx.databinding:viewbinding:8.3.0] /home/yashka/.gradle/caches/transforms-3/4091083fdfeb9e9b5f7d5ef545f140f6/transformed/jetified-viewbinding-8.3.0/AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.11.0] /home/yashka/.gradle/caches/transforms-3/feb2d2cce9b6a993d93fd87065d90737/transformed/material-1.11.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] /home/yashka/.gradle/caches/transforms-3/24e872fa2c2da0ac9dcd01d1428ad466/transformed/constraintlayout-2.1.4/AndroidManifest.xml:2:1-11:12
@@ -102,21 +102,25 @@ uses-permission#android.permission.DISABLE_KEYGUARD
 ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:14:5-75
 	android:name
 		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:14:22-72
+uses-permission#android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:15:5-95
+	android:name
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:15:22-92
 uses-feature#android.hardware.touchscreen
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:16:5-18:36
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:17:5-19:36
 	android:required
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:18:9-33
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:19:9-33
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:17:9-52
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:18:9-52
 uses-feature#android.software.leanback
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:19:5-21:36
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:20:5-22:36
 	android:required
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:21:9-33
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:22:9-33
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:20:9-49
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:21:9-49
 application
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:23:5-71:19
-INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:23:5-71:19
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:24:5-72:19
+INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:24:5-72:19
 MERGED from [com.google.android.material:material:1.11.0] /home/yashka/.gradle/caches/transforms-3/feb2d2cce9b6a993d93fd87065d90737/transformed/material-1.11.0/AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.11.0] /home/yashka/.gradle/caches/transforms-3/feb2d2cce9b6a993d93fd87065d90737/transformed/material-1.11.0/AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] /home/yashka/.gradle/caches/transforms-3/24e872fa2c2da0ac9dcd01d1428ad466/transformed/constraintlayout-2.1.4/AndroidManifest.xml:9:5-20
@@ -138,87 +142,87 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] /home/yashk
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.9.0] /home/yashka/.gradle/caches/transforms-3/0c1d96c62d573e0a487517b4fc5ff58c/transformed/core-1.9.0/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:28:9-35
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:29:9-35
 	android:label
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:27:9-41
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:28:9-41
 	android:hardwareAccelerated
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:31:9-43
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:32:9-43
 	android:roundIcon
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:26:9-48
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:27:9-48
 	tools:targetApi
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:32:9-29
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:33:9-29
 	android:icon
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:25:9-43
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:26:9-43
 	android:allowBackup
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:24:9-35
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:25:9-35
 	android:theme
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:29:9-50
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:30:9-50
 	android:usesCleartextTraffic
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:30:9-44
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:31:9-44
 activity#com.videocontrol.mediaplayer.MainActivity
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:35:9-48:20
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:36:9-49:20
 	android:screenOrientation
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:38:13-50
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:39:13-50
 	android:exported
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:37:13-36
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:38:13-36
 	android:configChanges
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:39:13-74
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:40:13-74
 	android:theme
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:40:13-65
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:41:13-65
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:36:13-41
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:37:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER+category:name:android.intent.category.LEANBACK_LAUNCHER
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:42:13-47:29
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:43:13-48:29
 action#android.intent.action.MAIN
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:43:17-69
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:44:17-69
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:43:25-66
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:44:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:45:17-77
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:17-77
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:45:27-74
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:27-74
 category#android.intent.category.LEANBACK_LAUNCHER
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:17-86
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:47:17-86
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:46:27-83
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:47:27-83
 activity#com.videocontrol.mediaplayer.SettingsActivity
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:51:9-55:57
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:52:9-56:57
 	android:screenOrientation
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:54:13-50
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:55:13-50
 	android:exported
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:53:13-37
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:54:13-37
 	android:theme
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:55:13-54
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:56:13-54
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:52:13-45
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:53:13-45
 receiver#com.videocontrol.mediaplayer.BootReceiver
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:58:9-70:20
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:59:9-71:20
 	android:enabled
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:60:13-35
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:61:13-35
 	android:exported
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:61:13-36
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:62:13-36
 	android:permission
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:62:13-75
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:63:13-75
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:59:13-41
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:60:13-41
 intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.LOCKED_BOOT_COMPLETED+action:name:android.intent.action.QUICKBOOT_POWERON+category:name:android.intent.category.DEFAULT
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:63:13-69:29
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:64:13-70:29
 action#android.intent.action.BOOT_COMPLETED
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:64:17-79
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:17-79
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:64:25-76
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:25-76
 action#android.intent.action.LOCKED_BOOT_COMPLETED
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:17-86
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:17-86
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:65:25-83
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:25-83
 action#android.intent.action.QUICKBOOT_POWERON
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:17-82
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:67:17-82
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:66:25-79
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:67:25-79
 category#android.intent.category.DEFAULT
-ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:68:17-76
+ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:69:17-76
 	android:name
-		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:68:27-73
+		ADDED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml:69:27-73
 uses-sdk
 INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /vid/videocontrol/clients/android-mediaplayer/app/src/main/AndroidManifest.xml

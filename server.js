@@ -32,6 +32,7 @@ import { createPlaceholderRouter } from './src/routes/placeholder.js';
 import { createFilesRouter } from './src/routes/files.js';
 import { createVideoInfoRouter } from './src/routes/video-info.js';
 import { createConversionRouter } from './src/routes/conversion.js';
+import { createSystemInfoRouter } from './src/routes/system-info.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
@@ -122,6 +123,10 @@ app.use('/api/devices', placeholderRouter);
 app.use('/api/devices', filesRouter);
 app.use('/api/devices', videoInfoRouter);
 app.use('/api/devices', conversionRouter);
+
+// System info router
+const systemInfoRouter = createSystemInfoRouter();
+app.use('/api/system', systemInfoRouter);
 
 // ========================================
 // ВСЕ API ROUTES ПЕРЕНЕСЕНЫ В МОДУЛИ src/routes/

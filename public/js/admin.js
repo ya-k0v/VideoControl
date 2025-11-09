@@ -11,6 +11,7 @@ import { uploadFiles, copyFile } from './admin/upload-manager.js';
 import { clearDetail, clearFilesPane, openDevice as openDeviceHelper } from './admin/ui-helpers.js';
 import { renderDeviceCard as renderDeviceCardModule } from './admin/device-card.js';
 import { setupUploadUI as setupUploadUIModule } from './admin/upload-ui.js';
+import { initSystemMonitor } from './admin/system-monitor.js';
 
 const socket = io();
 const grid = document.getElementById('grid');
@@ -98,6 +99,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDevices();
   renderLayout();
   initSelectionFromUrl();
+  
+  // Инициализируем системный монитор
+  initSystemMonitor();
 });
 
 async function loadDevices() {

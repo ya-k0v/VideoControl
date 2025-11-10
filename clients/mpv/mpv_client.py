@@ -96,20 +96,33 @@ class DeviceDetector:
             '--cursor-autohide=always',
         ]
         
-        # === Raspberry Pi - минимальные параметры ===
+        # === Raspberry Pi - оптимизированная конфигурация для V4L2 ===
         if platform_type == 'raspberry_pi':
-            print(f"[Detector] 🥧 Raspberry Pi - минимальная конфигурация")
+            print(f"[Detector] 🥧 Raspberry Pi - V4L2 аппаратное ускорение")
             params.extend([
-                # Без аппаратного ускорения - может вызывать черный экран
-                # '--hwdec=auto',  # ОТКЛЮЧЕНО
+                # КРИТИЧНО: V4L2 для аппаратного декодирования на RPi
+                '--hwdec=v4l2m2m-copy',  # V4L2 Memory-to-Memory (RPi специфично!)
+                '--vo=gpu',               # GPU вывод
+                '--gpu-context=drm',      # DRM контекст (без X server)
+                '--opengl-es=yes',        # OpenGL ES для ARM
                 
-                # Минимальный кэш
+                # Кэш оптимизирован для RPi
                 '--cache=yes',
-                '--cache-secs=5',
+                '--cache-secs=10',
+                '--demuxer-max-bytes=100M',  # 100MB для RPi
+                '--demuxer-readahead-secs=10',
                 
-                # Без сложных параметров
-                '--network-timeout=30',
+                # Сеть
+                '--network-timeout=60',
+                
+                # UI
+                '--no-osc',
+                '--no-osd-bar',
             ])
+            print(f"[Detector] ⚡ Используется V4L2 аппаратное ускорение")
+            print(f"[Detector] 💡 Убедитесь что /boot/config.txt содержит:")
+            print(f"[Detector] 💡   dtoverlay=vc4-kms-v3d,cma=512")
+            print(f"[Detector] 💡   gpu_mem=256")
             return params
         
         # === ARM Linux (не Raspberry Pi) ===

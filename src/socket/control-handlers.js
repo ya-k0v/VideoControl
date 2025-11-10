@@ -51,18 +51,14 @@ export function setupControlHandlers(socket, deps) {
       
       io.to(`device:${device_id}`).emit('player/play', d.current);
     } else {
-      // ИСПРАВЛЕНИЕ: Если файл не указан (resume после паузы)
-      // Отправляем команду resume на устройство
-      // Android клиент сам знает, что воспроизводить с сохраненной позиции
-      if (d.current && d.current.type !== 'idle') {
-        // Есть информация о текущем файле - отправляем
+      // КРИТИЧНО: Если файл не указан - это RESUME после паузы
+      // Отправляем команду player/resume чтобы плеер продолжил с места паузы
+      // НЕ отправляем player/play - это перезагрузит файл с начала!
+      if (d.current) {
         d.current.state = 'playing';
-        io.to(`device:${device_id}`).emit('player/play', d.current);
-      } else {
-        // Нет информации (после перезапуска) - просто отправляем команду resume
-        // Android клиент продолжит с последней позиции
-        io.to(`device:${device_id}`).emit('player/resume');
       }
+      io.to(`device:${device_id}`).emit('player/resume');
+      console.log(`[Control] ▶️ Resume: ${device_id} (продолжение с места паузы)`);
     }
     
     io.emit('preview/refresh', { device_id });

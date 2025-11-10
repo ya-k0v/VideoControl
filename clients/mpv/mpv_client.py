@@ -58,6 +58,21 @@ class DeviceDetector:
         return 'unknown'
     
     @staticmethod
+    def detect_display_server():
+        """Определяет тип display server (X11, Wayland, DRM console)"""
+        # Проверяем DISPLAY env
+        if os.environ.get('DISPLAY'):
+            # X11 session
+            return 'x11'
+        
+        # Проверяем WAYLAND_DISPLAY
+        if os.environ.get('WAYLAND_DISPLAY'):
+            return 'wayland'
+        
+        # Console/TTY без X/Wayland
+        return 'drm'
+    
+    @staticmethod
     def get_mpv_version():
         """Получает версию MPV"""
         try:
@@ -100,6 +115,10 @@ class DeviceDetector:
         if platform_type == 'raspberry_pi':
             print(f"[Detector] 🥧 Raspberry Pi 4 - RPiVid аппаратное ускорение")
             
+            # Определяем display server
+            display_server = DeviceDetector.detect_display_server()
+            print(f"[Detector] 🖥️  Display server: {display_server}")
+            
             # Проверяем наличие rpivid в /boot/config.txt
             has_rpivid = False
             try:
@@ -113,20 +132,30 @@ class DeviceDetector:
                 # RPi 4 с rpivid-v4l2 - используем rpi hwdec
                 print(f"[Detector] ⚡ Обнаружен rpivid-v4l2 → hwdec=rpi")
                 params.extend([
-                    '--hwdec=rpi',            # RPiVid аппаратный декодер (лучше для RPi 4!)
+                    '--hwdec=rpi',            # RPiVid аппаратный декодер
                     '--vo=gpu',               # GPU вывод
-                    '--gpu-context=drm',      # DRM контекст
-                    '--opengl-es=yes',        # OpenGL ES
                 ])
             else:
                 # Старый RPi или без rpivid - используем v4l2m2m
-                print(f"[Detector] ⚡ Используется V4L2 ускорение → hwdec=v4l2m2m-copy")
+                print(f"[Detector] ⚡ V4L2 ускорение → hwdec=v4l2m2m-copy")
                 params.extend([
                     '--hwdec=v4l2m2m-copy',   # V4L2 Memory-to-Memory
                     '--vo=gpu',
-                    '--gpu-context=drm',
-                    '--opengl-es=yes',
                 ])
+            
+            # КРИТИЧНО: Выбираем gpu-context в зависимости от display server
+            if display_server == 'x11':
+                params.append('--gpu-context=x11egl')  # X11 с EGL для RPi
+                print(f"[Detector] 🪟 X11 session → gpu-context=x11egl")
+            elif display_server == 'wayland':
+                params.append('--gpu-context=waylandvk')
+                print(f"[Detector] 🪟 Wayland session → gpu-context=waylandvk")
+            else:
+                params.append('--gpu-context=drm')
+                print(f"[Detector] 🖥️  Console → gpu-context=drm")
+            
+            # ARM оптимизации
+            params.append('--opengl-es=yes')
             
             # Общие параметры для RPi
             params.extend([

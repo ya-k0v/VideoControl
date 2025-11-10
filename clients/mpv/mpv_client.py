@@ -124,28 +124,28 @@ class MPVClient:
         if os.path.exists(self.ipc_socket):
             os.unlink(self.ipc_socket)
         
-        # Запуск MPV с параметрами как ExoPlayer
+        # Запуск MPV с параметрами (совместимость с 0.32.0+)
         mpv_cmd = [
             'mpv',
             '--idle=yes',
             '--force-window=yes',
             f'--input-ipc-server={self.ipc_socket}',
             
-            # Аппаратное ускорение (как ExoPlayer)
+            # Аппаратное ускорение
             '--hwdec=auto',
-            '--vo=x11',  # x11 для совместимости со старыми MPV (gpu требует 0.33+)
+            '--vo=x11',  # x11 для совместимости со старыми MPV
             
-            # Буферизация для больших файлов (как ExoPlayer: 200MB)
+            # Буферизация для больших файлов
             '--cache=yes',
             '--cache-secs=10',
             '--demuxer-max-bytes=200M',
             '--demuxer-readahead-secs=20',
-            '--demuxer-max-back-bytes=100M',
+            # --demuxer-max-back-bytes убран (не в 0.32.0)
             
             # Сетевые оптимизации
-            '--stream-buffer-size=4M',
+            # --stream-buffer-size убран (не в 0.32.0)
             '--network-timeout=60',
-            '--user-agent=VideoControl-MPV/1.0',  # http-header-fields в старых версиях может не работать
+            '--user-agent=VideoControl-MPV/1.0',
             
             # UI отключения
             '--no-input-default-bindings',
@@ -153,13 +153,13 @@ class MPVClient:
             '--no-osd-bar',
             '--osd-level=0',
             '--cursor-autohide=always',
-            '--no-terminal',
+            # --no-terminal убран (может крашить старые версии)
             
             # Стабильность
             '--keep-open=yes',
-            '--no-resume-playback',
-            '--save-position-on-quit=no',
-            '--msg-level=all=error',
+            # --no-resume-playback убран (не в 0.32.0)
+            # --save-position-on-quit убран (не в 0.32.0)
+            '--really-quiet',  # Вместо msg-level для старых версий
         ]
         
         if fullscreen:

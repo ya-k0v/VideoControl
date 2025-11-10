@@ -233,6 +233,7 @@ class MPVClient:
         print(f"[MPV] Сервер: {server_url}")
         print(f"[MPV] Устройство: {device_id}")
         print(f"[MPV] Display: {display}")
+        print(f"[MPV] 🔍 Система: {platform.system()} {platform.machine()}")
         
         # === Состояния (как в Android) ===
         self.current_video_file: Optional[str] = None

@@ -54,7 +54,6 @@ class MainActivity : AppCompatActivity() {
     
     // Новые компоненты
     private var config: RemoteConfig.Config = RemoteConfig.Config()
-    private var watchdog: ConnectionWatchdog? = null
     private var showStatus: Boolean = false
     
     // Для retry при ошибках
@@ -128,18 +127,6 @@ class MainActivity : AppCompatActivity() {
         wakeLock?.acquire()
 
         Log.i(TAG, "MainActivity initialized")
-
-        // Инициализируем Watchdog для автоперезапуска при потере связи
-        watchdog = ConnectionWatchdog(this, config.maxDisconnectTime.toLong())
-        watchdog?.setCheckInterval(config.watchdogInterval.toLong())
-        
-        // КРИТИЧНО: Callback - НЕ перезапускать если играет контент!
-        watchdog?.setContentPlayingCallback {
-            // Простая проверка по флагу (без обращения к player из другого потока)
-            !isPlayingPlaceholder
-        }
-        
-        Log.i(TAG, "Watchdog initialized (max disconnect: ${config.maxDisconnectTime}ms)")
 
         initializePlayer()
         connectSocket()
@@ -287,8 +274,6 @@ class MainActivity : AppCompatActivity() {
                 Log.i(TAG, "✅ Socket connected")
                 runOnUiThread {
                     showStatus("Подключено", autohideSeconds = 2)  // Скрываем через 2 сек
-                    watchdog?.updateConnectionStatus(true)
-                    watchdog?.start()
                     registerDevice()
                     startPingTimer()
                     
@@ -299,7 +284,13 @@ class MainActivity : AppCompatActivity() {
                     } else if (!isPlayingPlaceholder && player?.isPlaying == false) {
                         Log.i(TAG, "Reconnected: content was paused, keeping paused")
                     } else {
-                        Log.d(TAG, "Reconnected: placeholder is playing")
+                        // Заглушка должна играть - проверяем что плеер действительно играет
+                        if (player?.isPlaying != true) {
+                            Log.i(TAG, "Reconnected: placeholder stopped, reloading...")
+                            loadPlaceholder()
+                        } else {
+                            Log.d(TAG, "Reconnected: placeholder is playing correctly")
+                        }
                     }
                 }
             }
@@ -308,14 +299,16 @@ class MainActivity : AppCompatActivity() {
                 val reason = if (args.isNotEmpty()) args[0].toString() else "unknown"
                 Log.w(TAG, "⚠️ Socket disconnected: $reason")
                 runOnUiThread {
-                    showStatus("Отключено", autohideSeconds = 0)  // Не скрываем до переподключения
-                    watchdog?.updateConnectionStatus(false)
+                    showStatus("⚠️ Нет связи с сервером...", autohideSeconds = 0)  // Не скрываем до переподключения
                     stopPingTimer()
                     
                     // КРИТИЧНО: При потере связи НЕ останавливаем контент!
                     // ExoPlayer продолжит воспроизведение из кэша и автоматически подгрузит при reconnect
+                    // Заглушка продолжает крутиться в loop mode
                     if (!isPlayingPlaceholder) {
                         Log.i(TAG, "Connection lost during content, ExoPlayer will continue from cache...")
+                    } else {
+                        Log.i(TAG, "Connection lost, placeholder continues playing (loop mode)...")
                     }
                 }
             }
@@ -445,10 +438,8 @@ class MainActivity : AppCompatActivity() {
             }
             
             socket?.on("player/pong") {
-                // КРИТИЧНО: Обновляем статус подключения при получении pong
-                runOnUiThread {
-                    watchdog?.updateConnectionStatus(true)
-                }
+                // Pong получен - соединение работает нормально
+                // Socket.IO сам управляет reconnect, Watchdog больше не нужен
             }
 
             socket?.connect()
@@ -881,13 +872,25 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    Log.e(TAG, "❌ Failed to load placeholder: HTTP ${connection.responseCode}")
+                    Log.e(TAG, "❌ Failed to load placeholder: HTTP ${connection.responseCode}, retrying in 10s...")
+                    scheduleRetryPlaceholder()
                 }
                 connection.disconnect()
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Error loading placeholder", e)
+                Log.e(TAG, "❌ Error loading placeholder: ${e.message}, retrying in 10s...", e)
+                scheduleRetryPlaceholder()
             }
         }
+    }
+    
+    private fun scheduleRetryPlaceholder() {
+        // Retry через 10 секунд
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (cachedPlaceholderFile == null && socket?.connected() == true) {
+                Log.i(TAG, "🔄 Retrying to load placeholder...")
+                loadPlaceholder()
+            }
+        }, 10000)
     }
 
     private val statusHandler = Handler(Looper.getMainLooper())
@@ -948,7 +951,6 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "=== MainActivity onDestroy ===")
         
         stopPingTimer()
-        watchdog?.stop()
         player?.release()
         socket?.disconnect()
         wakeLock?.release()
@@ -1002,4 +1004,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
 

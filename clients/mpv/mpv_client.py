@@ -8,7 +8,7 @@ Native Media Player for Linux/Unix - полная идентичность с An
 ✅ Кэширование заглушки (не запрашивает сервер каждый раз)
 ✅ Предзагрузка соседних слайдов (мгновенное переключение)
 ✅ Умный reconnect (не сбрасывает контент)
-✅ ConnectionWatchdog (автоперезапуск)
+✅ Бесконечное переподключение (Socket.IO retry)
 ✅ Error retry механизм (3 попытки)
 ✅ Полное отслеживание состояния
 ✅ Аппаратное ускорение (VAAPI/VDPAU/NVDEC)
@@ -191,64 +191,6 @@ class DeviceDetector:
         ])
         return params
 
-class ConnectionWatchdog:
-    """
-    Watchdog для мониторинга подключения (как в Android)
-    Автоматически перезапускает приложение при длительной потере связи
-    """
-    def __init__(self, max_disconnect_time_ms: int = 300000, check_interval_ms: int = 30000):
-        self.max_disconnect_time = max_disconnect_time_ms  # 5 минут по умолчанию
-        self.check_interval = check_interval_ms / 1000.0  # В секундах
-        self.connected = False
-        self.last_connect_time = time.time()
-        self.running = False
-        self.content_playing_callback = None
-        self.thread = None
-        
-    def set_content_playing_callback(self, callback):
-        """Callback для проверки играет ли контент (не заглушка)"""
-        self.content_playing_callback = callback
-    
-    def update_connection_status(self, connected: bool):
-        """Обновление статуса подключения"""
-        self.connected = connected
-        if connected:
-            self.last_connect_time = time.time()
-    
-    def start(self):
-        """Запуск watchdog в отдельном потоке"""
-        self.running = True
-        self.thread = threading.Thread(target=self._run, daemon=True)
-        self.thread.start()
-    
-    def stop(self):
-        """Остановка watchdog"""
-        self.running = False
-    
-    def _run(self):
-        """Основной цикл watchdog"""
-        while self.running:
-            try:
-                time.sleep(self.check_interval)
-                
-                if not self.connected:
-                    disconnect_time = (time.time() - self.last_connect_time) * 1000
-                    
-                    if disconnect_time > self.max_disconnect_time:
-                        # Проверяем играет ли контент
-                        is_content_playing = False
-                        if self.content_playing_callback:
-                            is_content_playing = self.content_playing_callback()
-                        
-                        if not is_content_playing:
-                            print(f"[Watchdog] ❌ Нет связи {disconnect_time:.0f}ms - перезапуск приложения!")
-                            os.execv(sys.executable, ['python3'] + sys.argv)
-                        else:
-                            print(f"[Watchdog] ⚠️ Нет связи {disconnect_time:.0f}ms, но контент играет - не перезапускаем")
-                            
-            except Exception as e:
-                print(f"[Watchdog] Error: {e}")
-
 class MPVClient:
     def __init__(self, server_url, device_id, display=':0', fullscreen=True):
         self.server_url = server_url.rstrip('/')
@@ -368,10 +310,6 @@ class MPVClient:
             reconnection_delay_max=10
         )
         
-        # Watchdog (как в Android)
-        self.watchdog = ConnectionWatchdog(max_disconnect_time_ms=300000, check_interval_ms=30000)
-        self.watchdog.set_content_playing_callback(lambda: not self.is_playing_placeholder)
-        
         # Setup
         self._setup_socket_events()
         self._setup_signal_handlers()
@@ -434,8 +372,6 @@ class MPVClient:
         @self.sio.event
         def connect():
             print('[MPV] ✅ Подключено к серверу')
-            self.watchdog.update_connection_status(True)
-            self.watchdog.start()
             
             self.sio.emit('player/register', {
                 'device_id': self.device_id,
@@ -447,21 +383,27 @@ class MPVClient:
             # КРИТИЧНО: При reconnect НЕ сбрасываем контент! (как Android)
             if not self.is_playing_placeholder:
                 print('[MPV] ℹ️ Reconnected: контент играет, продолжаем...')
-                # Продолжаем воспроизведение
             else:
-                print('[MPV] ℹ️ Reconnected: заглушка играет')
+                # Проверяем что заглушка действительно играет
+                if not self._is_mpv_playing():
+                    print('[MPV] ℹ️ Reconnected: заглушка остановлена, перезагружаем...')
+                    self._load_placeholder()
+                else:
+                    print('[MPV] ℹ️ Reconnected: заглушка играет корректно')
             
             self._start_ping_timer()
         
         @self.sio.event
         def disconnect():
-            print('[MPV] ⚠️ Отключено от сервера')
-            self.watchdog.update_connection_status(False)
+            print('[MPV] ⚠️ Нет связи с сервером...')
             self._stop_ping_timer()
             
             # КРИТИЧНО: При disconnect НЕ останавливаем контент! (как Android)
+            # Заглушка продолжает крутиться в loop mode
             if not self.is_playing_placeholder:
                 print('[MPV] ℹ️ Connection lost: контент продолжает воспроизведение...')
+            else:
+                print('[MPV] ℹ️ Connection lost: заглушка продолжает крутиться (loop mode)...')
         
         @self.sio.on('player/play')
         def on_play(data):
@@ -1034,10 +976,6 @@ class MPVClient:
         
         self.running = False
         
-        # Остановка watchdog (как Android)
-        if hasattr(self, 'watchdog'):
-            self.watchdog.stop()
-        
         # Остановка ping (как Android)
         self._stop_ping_timer()
         
@@ -1090,7 +1028,7 @@ def main():
   ✅ Кэширование заглушки (не запрашивает сервер каждый раз)
   ✅ Предзагрузка соседних слайдов (мгновенное переключение)
   ✅ Умный reconnect (не сбрасывает контент)
-  ✅ ConnectionWatchdog (автоперезапуск при потере связи >5 мин)
+  ✅ Бесконечное переподключение (Socket.IO retry)
   ✅ Error retry механизм
   ✅ Полное отслеживание состояния
 

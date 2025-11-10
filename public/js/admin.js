@@ -209,6 +209,10 @@ function initSelectionFromUrl() {
 function openDevice(id) {
   currentDeviceId = id;
   filePage = 0; // Сброс пагинации файлов при смене устройства
+  
+  // Обновляем URL при переключении устройства
+  openDeviceHelper(id);
+  
   const d = devicesCache.find(x => x.device_id === id);
   const pane = document.getElementById('detailPane');
   if (!pane) return;

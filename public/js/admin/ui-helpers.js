@@ -23,7 +23,8 @@ export function clearFilesPane() {
 }
 
 export function openDevice(deviceId) {
+  // Обновляем URL при переключении устройства
   const url = new URL(location.href);
-  url.searchParams.set('device', deviceId);
+  url.searchParams.set('device_id', deviceId);
   history.replaceState(null, '', url.toString());
 }

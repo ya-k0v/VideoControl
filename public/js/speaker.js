@@ -165,6 +165,12 @@ function showLivePreviewForTV(deviceId) {
 async function selectDevice(id) {
   currentDevice = id;
   filePage = 0; // Сброс пагинации файлов при смене устройства
+  
+  // Обновляем URL при переключении устройства
+  const url = new URL(location.href);
+  url.searchParams.set('device_id', id);
+  history.replaceState(null, '', url.toString());
+  
   tvList.querySelectorAll('.tvTile').forEach(li => li.classList.remove('active'));
   const item = tvList.querySelector(`.tvTile[data-id="${id}"]`);
   if (item) item.classList.add('active');

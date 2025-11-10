@@ -533,25 +533,49 @@ class MPVClient:
         signal.signal(signal.SIGTERM, signal_handler)
     
     def _setup_mpv_monitor(self):
-        """Мониторинг событий MPV (как ExoPlayer listeners в Android)"""
+        """
+        Мониторинг событий MPV (как ExoPlayer listeners в Android)
+        + защита от зависаний
+        """
         def monitor():
             last_eof_check = time.time()
+            last_response_time = time.time()
+            failed_checks = 0
+            max_failed_checks = 6  # 6 неудач = 30 сек без ответа = kill
             
             while self.running:
                 try:
-                    time.sleep(0.5)  # Проверка каждые 500ms
+                    time.sleep(5)  # Проверка каждые 5 секунд
                     
-                    # Проверяем eof-reached (конец файла) - но не чаще раза в секунду
-                    if time.time() - last_eof_check > 1.0:
-                        result = self.send_command('get_property', 'eof-reached')
+                    # КРИТИЧНО: Проверка что MPV отвечает (защита от зависаний)
+                    result = self.send_command('get_property', 'pause')
+                    
+                    if result is not None:
+                        # MPV ответил - сбрасываем счетчик
+                        last_response_time = time.time()
+                        failed_checks = 0
+                    else:
+                        # MPV не ответил
+                        failed_checks += 1
+                        print(f'[MPV] ⚠️ MPV не отвечает ({failed_checks}/{max_failed_checks})')
+                        
+                        if failed_checks >= max_failed_checks:
+                            # MPV завис - принудительно убиваем
+                            print('[MPV] ❌ MPV завис! Принудительное завершение...')
+                            if self.mpv_process:
+                                self.mpv_process.kill()
+                            self.running = False
+                            break
+                    
+                    # Проверяем eof-reached
+                    if time.time() - last_eof_check > 10.0:  # Раз в 10 сек
+                        eof_result = self.send_command('get_property', 'eof-reached')
                         last_eof_check = time.time()
                         
-                        if result and result.get('data') == True:
+                        if eof_result and eof_result.get('data') == True:
                             print('[MPV] 🏁 Файл закончился')
-                            
-                            # Если это контент (не заглушка) - возврат к заглушке (как Android)
                             if not self.is_playing_placeholder:
-                                print('[MPV] 🔄 Возврат к заглушке после окончания контента')
+                                print('[MPV] 🔄 Возврат к заглушке')
                                 self._load_placeholder()
                     
                     # Проверяем жив ли MPV процесс
@@ -962,19 +986,28 @@ class MPVClient:
         except:
             pass
         
-        # Остановка MPV (как Android player?.release())
-        try:
-            self.send_command('quit')
-            time.sleep(0.5)
-        except:
-            pass
-        
+        # КРИТИЧНО: Принудительная остановка MPV (защита от зависаний)
         if self.mpv_process and self.mpv_process.poll() is None:
-            self.mpv_process.terminate()
+            print("[MPV] 🛑 Остановка MPV процесса...")
+            
+            # Пробуем graceful shutdown
             try:
-                self.mpv_process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.mpv_process.kill()
+                self.send_command('quit')
+                time.sleep(1)
+            except:
+                pass
+            
+            # Если не помогло - terminate
+            if self.mpv_process.poll() is None:
+                print("[MPV] ⚠️ Graceful quit не сработал, terminate...")
+                self.mpv_process.terminate()
+                try:
+                    self.mpv_process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    # Если совсем завис - kill
+                    print("[MPV] 💀 MPV завис, принудительный kill...")
+                    self.mpv_process.kill()
+                    self.mpv_process.wait(timeout=1)
         
         # Удаляем IPC socket
         if os.path.exists(self.ipc_socket):

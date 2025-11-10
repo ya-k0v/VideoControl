@@ -133,8 +133,7 @@ class MPVClient:
             
             # Аппаратное ускорение (как ExoPlayer)
             '--hwdec=auto',
-            '--gpu-context=auto',
-            '--vo=gpu',
+            '--vo=x11',  # x11 для совместимости со старыми MPV (gpu требует 0.33+)
             
             # Буферизация для больших файлов (как ExoPlayer: 200MB)
             '--cache=yes',
@@ -146,7 +145,7 @@ class MPVClient:
             # Сетевые оптимизации
             '--stream-buffer-size=4M',
             '--network-timeout=60',
-            '--http-header-fields=User-Agent: VideoControl-MPV/1.0',
+            '--user-agent=VideoControl-MPV/1.0',  # http-header-fields в старых версиях может не работать
             
             # UI отключения
             '--no-input-default-bindings',

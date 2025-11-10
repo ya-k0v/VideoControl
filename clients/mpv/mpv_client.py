@@ -125,8 +125,6 @@ class DeviceDetector:
                 '--demuxer-max-bytes=150M',  # Больше под ваши 256MB GPU
                 '--demuxer-readahead-secs=30',
                 '--network-timeout=60',
-                '--image-display-duration=inf',
-                '--pause=no',
                 '--vo=gpu',  # GPU shader-based renderer (vc4-kms-v3d)
                 '--hwdec=v4l2m2m',  # rpivid-v4l2 аппаратный декодер
                 '--hwdec-codecs=h264,hevc,vp8,vp9',  # Поддерживаемые кодеки
@@ -685,33 +683,43 @@ class MPVClient:
             url = f"{self.server_url}/content/{self.device_id}/{encoded_filename}"
             
             print(f"[MPV] 🖼️ Showing image: {filename} (isPlaceholder={is_placeholder})")
+            print(f"[MPV] 🔗 URL: {url}")
             
             # КРИТИЧНО: Сбрасываем currentVideoFile (как Android)
             self.current_video_file = None
             self.saved_position = 0.0
             
+            # КРИТИЧНО для MPV 0.32: Установить image-display-duration ДО loadfile!
+            if is_placeholder:
+                duration_result = self.send_command('set_property', 'image-display-duration', 'inf')
+                print(f"[MPV] ⏱️ Set image-display-duration=inf: {duration_result}")
+            else:
+                duration_result = self.send_command('set_property', 'image-display-duration', 10)
+                print(f"[MPV] ⏱️ Set image-display-duration=10: {duration_result}")
+            
+            time.sleep(0.1)  # Даем MPV применить настройку
+            
             # Загрузка изображения
+            print(f"[MPV] 📤 Отправка loadfile...")
             result = self.send_command('loadfile', url, 'replace')
+            print(f"[MPV] 📥 Ответ MPV: {result}")
             
             if result and result.get('error') == 'success':
-                # MPV автоматически показывает изображения
-                if is_placeholder:
-                    # Заглушка-изображение показывается бесконечно
-                    self.send_command('set_property', 'image-display-duration', 'inf')
-                else:
-                    # Обычное изображение - 10 секунд
-                    self.send_command('set_property', 'image-display-duration', 10)
+                time.sleep(0.2)  # Даем загрузиться
                 
                 # Убеждаемся что не на паузе
-                self.send_command('set_property', 'pause', False)
+                pause_result = self.send_command('set_property', 'pause', False)
+                print(f"[MPV] ▶️ Unpause: {pause_result}")
                 
                 self.is_playing_placeholder = is_placeholder
-                print(f"[MPV] ✅ Изображение показано")
+                print(f"[MPV] ✅ Изображение загружено и показано")
             else:
-                print(f"[MPV] ❌ Ошибка загрузки изображения")
+                print(f"[MPV] ❌ Ошибка загрузки изображения, result={result}")
                 
         except Exception as e:
             print(f"[MPV] ❌ Exception в _play_image: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _show_pdf_page(self, filename: str, page: int):
         """Показ страницы PDF (идентично Android)"""
@@ -728,11 +736,16 @@ class MPVClient:
                 self.current_video_file = None
                 self.saved_position = 0.0
             
+            # КРИТИЧНО для MPV 0.32: image-display-duration ДО loadfile!
+            self.send_command('set_property', 'image-display-duration', 'inf')
+            time.sleep(0.1)
+            
             # Загрузка страницы
             result = self.send_command('loadfile', url, 'replace')
             
             if result and result.get('error') == 'success':
-                self.send_command('set_property', 'image-display-duration', 'inf')
+                time.sleep(0.2)
+                self.send_command('set_property', 'pause', False)
                 
                 # Обновление состояния (как Android)
                 self.current_pdf_file = filename
@@ -764,10 +777,15 @@ class MPVClient:
                 self.current_video_file = None
                 self.saved_position = 0.0
             
+            # КРИТИЧНО для MPV 0.32: image-display-duration ДО loadfile!
+            self.send_command('set_property', 'image-display-duration', 'inf')
+            time.sleep(0.1)
+            
             result = self.send_command('loadfile', url, 'replace')
             
             if result and result.get('error') == 'success':
-                self.send_command('set_property', 'image-display-duration', 'inf')
+                time.sleep(0.2)
+                self.send_command('set_property', 'pause', False)
                 
                 # Обновление состояния (как Android)
                 self.current_pptx_file = filename
@@ -799,10 +817,15 @@ class MPVClient:
                 self.current_video_file = None
                 self.saved_position = 0.0
             
+            # КРИТИЧНО для MPV 0.32: image-display-duration ДО loadfile!
+            self.send_command('set_property', 'image-display-duration', 'inf')
+            time.sleep(0.1)
+            
             result = self.send_command('loadfile', url, 'replace')
             
             if result and result.get('error') == 'success':
-                self.send_command('set_property', 'image-display-duration', 'inf')
+                time.sleep(0.2)
+                self.send_command('set_property', 'pause', False)
                 
                 # Обновление состояния (как Android)
                 self.current_folder_name = folder_name

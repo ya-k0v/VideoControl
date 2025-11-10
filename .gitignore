@@ -10,6 +10,12 @@ npm-debug.log*
 *.seed
 .converted/
 
+# SQLite database (хранится локально, не коммитим)
+config/main.db
+config/main.db-wal
+config/main.db-shm
+config/json-backup-*/
+
 # Production
 public/content/*/
 !public/content/.gitkeep

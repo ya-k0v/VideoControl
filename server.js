@@ -18,8 +18,14 @@ import {
 import { createSocketServer } from './src/config/socket-config.js';
 import { sanitizeDeviceId, isSystemFile } from './src/utils/sanitize.js';
 import { fixEncoding } from './src/utils/encoding.js';
-import { loadDevicesJson, saveDevicesJson, scan } from './src/storage/devices-storage.js';
-import { loadFileNamesMap, saveFileNamesMap } from './src/storage/filenames-storage.js';
+import { initDatabase } from './src/database/database.js';
+import { 
+  loadDevicesFromDB, 
+  saveDevicesToDB, 
+  loadFileNamesFromDB, 
+  saveFileNamesToDB,
+  scanAllDevices 
+} from './src/storage/devices-storage-sqlite.js';
 import { getFileStatuses, getFileStatus, setFileStatus, deleteFileStatus } from './src/video/file-status.js';
 import { checkVideoParameters } from './src/video/ffmpeg-wrapper.js';
 import { getVideoOptConfig, needsOptimization, autoOptimizeVideo } from './src/video/optimizer.js';
@@ -56,18 +62,25 @@ if (!fs.existsSync(DEVICES)) fs.mkdirSync(DEVICES, { recursive: true });
 setupExpressMiddleware(app);
 setupStaticFiles(app);
 
+// ========================================
+// DATABASE INITIALIZATION
+// ========================================
+const DB_PATH = path.join(ROOT, 'config', 'main.db');
+initDatabase(DB_PATH);
+
 // Инициализация данных
 let devices = {};
-let savedNames = {};
 let fileNamesMap = {};
 
-// Загружаем данные и сканируем папки устройств
-savedNames = loadDevicesJson();
-fileNamesMap = loadFileNamesMap(fileNamesMap, (map) => saveFileNamesMap(map));
-scan(devices, savedNames, fileNamesMap);
+// Загружаем данные из SQLite БД
+devices = loadDevicesFromDB();
+fileNamesMap = loadFileNamesFromDB();
 
-// Сохраняем начальное состояние
-saveDevicesJson(devices);
+// Сканируем файлы в папках устройств
+scanAllDevices(devices, fileNamesMap);
+
+// Сохраняем обновленное состояние в БД
+saveDevicesToDB(devices);
 
 // ========================================
 // UPLOAD MIDDLEWARE
@@ -83,9 +96,9 @@ const upload = createUploadMiddleware(devices);
 const devicesRouter = createDevicesRouter({ 
   devices, 
   io, 
-  saveDevicesJson, 
+  saveDevicesJson: saveDevicesToDB, 
   fileNamesMap, 
-  saveFileNamesMap 
+  saveFileNamesMap: saveFileNamesToDB 
 });
 
 const placeholderRouter = createPlaceholderRouter({ 
@@ -97,7 +110,7 @@ const filesRouter = createFilesRouter({
   devices,
   io,
   fileNamesMap,
-  saveFileNamesMap,
+  saveFileNamesMap: saveFileNamesToDB,
   upload,
   autoConvertFileWrapper,
   autoOptimizeVideoWrapper,
@@ -159,11 +172,11 @@ const fileStatuses = getFileStatuses();
 
 // Оберточные функции для совместимости с существующим кодом
 async function autoOptimizeVideoWrapper(deviceId, fileName) {
-  return await autoOptimizeVideo(deviceId, fileName, devices, io, fileNamesMap, (map) => saveFileNamesMap(map));
+  return await autoOptimizeVideo(deviceId, fileName, devices, io, fileNamesMap, (map) => saveFileNamesToDB(map));
 }
 
 async function autoConvertFileWrapper(deviceId, fileName) {
-  return await autoConvertFile(deviceId, fileName, devices, fileNamesMap, (map) => saveFileNamesMap(map));
+  return await autoConvertFile(deviceId, fileName, devices, fileNamesMap, (map) => saveFileNamesToDB(map));
 }
 
 // ========================================

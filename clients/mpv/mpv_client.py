@@ -481,10 +481,15 @@ class MPVClient:
                 else:
                     self.send_command('set_property', 'loop-file', 'no')
                 
+                # КРИТИЧНО: Запускаем воспроизведение (как playWhenReady в ExoPlayer!)
+                time.sleep(0.3)  # Даем MPV загрузить метаданные
+                play_result = self.send_command('set_property', 'pause', False)
+                print(f"[MPV] ▶️ Воспроизведение запущено: {play_result}")
+                
                 # Обновление состояния
                 self.is_playing_placeholder = is_placeholder
                 
-                print(f"[MPV] ✅ Видео загружено (loop={is_placeholder})")
+                print(f"[MPV] ✅ Видео загружено и воспроизводится (loop={is_placeholder})")
             else:
                 print(f"[MPV] ❌ Ошибка загрузки видео, result={result}")
                 if not is_placeholder:
@@ -518,6 +523,9 @@ class MPVClient:
                 else:
                     # Обычное изображение - 10 секунд
                     self.send_command('set_property', 'image-display-duration', 10)
+                
+                # Убеждаемся что не на паузе
+                self.send_command('set_property', 'pause', False)
                 
                 self.is_playing_placeholder = is_placeholder
                 print(f"[MPV] ✅ Изображение показано")

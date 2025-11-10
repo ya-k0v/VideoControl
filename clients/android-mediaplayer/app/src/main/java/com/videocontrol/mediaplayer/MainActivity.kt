@@ -443,6 +443,13 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { showFolderImage(null, imageNum) }
                 }
             }
+            
+            socket?.on("player/pong") {
+                // КРИТИЧНО: Обновляем статус подключения при получении pong
+                runOnUiThread {
+                    watchdog?.updateConnectionStatus(true)
+                }
+            }
 
             socket?.connect()
             Log.d(TAG, "Socket connecting to $SERVER_URL")

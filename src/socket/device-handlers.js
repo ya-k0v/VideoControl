@@ -102,6 +102,7 @@ export function setupDeviceHandlers(socket, deps) {
     if (socket.data.device_id) {
       socket.emit('player/pong');
       if (socket.data) socket.data.lastPing = Date.now();
+      console.log(`[Server] 🏓 Ping from ${socket.data.device_id} (socket: ${socket.id})`);
     }
   });
   

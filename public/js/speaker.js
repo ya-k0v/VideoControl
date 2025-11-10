@@ -51,7 +51,21 @@ async function loadDevices() {
       console.error('Failed to load devices:', res.status);
       return;
     }
-    devices = await res.json();
+    const newDevices = await res.json();
+    
+    // КРИТИЧНО: Сохраняем локальное состояние устройств (current) при обновлении списка
+    // чтобы не потерять информацию о паузе/воспроизведении при переключении
+    if (devices.length > 0) {
+      newDevices.forEach(newDev => {
+        const oldDev = devices.find(d => d.device_id === newDev.device_id);
+        if (oldDev && oldDev.current) {
+          // Сохраняем локальное состояние (state, file, type)
+          newDev.current = oldDev.current;
+        }
+      });
+    }
+    
+    devices = newDevices;
     // Сортируем устройства по алфавиту: А-Я, A-Z, 0-9
     devices = sortDevices(devices, nodeNames);
     const pageSize = getPageSize();
@@ -455,6 +469,16 @@ async function loadFiles() {
     btn.onclick = () => {
       const safeName = decodeURIComponent(btn.getAttribute('data-safe'));
       setCurrentFileSelection(safeName, btn.closest('.file-item'));
+      
+      // КРИТИЧНО: Обновляем локальное состояние устройства
+      const device = devices.find(d => d.device_id === currentDevice);
+      if (device) {
+        if (!device.current) device.current = {};
+        device.current.file = safeName;
+        device.current.state = 'playing';
+        console.log(`[Speaker] ▶️ Воспроизведение: ${safeName} на ${currentDevice}`);
+      }
+      
       socket.emit('control/play', { device_id: currentDevice, file: safeName });
       
       // Определяем тип файла
@@ -504,10 +528,39 @@ function setCurrentFileSelection(filename, itemEl) {
 /* Верхняя панель управления */
 document.getElementById('playBtn').onclick = () => {
   if (!currentDevice) return;
-  socket.emit('control/play', { device_id: currentDevice }); // resume
+  
+  const device = devices.find(d => d.device_id === currentDevice);
+  
+  // Если устройство на паузе - продолжаем воспроизведение (resume)
+  if (device && device.current && device.current.state === 'paused') {
+    console.log(`[Speaker] ▶️ Resume: ${currentDevice} (файл: ${device.current.file || 'unknown'})`);
+    socket.emit('control/play', { device_id: currentDevice }); // Сервер отправит player/resume
+    // Обновляем локальное состояние
+    device.current.state = 'playing';
+  } 
+  // Если выбран файл из списка - воспроизводим его
+  else if (currentFile) {
+    console.log(`[Speaker] ▶️ Play файл: ${currentFile}`);
+    socket.emit('control/play', { device_id: currentDevice, file: currentFile });
+  }
+  // Иначе пробуем resume (если было что-то до перезапуска сервера)
+  else {
+    console.log(`[Speaker] ▶️ Resume (нет currentFile)`);
+    socket.emit('control/play', { device_id: currentDevice });
+  }
 };
+
 document.getElementById('pauseBtn').onclick = () => {
   if (!currentDevice) return;
+  
+  const device = devices.find(d => d.device_id === currentDevice);
+  
+  // Обновляем локальное состояние устройства на "пауза"
+  if (device && device.current) {
+    device.current.state = 'paused';
+    console.log(`[Speaker] ⏸️ Пауза: ${currentDevice} (файл: ${device.current.file || 'unknown'})`);
+  }
+  
   socket.emit('control/pause', { device_id: currentDevice });
 };
 document.getElementById('restartBtn').onclick = () => {

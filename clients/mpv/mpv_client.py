@@ -245,20 +245,25 @@ class MPVClient:
     
     def _check_hardware_acceleration(self):
         """Проверка аппаратного декодирования"""
-        time.sleep(0.5)
-        result = self.send_command('get_property', 'hwdec-current')
-        if result and result.get('error') == 'success':
-            hwdec = result.get('data', 'no')
-            if hwdec and hwdec != 'no':
-                print(f"[MPV] ✅ Аппаратное ускорение: {hwdec}")
+        time.sleep(1.0)  # Увеличено для старых MPV
+        try:
+            result = self.send_command('get_property', 'hwdec-current')
+            if result and result.get('error') == 'success':
+                hwdec = result.get('data', 'no')
+                if hwdec and hwdec != 'no':
+                    print(f"[MPV] ✅ Аппаратное ускорение: {hwdec}")
+                else:
+                    print(f"[MPV] ⚠️ CPU декодинг (установите VAAPI/VDPAU)")
             else:
-                print(f"[MPV] ⚠️ CPU декодинг (установите VAAPI/VDPAU)")
+                print(f"[MPV] ℹ️ Hwdec статус: недоступен (старая версия MPV)")
+        except Exception as e:
+            print(f"[MPV] ℹ️ Не удалось проверить hwdec: {e}")
     
     def send_command(self, command, *args) -> Optional[Dict[str, Any]]:
         """Отправка команды в MPV через IPC"""
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            sock.settimeout(5)
+            sock.settimeout(10)  # Увеличен до 10 сек для старых MPV
             sock.connect(self.ipc_socket)
             
             cmd = {"command": [command] + list(args)}

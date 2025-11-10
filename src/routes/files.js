@@ -329,9 +329,8 @@ export function createFilesRouter(deps) {
       // КРИТИЧНО: Обновляем devices.files для обоих устройств ВСЕГДА
       console.log(`[copy-file] 🔄 Начинаем обновление devices.files...`);
       
+      // sourceFolder и targetFolder уже объявлены выше (строки 234-235)
       // Обновляем списки файлов обоих устройств используя общую утилиту
-      const sourceFolder = path.join(DEVICES, devices[sourceId].folder);
-      const targetFolder = path.join(DEVICES, devices[targetId].folder);
       
       console.log(`[copy-file] 📂 Сканируем source: ${sourceFolder}`);
       const sourceResult = scanDeviceFiles(sourceId, sourceFolder, fileNamesMap);

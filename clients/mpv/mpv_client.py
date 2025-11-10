@@ -25,8 +25,144 @@ import argparse
 import signal
 import subprocess
 import requests
+import platform
+import re
 from urllib.parse import quote
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+
+class DeviceDetector:
+    """
+    Автоматическое определение типа устройства и оптимальных параметров MPV
+    """
+    
+    @staticmethod
+    def detect_platform():
+        """Определяет тип платформы"""
+        system = platform.system()
+        machine = platform.machine()
+        
+        # Raspberry Pi
+        if machine.startswith('arm') or machine.startswith('aarch'):
+            try:
+                with open('/proc/cpuinfo', 'r') as f:
+                    if 'Raspberry Pi' in f.read():
+                        return 'raspberry_pi'
+            except:
+                pass
+            return 'arm_linux'
+        
+        # x86/x64 Linux
+        if system == 'Linux':
+            return 'x86_linux'
+        
+        return 'unknown'
+    
+    @staticmethod
+    def get_mpv_version():
+        """Получает версию MPV"""
+        try:
+            result = subprocess.run(['mpv', '--version'], 
+                                  capture_output=True, 
+                                  text=True, 
+                                  timeout=2)
+            version_line = result.stdout.split('\n')[0]
+            match = re.search(r'mpv (\d+)\.(\d+)', version_line)
+            if match:
+                major = int(match.group(1))
+                minor = int(match.group(2))
+                return (major, minor)
+        except:
+            pass
+        return (0, 32)  # По умолчанию - старая версия
+    
+    @staticmethod
+    def get_optimal_params(platform_type: str, mpv_version: tuple) -> List[str]:
+        """
+        Возвращает оптимальные параметры для платформы
+        """
+        major, minor = mpv_version
+        is_modern_mpv = (major > 0 or minor >= 33)  # MPV 0.33+
+        
+        print(f"[Detector] 🖥️  Платформа: {platform_type}")
+        print(f"[Detector] 📦 MPV версия: {major}.{minor}")
+        print(f"[Detector] 🔧 Конфигурация: {'modern' if is_modern_mpv else 'legacy'}")
+        
+        # Базовые параметры для всех
+        params = [
+            '--idle=yes',
+            '--force-window=yes',
+            '--keep-open=yes',
+            '--no-input-default-bindings',
+            '--cursor-autohide=always',
+        ]
+        
+        # === Raspberry Pi - минимальные параметры ===
+        if platform_type == 'raspberry_pi':
+            print(f"[Detector] 🥧 Raspberry Pi - минимальная конфигурация")
+            params.extend([
+                # Без аппаратного ускорения - может вызывать черный экран
+                # '--hwdec=auto',  # ОТКЛЮЧЕНО
+                
+                # Минимальный кэш
+                '--cache=yes',
+                '--cache-secs=5',
+                
+                # Без сложных параметров
+                '--network-timeout=30',
+            ])
+            return params
+        
+        # === ARM Linux (не Raspberry Pi) ===
+        if platform_type == 'arm_linux':
+            print(f"[Detector] 📱 ARM Linux - сбалансированная конфигурация")
+            params.extend([
+                '--hwdec=auto',  # Пробуем hwdec
+                '--cache=yes',
+                '--cache-secs=10',
+                '--network-timeout=60',
+            ])
+            return params
+        
+        # === x86/x64 Linux Desktop ===
+        if platform_type == 'x86_linux':
+            print(f"[Detector] 💻 x86 Linux - максимальная конфигурация")
+            
+            if is_modern_mpv:
+                # MPV 0.33+ - используем GPU вывод
+                params.extend([
+                    '--hwdec=auto',
+                    '--vo=gpu',  # GPU для новых версий
+                    '--gpu-context=auto',
+                    '--cache=yes',
+                    '--cache-secs=10',
+                    '--demuxer-max-bytes=200M',
+                    '--demuxer-readahead-secs=20',
+                    '--network-timeout=60',
+                    '--no-osc',
+                    '--no-osd-bar',
+                ])
+            else:
+                # MPV 0.32 - используем x11
+                params.extend([
+                    '--hwdec=auto',
+                    '--vo=x11',
+                    '--cache=yes',
+                    '--cache-secs=10',
+                    '--demuxer-max-bytes=200M',
+                    '--network-timeout=60',
+                    '--no-osc',
+                    '--no-osd-bar',
+                ])
+            return params
+        
+        # === Unknown - безопасные параметры ===
+        print(f"[Detector] ❓ Unknown platform - безопасная конфигурация")
+        params.extend([
+            '--cache=yes',
+            '--cache-secs=5',
+            '--network-timeout=30',
+        ])
+        return params
 
 class ConnectionWatchdog:
     """
@@ -124,47 +260,17 @@ class MPVClient:
         if os.path.exists(self.ipc_socket):
             os.unlink(self.ipc_socket)
         
-        # Запуск MPV с параметрами (совместимость с 0.32.0+)
-        mpv_cmd = [
-            'mpv',
-            '--idle=yes',
-            '--force-window=yes',
-            f'--input-ipc-server={self.ipc_socket}',
-            
-            # Аппаратное ускорение
-            '--hwdec=auto',
-            '--vo=x11',  # x11 для совместимости со старыми MPV
-            
-            # Буферизация для больших файлов
-            '--cache=yes',
-            '--cache-secs=10',
-            '--demuxer-max-bytes=200M',
-            '--demuxer-readahead-secs=20',
-            # --demuxer-max-back-bytes убран (не в 0.32.0)
-            
-            # Сетевые оптимизации
-            # --stream-buffer-size убран (не в 0.32.0)
-            '--network-timeout=60',
-            '--user-agent=VideoControl-MPV/1.0',
-            
-            # UI отключения
-            '--no-input-default-bindings',
-            '--no-osc',
-            '--no-osd-bar',
-            '--osd-level=0',
-            '--cursor-autohide=always',
-            # --no-terminal убран (может крашить старые версии)
-            
-            # Стабильность
-            '--keep-open=yes',
-            # --no-resume-playback убран (не в 0.32.0)
-            # --save-position-on-quit убран (не в 0.32.0)
-            '--really-quiet',  # Вместо msg-level для старых версий
-        ]
+        # === УМНОЕ ОПРЕДЕЛЕНИЕ ПЛАТФОРМЫ И ПАРАМЕТРОВ ===
+        platform_type = DeviceDetector.detect_platform()
+        mpv_version = DeviceDetector.get_mpv_version()
+        optimal_params = DeviceDetector.get_optimal_params(platform_type, mpv_version)
+        
+        # Создаем команду MPV
+        mpv_cmd = ['mpv'] + optimal_params + [f'--input-ipc-server={self.ipc_socket}']
         
         if fullscreen:
             mpv_cmd.append('--fullscreen')
-        # DISPLAY передается через environment, не через --display (не поддерживается в старых MPV)
+        # DISPLAY передается через environment
         
         print(f"[MPV] 🎬 Запуск MPV процесса...")
         print(f"[MPV] 📝 Команда: {' '.join(mpv_cmd[:5])}...")

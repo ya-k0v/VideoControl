@@ -931,14 +931,24 @@ class MPVClient:
                         elif self.cached_placeholder_type == 'image':
                             self._play_image(placeholder_file, is_placeholder=True)
                     else:
-                        print(f"[MPV] ℹ️ No placeholder set for device")
-                        # Черный экран
+                        print(f"[MPV] ℹ️ No placeholder set for device - idle mode")
                         self.is_playing_placeholder = True
+                        self.cached_placeholder_file = None
+                        self.cached_placeholder_type = None
+                elif response.status_code == 404:
+                    print(f"[MPV] ℹ️ No placeholder configured (404) - idle mode")
+                    self.is_playing_placeholder = True
+                    self.cached_placeholder_file = None
+                    self.cached_placeholder_type = None
                 else:
-                    print(f"[MPV] ❌ Failed to load placeholder: HTTP {response.status_code}")
+                    print(f"[MPV] ⚠️ Failed to load placeholder: HTTP {response.status_code} - idle mode")
+                    self.is_playing_placeholder = True
                     
             except Exception as e:
-                print(f"[MPV] ❌ Error loading placeholder: {e}")
+                print(f"[MPV] ⚠️ Error loading placeholder: {e} - idle mode")
+                self.is_playing_placeholder = True
+                self.cached_placeholder_file = None
+                self.cached_placeholder_type = None
         
         # Загружаем в отдельном потоке чтобы не блокировать
         threading.Thread(target=load_from_api, daemon=True).start()

@@ -96,20 +96,44 @@ class DeviceDetector:
             '--cursor-autohide=always',
         ]
         
-        # === Raspberry Pi - оптимизированная конфигурация для V4L2 ===
+        # === Raspberry Pi - оптимизированная конфигурация ===
         if platform_type == 'raspberry_pi':
-            print(f"[Detector] 🥧 Raspberry Pi - V4L2 аппаратное ускорение")
+            print(f"[Detector] 🥧 Raspberry Pi 4 - RPiVid аппаратное ускорение")
+            
+            # Проверяем наличие rpivid в /boot/config.txt
+            has_rpivid = False
+            try:
+                with open('/boot/config.txt', 'r') as f:
+                    if 'rpivid-v4l2' in f.read():
+                        has_rpivid = True
+            except:
+                pass
+            
+            if has_rpivid:
+                # RPi 4 с rpivid-v4l2 - используем rpi hwdec
+                print(f"[Detector] ⚡ Обнаружен rpivid-v4l2 → hwdec=rpi")
+                params.extend([
+                    '--hwdec=rpi',            # RPiVid аппаратный декодер (лучше для RPi 4!)
+                    '--vo=gpu',               # GPU вывод
+                    '--gpu-context=drm',      # DRM контекст
+                    '--opengl-es=yes',        # OpenGL ES
+                ])
+            else:
+                # Старый RPi или без rpivid - используем v4l2m2m
+                print(f"[Detector] ⚡ Используется V4L2 ускорение → hwdec=v4l2m2m-copy")
+                params.extend([
+                    '--hwdec=v4l2m2m-copy',   # V4L2 Memory-to-Memory
+                    '--vo=gpu',
+                    '--gpu-context=drm',
+                    '--opengl-es=yes',
+                ])
+            
+            # Общие параметры для RPi
             params.extend([
-                # КРИТИЧНО: V4L2 для аппаратного декодирования на RPi
-                '--hwdec=v4l2m2m-copy',  # V4L2 Memory-to-Memory (RPi специфично!)
-                '--vo=gpu',               # GPU вывод
-                '--gpu-context=drm',      # DRM контекст (без X server)
-                '--opengl-es=yes',        # OpenGL ES для ARM
-                
-                # Кэш оптимизирован для RPi
+                # Кэш
                 '--cache=yes',
                 '--cache-secs=10',
-                '--demuxer-max-bytes=100M',  # 100MB для RPi
+                '--demuxer-max-bytes=100M',
                 '--demuxer-readahead-secs=10',
                 
                 # Сеть
@@ -119,10 +143,7 @@ class DeviceDetector:
                 '--no-osc',
                 '--no-osd-bar',
             ])
-            print(f"[Detector] ⚡ Используется V4L2 аппаратное ускорение")
-            print(f"[Detector] 💡 Убедитесь что /boot/config.txt содержит:")
-            print(f"[Detector] 💡   dtoverlay=vc4-kms-v3d,cma=512")
-            print(f"[Detector] 💡   gpu_mem=256")
+            
             return params
         
         # === ARM Linux (не Raspberry Pi) ===

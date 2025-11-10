@@ -179,8 +179,8 @@ class MPVClient:
         
         print(f"[MPV] ⏳ Ожидание создания IPC socket: {self.ipc_socket}")
         
-        # Ждем создания IPC socket (увеличен таймаут до 5 секунд)
-        for i in range(50):  # 50 * 0.1 = 5 секунд
+        # Ждем создания IPC socket (увеличен таймаут до 10 секунд для Raspberry Pi)
+        for i in range(100):  # 100 * 0.1 = 10 секунд
             if os.path.exists(self.ipc_socket):
                 print(f"[MPV] ✅ Socket создан за {i * 0.1:.1f} сек")
                 break
@@ -206,7 +206,7 @@ class MPVClient:
             time.sleep(0.1)
         
         if not os.path.exists(self.ipc_socket):
-            print(f"[MPV] ❌ IPC socket не создан за 5 секунд: {self.ipc_socket}")
+            print(f"[MPV] ❌ IPC socket не создан за 10 секунд: {self.ipc_socket}")
             print(f"[MPV] 🔍 Проверка MPV процесса...")
             
             # Пытаемся получить вывод

@@ -451,6 +451,7 @@ class MPVClient:
             url = f"{self.server_url}/content/{self.device_id}/{encoded_filename}"
             
             print(f"[MPV] 🎬 Playing video: {filename} (isPlaceholder={is_placeholder})")
+            print(f"[MPV] 🔗 URL: {url}")
             
             # КРИТИЧНО: Проверяем тот же ли файл (как Android)
             is_same_file = (self.current_video_file == filename)
@@ -468,12 +469,15 @@ class MPVClient:
             self.saved_position = 0.0
             
             # Загрузка файла
+            print(f"[MPV] 📤 Отправка команды loadfile...")
             result = self.send_command('loadfile', url, 'replace')
+            print(f"[MPV] 📥 Ответ MPV: {result}")
             
             if result and result.get('error') == 'success':
                 # КРИТИЧНО: Заглушка зацикливается, контент - нет (как ExoPlayer)
                 if is_placeholder:
-                    self.send_command('set_property', 'loop-file', 'inf')
+                    loop_result = self.send_command('set_property', 'loop-file', 'inf')
+                    print(f"[MPV] 🔁 Loop установлен: {loop_result}")
                 else:
                     self.send_command('set_property', 'loop-file', 'no')
                 
@@ -482,7 +486,7 @@ class MPVClient:
                 
                 print(f"[MPV] ✅ Видео загружено (loop={is_placeholder})")
             else:
-                print(f"[MPV] ❌ Ошибка загрузки видео")
+                print(f"[MPV] ❌ Ошибка загрузки видео, result={result}")
                 if not is_placeholder:
                     self._load_placeholder()
                     

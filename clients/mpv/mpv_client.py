@@ -111,30 +111,34 @@ class DeviceDetector:
             '--cursor-autohide=always',
         ]
         
-        # === Raspberry Pi - GPU УСКОРЕНИЕ для MPV 0.32 ===
+        # === Raspberry Pi - НАСТРОЕНО ПОД vc4-kms-v3d + rpivid-v4l2 ===
         if platform_type == 'raspberry_pi':
-            print(f"[Detector] 🥧 Raspberry Pi 4 - GPU ускорение через DRM")
+            print(f"[Detector] 🥧 Raspberry Pi 4 - оптимизация под ваш config.txt")
             
-            # Попробуем DRM hwdec - должен работать с RPi 4
+            # Конфигурация согласно вашим /boot/config.txt:
+            # - vc4-kms-v3d,cma-512 (современный KMS)
+            # - rpivid-v4l2 (аппаратный H.264/H.265)
+            # - gpu_mem=256, gpu_freq=600
             params.extend([
                 '--cache=yes',
                 '--cache-secs=30',
-                '--demuxer-max-bytes=100M',
+                '--demuxer-max-bytes=150M',  # Больше под ваши 256MB GPU
                 '--demuxer-readahead-secs=30',
                 '--network-timeout=60',
                 '--image-display-duration=inf',
                 '--pause=no',
-                '--vo=gpu',  # GPU video output
-                '--gpu-context=drm',  # Direct Rendering Manager
-                '--hwdec=drm-copy',  # DRM hardware decoding
-                '--vd-lavc-threads=4',  # Fallback для SW декодинга
-                '--framedrop=vo',  # Пропуск кадров
+                '--vo=gpu',  # GPU shader-based renderer (vc4-kms-v3d)
+                '--hwdec=v4l2m2m',  # rpivid-v4l2 аппаратный декодер
+                '--hwdec-codecs=h264,hevc,vp8,vp9',  # Поддерживаемые кодеки
+                '--vd-lavc-threads=4',  # 4 ядра CPU (arm_freq=2000)
+                '--framedrop=vo',  # Пропуск кадров если нужно
+                '--opengl-es=yes',  # OpenGL ES для VideoCore
             ])
             
-            print(f"[Detector] ✅ GPU декодинг: DRM + hwdec=drm-copy")
-            print(f"[Detector] 📦 Большой кэш: 30 сек, 100MB буфер")
-            print(f"[Detector] 🎮 RPi4 VideoCore GPU")
-            print(f"[Detector] ⚠️  Если не запустится - попробуйте из консоли (без X11)")
+            print(f"[Detector] ✅ rpivid-v4l2: H.264/H.265 GPU декодинг")
+            print(f"[Detector] 🎮 vc4-kms-v3d: OpenGL ES renderer")
+            print(f"[Detector] 📦 Кэш: 150MB (под ваши gpu_mem=256)")
+            print(f"[Detector] ⚡ GPU: 600MHz, CPU: 2000MHz")
             
             return params
         

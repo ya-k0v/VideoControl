@@ -176,7 +176,7 @@ async function autoOptimizeVideoWrapper(deviceId, fileName) {
 }
 
 async function autoConvertFileWrapper(deviceId, fileName) {
-  return await autoConvertFile(deviceId, fileName, devices, fileNamesMap, (map) => saveFileNamesToDB(map));
+  return await autoConvertFile(deviceId, fileName, devices, fileNamesMap, (map) => saveFileNamesToDB(map), io);
 }
 
 // ========================================

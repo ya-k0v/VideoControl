@@ -128,7 +128,7 @@ export async function getPageSlideCount(deviceId, fileName) {
  * @param {Function} saveFileNamesMapFn - Функция сохранения маппинга
  * @returns {Promise<number>} Количество конвертированных страниц/слайдов
  */
-export async function autoConvertFile(deviceId, fileName, devices, fileNamesMap, saveFileNamesMapFn) {
+export async function autoConvertFile(deviceId, fileName, devices, fileNamesMap, saveFileNamesMapFn, io = null) {
   const d = devices[deviceId];
   if (!d) return 0;
   
@@ -139,6 +139,12 @@ export async function autoConvertFile(deviceId, fileName, devices, fileNamesMap,
   
   const ext = path.extname(fileName).toLowerCase();
   if (ext !== '.pdf' && ext !== '.pptx') return 0;
+  
+  // Отправляем событие начала обработки
+  if (io) {
+    io.emit('file/processing', { device_id: deviceId, file: fileName, type: ext.substring(1) });
+    console.log(`[Converter] 📄 Начало конвертации: ${fileName}`);
+  }
   
   const folderName = fileName.replace(/\.(pdf|pptx)$/i, '');
   const convertedDir = path.join(deviceFolder, folderName);
@@ -156,6 +162,13 @@ export async function autoConvertFile(deviceId, fileName, devices, fileNamesMap,
       fileNamesMap[deviceId][folderName] = originalName;
       saveFileNamesMapFn(fileNamesMap);
     }
+    
+    // Отправляем событие готовности (файл уже был конвертирован)
+    if (io) {
+      io.emit('file/ready', { device_id: deviceId, file: fileName, pages: existing });
+      console.log(`[Converter] ✅ Уже конвертирован: ${fileName} (${existing} страниц)`);
+    }
+    
     return existing;
   }
   
@@ -185,10 +198,25 @@ export async function autoConvertFile(deviceId, fileName, devices, fileNamesMap,
       count = await convertPdfToImages(movedFilePath, convertedDir);
     }
     
+    // Отправляем событие успешной конвертации
+    if (io && count > 0) {
+      io.emit('file/ready', { device_id: deviceId, file: fileName, pages: count });
+      console.log(`[Converter] ✅ Конвертировано: ${fileName} (${count} страниц)`);
+    }
+    
     return count;
     
   } catch (error) {
     console.error(`[Converter] ❌ Ошибка конвертации ${fileName}:`, error);
+    
+    // Отправляем событие ошибки
+    if (io) {
+      io.emit('file/error', { 
+        device_id: deviceId, 
+        file: fileName, 
+        error: error.message || String(error) 
+      });
+    }
     
     // Откатываем изменения при ошибке
     const movedFilePath = path.join(convertedDir, fileName);

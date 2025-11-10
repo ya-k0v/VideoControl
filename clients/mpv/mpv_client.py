@@ -164,8 +164,7 @@ class MPVClient:
         
         if fullscreen:
             mpv_cmd.append('--fullscreen')
-        if display:
-            mpv_cmd.append(f'--display={display}')
+        # DISPLAY передается через environment, не через --display (не поддерживается в старых MPV)
         
         print(f"[MPV] 🎬 Запуск MPV процесса...")
         print(f"[MPV] 📝 Команда: {' '.join(mpv_cmd[:5])}...")

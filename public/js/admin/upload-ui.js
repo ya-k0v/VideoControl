@@ -182,9 +182,9 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
       pending.forEach(f => {
         // Используем webkitRelativePath если доступен, иначе просто имя файла
         const relativePath = f.webkitRelativePath || f.name;
-        // Создаем новый File объект с сохранением относительного пути
-        const blob = new Blob([f], { type: f.type });
-        form.append('files', blob, relativePath);
+        // ОПТИМИЗАЦИЯ: не создаем Blob копию, используем File напрямую
+        // Это критично для больших файлов (1.5GB+)
+        form.append('files', f, relativePath);
       });
     } else {
       pending.forEach(f => form.append('files', f));

@@ -269,10 +269,27 @@ class MPVClient:
             cmd = {"command": [command] + list(args)}
             sock.send((json.dumps(cmd) + '\n').encode())
             
-            response = sock.recv(8192).decode().strip()
+            # КРИТИЧНО: Читаем только ПЕРВУЮ строку JSON (MPV может отправить несколько событий)
+            response_bytes = b''
+            while True:
+                chunk = sock.recv(1)
+                if not chunk or chunk == b'\n':
+                    break
+                response_bytes += chunk
+            
             sock.close()
             
-            return json.loads(response) if response else None
+            if response_bytes:
+                response = response_bytes.decode('utf-8', errors='ignore').strip()
+                return json.loads(response)
+            return None
+            
+        except json.JSONDecodeError as e:
+            print(f"[MPV] ⚠️ JSON parse error: {e}")
+            return None
+        except socket.timeout:
+            # Timeout не критичен - команда может уже выполниться
+            return None
         except Exception as e:
             print(f"[MPV] ⚠️ IPC error: {e}")
             return None

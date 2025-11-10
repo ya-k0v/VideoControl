@@ -111,29 +111,30 @@ class DeviceDetector:
             '--cursor-autohide=always',
         ]
         
-        # === Raspberry Pi - ОПТИМИЗАЦИЯ для MPV 0.32 ===
+        # === Raspberry Pi - GPU УСКОРЕНИЕ для MPV 0.32 ===
         if platform_type == 'raspberry_pi':
-            print(f"[Detector] 🥧 Raspberry Pi - оптимизированный CPU декодинг")
+            print(f"[Detector] 🥧 Raspberry Pi 4 - GPU ускорение через DRM")
             
-            # БЕЗ hwdec - он не работает нормально на MPV 0.32
-            # Вместо этого - максимальная оптимизация CPU декодинга
+            # Попробуем DRM hwdec - должен работать с RPi 4
             params.extend([
                 '--cache=yes',
-                '--cache-secs=30',  # Больше кэш
-                '--demuxer-max-bytes=100M',  # Большой буфер
-                '--demuxer-readahead-secs=30',  # Предзагрузка
+                '--cache-secs=30',
+                '--demuxer-max-bytes=100M',
+                '--demuxer-readahead-secs=30',
                 '--network-timeout=60',
                 '--image-display-duration=inf',
                 '--pause=no',
-                '--vo=xv',  # XV обычно быстрее X11 на старых системах
-                '--vd-lavc-threads=4',  # 4 потока для декодинга (RPi 4 имеет 4 ядра)
-                '--vd-lavc-fast',  # Быстрый режим декодинга
-                '--framedrop=vo',  # Пропускать кадры если не успевает
+                '--vo=gpu',  # GPU video output
+                '--gpu-context=drm',  # Direct Rendering Manager
+                '--hwdec=drm-copy',  # DRM hardware decoding
+                '--vd-lavc-threads=4',  # Fallback для SW декодинга
+                '--framedrop=vo',  # Пропуск кадров
             ])
             
-            print(f"[Detector] ✅ Оптимизированный CPU декодинг (4 потока)")
+            print(f"[Detector] ✅ GPU декодинг: DRM + hwdec=drm-copy")
             print(f"[Detector] 📦 Большой кэш: 30 сек, 100MB буфер")
-            print(f"[Detector] ⚡ XV video output + framedrop")
+            print(f"[Detector] 🎮 RPi4 VideoCore GPU")
+            print(f"[Detector] ⚠️  Если не запустится - попробуйте из консоли (без X11)")
             
             return params
         

@@ -125,12 +125,11 @@ class DeviceDetector:
                 '--demuxer-max-bytes=150M',  # Больше под ваши 256MB GPU
                 '--demuxer-readahead-secs=30',
                 '--network-timeout=60',
-                '--vo=gpu',  # GPU shader-based renderer (vc4-kms-v3d)
+                '--vo=x11',  # X11 стабильнее чем gpu на RPi с X-сервером
                 '--hwdec=v4l2m2m',  # rpivid-v4l2 аппаратный декодер
                 '--hwdec-codecs=h264,hevc,vp8,vp9',  # Поддерживаемые кодеки
                 '--vd-lavc-threads=4',  # 4 ядра CPU (arm_freq=2000)
                 '--framedrop=vo',  # Пропуск кадров если нужно
-                '--opengl-es=yes',  # OpenGL ES для VideoCore
             ])
             
             print(f"[Detector] ✅ rpivid-v4l2: H.264/H.265 GPU декодинг")

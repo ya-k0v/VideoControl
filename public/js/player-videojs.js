@@ -1152,6 +1152,15 @@ if (!device_id || !device_id.trim()) {
       console.log('[Player] ⏸️ Видео на паузе, последний кадр остается на экране');
     }
   });
+  
+  socket.on('player/resume', () => {
+    console.log('[Player] ▶️ player/resume');
+    // Продолжаем воспроизведение с текущей позиции (не сбрасываем!)
+    if (vjsPlayer && vjsPlayer.paused()) {
+      vjsPlayer.play();
+      console.log('[Player] ▶️ Продолжение воспроизведения с текущей позиции');
+    }
+  });
 
   socket.on('player/restart', () => {
     console.log('[Player] 🔄 player/restart');

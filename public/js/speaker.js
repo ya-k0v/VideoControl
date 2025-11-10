@@ -383,7 +383,6 @@ async function loadFiles() {
                          style="width:100%; height:100%; object-fit:cover; display:block; pointer-events:none"
                          onerror="this.parentElement.innerHTML='<div style=\\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);font-size:10px\\'>✗</div>'">
                     <div style="position:absolute; bottom:2px; right:4px; background:rgba(0,0,0,0.7); color:#fff; padding:2px 4px; border-radius:3px; font-size:10px; pointer-events:none">${idx + 1}</div>
-                    <div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); opacity:0; transition:opacity 0.2s; pointer-events:none; background:rgba(0,0,0,0.8); color:#fff; padding:8px 12px; border-radius:4px; font-size:12px; white-space:nowrap" class="play-hint">▶ Показать</div>
                   </div>
                 `).join('')}
               </div>

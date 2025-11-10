@@ -169,6 +169,8 @@ class MPVClient:
             mpv_cmd.append(f'--display={display}')
         
         print(f"[MPV] 🎬 Запуск MPV процесса...")
+        print(f"[MPV] 📝 Команда: {' '.join(mpv_cmd[:5])}...")
+        
         self.mpv_process = subprocess.Popen(
             mpv_cmd,
             stdout=subprocess.DEVNULL,
@@ -176,14 +178,36 @@ class MPVClient:
             env={**os.environ, 'DISPLAY': display}
         )
         
-        # Ждем создания IPC socket
-        for i in range(30):
+        print(f"[MPV] ⏳ Ожидание создания IPC socket: {self.ipc_socket}")
+        
+        # Ждем создания IPC socket (увеличен таймаут до 5 секунд)
+        for i in range(50):  # 50 * 0.1 = 5 секунд
             if os.path.exists(self.ipc_socket):
+                print(f"[MPV] ✅ Socket создан за {i * 0.1:.1f} сек")
                 break
+            
+            # Проверяем не завершился ли MPV с ошибкой
+            if self.mpv_process.poll() is not None:
+                print(f"[MPV] ❌ MPV процесс завершился с кодом: {self.mpv_process.returncode}")
+                stderr_output = self.mpv_process.stderr.read().decode('utf-8', errors='ignore')
+                if stderr_output:
+                    print(f"[MPV] 📛 Stderr: {stderr_output}")
+                sys.exit(1)
+            
             time.sleep(0.1)
         
         if not os.path.exists(self.ipc_socket):
-            print(f"[MPV] ❌ IPC socket не создан: {self.ipc_socket}")
+            print(f"[MPV] ❌ IPC socket не создан за 5 секунд: {self.ipc_socket}")
+            print(f"[MPV] 🔍 Проверка MPV процесса...")
+            
+            # Пытаемся получить stderr
+            if self.mpv_process.poll() is None:
+                print(f"[MPV] ℹ️ MPV процесс еще работает (PID: {self.mpv_process.pid})")
+                print(f"[MPV] 💡 Попробуйте увеличить таймаут или запустить с --msg-level=all=info")
+            else:
+                stderr_output = self.mpv_process.stderr.read().decode('utf-8', errors='ignore')
+                print(f"[MPV] 📛 MPV завершился. Stderr:\n{stderr_output}")
+            
             sys.exit(1)
         
         print(f"[MPV] ✅ MPV запущен (PID: {self.mpv_process.pid})")

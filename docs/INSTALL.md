@@ -61,8 +61,14 @@ MPV - нативный плеер для Linux с производительно
 - ✅ Стабильность 24/7
 - ✅ Большие файлы >4GB без проблем
 - ✅ Память ~50-70 MB (vs ~350 MB у браузера)
+- ✅ Идентичен Android ExoPlayer по функциональности
 
-**Быстрая установка:**
+**Быстрая установка (одна команда, без клонирования):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/clients/mpv/quick-install.sh | bash -s -- --server http://SERVER_IP --device mpv-001
+```
+
+**Или из репозитория:**
 ```bash
 cd clients/mpv
 ./install.sh --server http://SERVER_IP --device mpv-001

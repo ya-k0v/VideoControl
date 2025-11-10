@@ -171,10 +171,11 @@ class MPVClient:
         print(f"[MPV] 🎬 Запуск MPV процесса...")
         print(f"[MPV] 📝 Команда: {' '.join(mpv_cmd[:5])}...")
         
+        # КРИТИЧНО: Запускаем с STDOUT тоже для полной отладки
         self.mpv_process = subprocess.Popen(
             mpv_cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # Объединяем stderr в stdout
             env={**os.environ, 'DISPLAY': display}
         )
         
@@ -189,9 +190,19 @@ class MPVClient:
             # Проверяем не завершился ли MPV с ошибкой
             if self.mpv_process.poll() is not None:
                 print(f"[MPV] ❌ MPV процесс завершился с кодом: {self.mpv_process.returncode}")
-                stderr_output = self.mpv_process.stderr.read().decode('utf-8', errors='ignore')
-                if stderr_output:
-                    print(f"[MPV] 📛 Stderr: {stderr_output}")
+                
+                # Читаем весь вывод
+                output = self.mpv_process.stdout.read().decode('utf-8', errors='ignore')
+                if output:
+                    print(f"[MPV] 📛 Вывод MPV:")
+                    print("=" * 60)
+                    print(output)
+                    print("=" * 60)
+                else:
+                    print(f"[MPV] 📛 Нет вывода от MPV")
+                
+                print(f"[MPV] 💡 Попробуйте запустить MPV вручную:")
+                print(f"[MPV] 💡   mpv --idle=yes --force-window=yes --input-ipc-server=/tmp/test.sock")
                 sys.exit(1)
             
             time.sleep(0.1)
@@ -200,13 +211,17 @@ class MPVClient:
             print(f"[MPV] ❌ IPC socket не создан за 5 секунд: {self.ipc_socket}")
             print(f"[MPV] 🔍 Проверка MPV процесса...")
             
-            # Пытаемся получить stderr
+            # Пытаемся получить вывод
             if self.mpv_process.poll() is None:
                 print(f"[MPV] ℹ️ MPV процесс еще работает (PID: {self.mpv_process.pid})")
-                print(f"[MPV] 💡 Попробуйте увеличить таймаут или запустить с --msg-level=all=info")
+                print(f"[MPV] 💡 Попробуйте запустить вручную для отладки:")
+                print(f"[MPV] 💡   mpv --idle=yes --input-ipc-server=/tmp/test.sock")
             else:
-                stderr_output = self.mpv_process.stderr.read().decode('utf-8', errors='ignore')
-                print(f"[MPV] 📛 MPV завершился. Stderr:\n{stderr_output}")
+                output = self.mpv_process.stdout.read().decode('utf-8', errors='ignore')
+                print(f"[MPV] 📛 MPV завершился. Вывод:")
+                print("=" * 60)
+                print(output if output else "(пусто)")
+                print("=" * 60)
             
             sys.exit(1)
         

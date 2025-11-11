@@ -104,10 +104,14 @@ export function scanDeviceFiles(deviceId, deviceFolder, fileNamesMap) {
         const originalName = fileNamesMap[deviceId]?.[entry] || fullName;
         fileNames.push(originalName);
       } else {
-        // Обычная папка с изображениями
-        files.push(entry);
-        const originalName = fileNamesMap[deviceId]?.[entry] || entry;
-        fileNames.push(originalName);
+        // Проверяем, есть ли изображения в папке (папка изображений)
+        const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
+        if (hasImages) {
+          // Это папка с изображениями - добавляем её как файл
+          files.push(entry); // Добавляем имя папки
+          const originalName = fileNamesMap[deviceId]?.[entry] || entry;
+          fileNames.push(originalName);
+        }
       }
     }
   }

@@ -28,21 +28,15 @@ export function initSystemMonitor(adminFetch) {
  * Создать UI для системного монитора
  */
 function createSystemMonitorUI() {
-  const toolbar = document.querySelector('.toolbar');
-  if (!toolbar) {
-    console.warn('Toolbar not found');
-    return;
-  }
-
   // Проверяем, не создан ли уже
   if (document.getElementById('system-monitor')) {
     return;
   }
 
-  // Находим центральный элемент (flex:1)
-  const centerDiv = toolbar.querySelector('div[style*="flex:1"]');
+  // Находим специальный контейнер для монитора
+  const centerDiv = document.getElementById('systemMonitorContainer');
   if (!centerDiv) {
-    console.warn('Center div not found in toolbar');
+    console.warn('System monitor container not found');
     return;
   }
 
@@ -80,9 +74,6 @@ function createSystemMonitorUI() {
   `;
 
   centerDiv.innerHTML = monitorHTML;
-  centerDiv.style.display = 'flex';
-  centerDiv.style.justifyContent = 'center';
-  centerDiv.style.alignItems = 'center';
   
   // Добавляем стили
   addSystemMonitorStyles();

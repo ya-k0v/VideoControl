@@ -98,11 +98,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   
-  // Показываем имя пользователя
+  // Показываем ФИО пользователя
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInfo = document.getElementById('userInfo');
-  if (userInfo && user.username) {
-    userInfo.textContent = `👤 ${user.username} (${user.role})`;
+  const userFullName = document.getElementById('userFullName');
+  if (userFullName && user.full_name) {
+    userFullName.textContent = user.full_name;
+  } else if (userFullName && user.username) {
+    userFullName.textContent = user.username; // Fallback
   }
   
   // Обработчик кнопки Устройства (только для admin)
@@ -125,10 +127,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     usersBtn.style.display = 'none';
   }
   
-  // Обработчик кнопки logout
+  // Обработчик выхода (теперь это span)
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
-    logoutBtn.onclick = logout;
+    logoutBtn.onclick = (e) => {
+      e.preventDefault();
+      logout();
+    };
+    logoutBtn.style.cursor = 'pointer';
   }
   
   await loadAndSetNodeNames();
@@ -136,7 +142,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderLayout();
   initSelectionFromUrl();
   
-  // Инициализируем системный монитор с adminFetch
+  // Инициализируем системный монитор (теперь в специальном контейнере)
   initSystemMonitor(adminFetch);
 });
 

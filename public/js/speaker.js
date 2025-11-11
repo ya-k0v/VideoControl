@@ -38,17 +38,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   
-  // Показываем имя пользователя
+  // Показываем ФИО пользователя
   const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const userInfo = document.getElementById('userInfo');
-  if (userInfo && user.username) {
-    userInfo.textContent = `👤 ${user.username}`;
+  const userFullName = document.getElementById('userFullName');
+  if (userFullName && user.full_name) {
+    userFullName.textContent = user.full_name;
+  } else if (userFullName && user.username) {
+    userFullName.textContent = user.username; // Fallback на username
   }
   
-  // Обработчик кнопки logout
+  // Обработчик выхода (теперь это span)
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
-    logoutBtn.onclick = logout;
+    logoutBtn.onclick = (e) => {
+      e.preventDefault();
+      logout();
+    };
+    logoutBtn.style.cursor = 'pointer';
   }
   
   nodeNames = await loadNodeNames();

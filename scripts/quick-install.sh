@@ -137,9 +137,13 @@ NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
 
+# JWT Authentication (Week 1)
 JWT_SECRET=$JWT_SECRET
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
+JWT_ACCESS_EXPIRES_IN=12h
+JWT_REFRESH_EXPIRES_IN=30d
+
+# Logging level (info, warn, error, debug)
+LOG_LEVEL=info
 EOF
     chown $CURRENT_USER:$CURRENT_USER .env
     echo -e "  ${GREEN}✅ .env created with secure JWT secret${NC}"

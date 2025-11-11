@@ -12,6 +12,7 @@ import { deleteDevice as deleteDeviceFromDB, deleteDeviceFileNames } from '../da
 import { createLimiter, deleteLimiter } from '../middleware/rate-limit.js';
 import { auditLog, AuditAction } from '../utils/audit-logger.js';
 import logger, { logDevice } from '../utils/logger.js';
+import { deleteDeviceFilesMetadata } from '../database/files-metadata.js';
 
 const router = express.Router();
 
@@ -131,6 +132,10 @@ export function createDevicesRouter(deps) {
     // 1. Удаляем из БД
     deleteDeviceFromDB(id);
     logDevice('info', `Device deleted from DB`, { deviceId: id });
+    
+    // 1.5. Удаляем метаданные файлов устройства
+    const deletedMetadata = deleteDeviceFilesMetadata(id);
+    logDevice('info', `Device files metadata deleted`, { deviceId: id, filesCount: deletedMetadata });
     
     // 2. Удаляем папку устройства
     const devicePath = path.join(DEVICES, d.folder);

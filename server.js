@@ -47,6 +47,7 @@ import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
 import logger, { httpLoggerMiddleware } from './src/utils/logger.js';
+import { cleanupResolutionCache, getResolutionCacheSize } from './src/video/resolution-cache.js';
 
 const execAsync = util.promisify(execCallback);
 
@@ -219,3 +220,19 @@ server.listen(PORT, HOST, () => {
     env: process.env.NODE_ENV || 'development' 
   });
 });
+
+// ========================================
+// PERIODIC CLEANUP TASKS
+// ========================================
+
+// Очистка кэша разрешений видео (каждые 30 минут)
+// Удаляет записи для несуществующих файлов
+setInterval(() => {
+  const removed = cleanupResolutionCache();
+  if (removed > 0) {
+    logger.info('Resolution cache cleanup completed', { 
+      removedEntries: removed, 
+      cacheSize: getResolutionCacheSize() 
+    });
+  }
+}, 30 * 60 * 1000); // 30 минут

@@ -15,6 +15,9 @@ import { validatePath } from '../utils/path-validator.js';
 import { uploadLimiter, deleteLimiter } from '../middleware/rate-limit.js';
 import { auditLog, AuditAction } from '../utils/audit-logger.js';
 import logger, { logFile, logSecurity } from '../utils/logger.js';
+import { getCachedResolution, clearResolutionCache } from '../video/resolution-cache.js';
+import { processUploadedFilesAsync } from '../utils/file-metadata-processor.js';
+import { getFileMetadata, deleteFileMetadata } from '../database/files-metadata.js';
 
 const router = express.Router();
 
@@ -236,6 +239,14 @@ export function createFilesRouter(deps) {
           filesCount: uploaded.length, 
           folderName: folderName || null,
           uploadedBy: req.user?.username || 'anonymous'
+        });
+        
+        // Асинхронно обрабатываем метаданные (MD5, разрешение) - не блокируем ответ
+        processUploadedFilesAsync(id, req.files || [], folder, fileNamesMap).catch(err => {
+          logger.error('Background metadata processing failed', { 
+            error: err.message, 
+            deviceId: id 
+          });
         });
       }
       
@@ -576,6 +587,12 @@ export function createFilesRouter(deps) {
         return res.status(404).json({ error: 'not found' });
       }
       fs.unlinkSync(abs);
+      
+      // Очищаем кэш разрешения для удаленного видео
+      clearResolutionCache(abs);
+      
+      // Удаляем метаданные из БД
+      deleteFileMetadata(id, name);
     }
     
     // Удаляем из маппинга
@@ -695,23 +712,24 @@ export function createFilesRouter(deps) {
       
       let resolution = null;
       
-      // Получаем разрешение для видео файлов
+      // Получаем разрешение для видео файлов (из БД, не FFmpeg!)
       const ext = path.extname(safeName).toLowerCase();
       if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
-        if (fileStatus.status !== 'processing' && fileStatus.status !== 'checking') {
+        // Сначала пробуем из БД (быстро!)
+        const metadata = getFileMetadata(id, safeName);
+        if (metadata && metadata.video_width && metadata.video_height) {
+          resolution = {
+            width: metadata.video_width,
+            height: metadata.video_height
+          };
+        } else if (fileStatus.status !== 'processing' && fileStatus.status !== 'checking') {
+          // Fallback: если метаданных нет в БД - используем кэш с FFmpeg
+          // (это может быть для старых файлов загруженных до миграции)
           try {
             const filePath = path.join(DEVICES, d.folder, safeName);
-            if (fs.existsSync(filePath)) {
-              const params = await checkVideoParameters(filePath);
-              if (params) {
-                resolution = {
-                  width: params.width,
-                  height: params.height
-                };
-              }
-            }
+            resolution = await getCachedResolution(filePath, checkVideoParameters);
           } catch (e) {
-            console.error(`[files-with-status] ❌ Ошибка получения разрешения для ${safeName}:`, e);
+            // Игнорируем ошибки
           }
         }
       }

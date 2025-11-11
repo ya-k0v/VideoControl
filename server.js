@@ -121,7 +121,8 @@ const devicesRouter = createDevicesRouter({
 
 const placeholderRouter = createPlaceholderRouter({ 
   devices, 
-  io 
+  io,
+  fileNamesMap
 });
 
 const filesRouter = createFilesRouter({

@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { DEVICES, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
+import { scanDeviceFiles } from '../utils/file-scanner.js';
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ const router = express.Router();
  * @returns {express.Router} Настроенный роутер
  */
 export function createPlaceholderRouter(deps) {
-  const { devices, io } = deps;
+  const { devices, io, fileNamesMap } = deps;
   
   // GET /api/devices/:id/placeholder - Получить текущую заглушку устройства
   router.get('/:id/placeholder', (req, res) => {
@@ -198,27 +199,11 @@ export function createPlaceholderRouter(deps) {
       return res.status(500).json({ error: 'atomic copy failed', detail: String(e) });
     }
 
-    // Обновляем список файлов устройства
-    const result = [];
-    if (fs.existsSync(folder)) {
-      const entries = fs.readdirSync(folder);
-      for (const entry of entries) {
-        const entryPath = path.join(folder, entry);
-        const stat = fs.statSync(entryPath);
-        
-        if (stat.isFile()) {
-          // Пропускаем системные файлы (default.*, .optimizing_*, .tmp_*, etc.)
-          if (!isSystemFile(entry)) {
-            result.push(entry);
-          }
-        } else if (stat.isDirectory()) {
-          const folderContents = fs.readdirSync(entryPath);
-          const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-          if (originalFile) result.push(originalFile);
-        }
-      }
-    }
-    d.files = result;
+    // Обновляем список файлов через scanDeviceFiles (единая логика)
+    const { files: scannedFiles, fileNames: scannedFileNames } = scanDeviceFiles(id, folder, fileNamesMap);
+    
+    d.files = scannedFiles;
+    d.fileNames = scannedFileNames;
 
     io.emit('devices/updated');
     io.to(`device:${id}`).emit('player/stop');

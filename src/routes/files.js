@@ -215,7 +215,7 @@ export function createFilesRouter(deps) {
         });
       }
       
-      res.json({ ok: true, files: result, uploaded });
+      res.json({ ok: true, files: scannedFiles, uploaded });
     });
   });
   

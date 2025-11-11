@@ -1,29 +1,47 @@
 # VideoControl v2.5.0
 
-> Модульная система управления видеоконтентом для дисплеев и Android устройств
+> Профессиональная система управления медиа-контентом с JWT аутентификацией, audit logging и enterprise security
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![Release](https://img.shields.io/badge/release-v2.5.0-blue.svg)](https://github.com/ya-k0v/VideoControl/releases/tag/v2.5.0)
+[![Security](https://img.shields.io/badge/security-JWT+Audit-success.svg)](https://github.com/ya-k0v/VideoControl)
 [![GitHub](https://img.shields.io/github/stars/ya-k0v/VideoControl?style=social)](https://github.com/ya-k0v/VideoControl)
 
 ---
 
 ## 🎯 О проекте
 
-VideoControl - это профессиональная система централизованного управления медиа-контентом для множества устройств в режиме реального времени.
+VideoControl - это **enterprise-ready** система централизованного управления медиа-контентом для множества устройств с двухуровневой защитой и полным аудитом операций.
 
-**Особенности:**
-- 🎬 Управление видео, изображениями, PDF, PPTX, **папок с изображениями**
-- 📱 Нативное Android приложение (ExoPlayer + Glide)
-- 🌐 Веб-панели управления (Admin, Speaker, Player)
-- 🔄 Синхронизация в реальном времени (Socket.IO)
-- 📊 Автоматическая оптимизация видео (FFmpeg)
-- 🎨 Drag & Drop между устройствами (включая папки)
-- 📁 **Загрузка папок**: прямой выбор или ZIP архивы
-- 🖼️ **Превью миниатюр**: сетка для папок и презентаций
-- 🔤 **Транслитерация**: кириллица → латиница автоматически
-- 📡 Поддержка offline режима (PWA)
+### 🎬 Медиа функции:
+- Управление видео, аудио, изображений, PDF, PPTX, папок с изображениями
+- Нативное Android приложение (ExoPlayer + Glide)
+- MPV Python клиент (Raspberry Pi, Linux)
+- Синхронизация в реальном времени (Socket.IO)
+- Автоматическая оптимизация видео (FFmpeg)
+- Drag & Drop между устройствами
+- Загрузка до **5GB** на файл
+- Превью миниатюр для папок и презентаций
+- Транслитерация кириллицы → латиница
+- PWA поддержка (offline режим)
+
+### 🔐 Безопасность (NEW):
+- **JWT Authentication** (12h access, 30d refresh)
+- **Two-level security**: Network (Nginx IP-based) + Application (JWT)
+- **Role-Based Access Control**: admin, speaker
+- **Rate limiting**: защита от brute-force и DDoS (отключен для локальной сети)
+- **Path traversal protection**: валидация всех путей
+- **MIME type validation**: проверка типов файлов
+- **Client-side validation**: проверка размера файлов перед загрузкой
+
+### 📝 Логирование и аудит (NEW):
+- **Winston structured logging**: JSON формат с ротацией
+- **Audit log в БД**: запись всех критических операций
+- **HTTP request logging**: метрики производительности
+- **Security event tracking**: обнаружение атак
+- **Daily log rotation**: 14 дней (combined), 30 дней (errors)
+- **Категории логов**: auth, device, file, socket, security, api
 
 ---
 
@@ -35,34 +53,55 @@ VideoControl - это профессиональная система центр
 curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install.sh | sudo bash
 ```
 
-Скрипт установит **ВСЁ НЕОБХОДИМОЕ** и запустит сервер!
+Скрипт установит **ВСЁ НЕОБХОДИМОЕ** и запустит сервер с полной безопасностью!
 
-**Готово!** Откройте: `http://YOUR_SERVER_IP/admin.html`
+**Готово!** Откройте: `http://YOUR_SERVER_IP/`  
+**Логин**: `admin` / **Пароль**: `admin123` 🔐
 
 ---
 
-## 📦 Установка (детально)
+## 📦 Что устанавливает скрипт?
 
-### ⚡ Установка одной командой (Рекомендуется):
+### Автоматическая установка включает:
 
-```bash
-# Полная автоматическая установка на Ubuntu/Debian
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install.sh | sudo bash
+**🔧 Системные зависимости:**
+- ✅ Node.js 18+ (JavaScript runtime)
+- ✅ FFmpeg (видео конвертация)
+- ✅ LibreOffice (PDF/PPTX → изображения)
+- ✅ ImageMagick (обработка изображений)
+- ✅ SQLite3 (база данных)
+- ✅ Nginx (reverse proxy + security)
+- ✅ Unzip (распаковка архивов)
 
-# Или с указанием директории установки:
-curl -fsSL https://raw.githubusercontent.com/ya-k0v/VideoControl/main/scripts/quick-install.sh | sudo bash -s /path/to/install
-```
+**📊 База данных:**
+- ✅ Автоматическое создание `main.db` (SQLite)
+- ✅ Применение миграций (users, refresh_tokens, audit_log)
+- ✅ Создание дефолтного admin пользователя
+- ✅ Индексы для быстрого поиска
 
-**Скрипт автоматически:**
-- ✅ Установит Node.js 18, FFmpeg, LibreOffice, ImageMagick
-- ✅ Клонирует проект и установит зависимости
-- ✅ Создаст SQLite базу данных
-- ✅ Оптимизирует TCP буферы для быстрой загрузки (16MB)
-- ✅ Настроит и запустит Nginx
-- ✅ Создаст systemd service
-- ✅ Запустит сервер
+**🔐 Безопасность:**
+- ✅ Генерация JWT секрета (64 байта, crypto.randomBytes)
+- ✅ Настройка Nginx с IP-based access control
+- ✅ Rate limiting конфигурация
+- ✅ Path traversal защита
+- ✅ Audit logging система
 
-**После установки откройте:** `http://YOUR_SERVER_IP/admin.html`
+**📝 Логирование:**
+- ✅ Winston structured logging
+- ✅ Директория `logs/` с ротацией
+- ✅ HTTP request logging
+- ✅ Security event tracking
+
+**⚙️ Сервис:**
+- ✅ Systemd service (автозапуск)
+- ✅ Оптимизация сети (16MB TCP buffers)
+- ✅ Nginx reverse proxy (порт 80)
+- ✅ Автоматический рестарт при сбоях
+
+**После установки:**
+- 🌐 Admin panel: `http://YOUR_SERVER_IP/`
+- 🎤 Speaker panel: `http://YOUR_SERVER_IP/speaker.html`
+- 🔑 Credentials: **admin / admin123** (обязательно смените!)
 
 ---
 
@@ -118,13 +157,21 @@ videocontrol/
 │   ├── main.db                  SQLite база данных (devices, files)
 │   └── video-optimization.json  Настройки FFmpeg оптимизации
 │
-├── src/                      Backend (28+ модулей)
+├── src/                      Backend (35+ модулей)
 │   ├── database/             SQLite база данных
 │   │   ├── database.js       Модуль работы с БД
-│   │   └── schema.sql        Схема БД
+│   │   ├── schema.sql        Схема БД
+│   │   └── migrations/       Миграции БД
+│   │       └── 001_add_users.sql
 │   ├── config/               Константы и настройки
-│   ├── middleware/           Express middleware (multer, express)
-│   ├── routes/               API endpoints (7 роутеров)
+│   ├── middleware/           Express middleware (6 модулей) **← NEW!**
+│   │   ├── auth.js           JWT аутентификация **NEW**
+│   │   ├── rate-limit.js     Rate limiting **NEW**
+│   │   ├── file-validation.js MIME type проверка **NEW**
+│   │   ├── multer-config.js  Загрузка файлов
+│   │   └── express-config.js Express настройки
+│   ├── routes/               API endpoints (8 роутеров)
+│   │   ├── auth.js           Аутентификация (login/logout) **NEW**
 │   │   ├── devices.js        Управление устройствами
 │   │   ├── files.js          Загрузка/управление файлами
 │   │   ├── folders.js        API для папок с изображениями
@@ -138,30 +185,45 @@ videocontrol/
 │   │   ├── device-handlers.js    События устройств
 │   │   ├── control-handlers.js   Управление воспроизведением
 │   │   └── device-state.js       Состояние устройств
-│   ├── storage/              Работа с файлами (2 модуля)
+│   ├── storage/              Работа с файлами (1 модуль)
+│   │   └── devices-storage-sqlite.js SQLite хранилище
 │   ├── video/                FFmpeg оптимизация (3 модуля)
 │   ├── converters/           PDF/PPTX/ZIP → изображения (2 модуля)
 │   │   ├── document-converter.js PDF/PPTX конвертер
 │   │   └── folder-converter.js   ZIP → папки изображений
-│   └── utils/                Утилиты (4 модуля)
+│   └── utils/                Утилиты (8 модулей) **← EXPANDED!**
+│       ├── logger.js         Winston logging **NEW**
+│       ├── audit-logger.js   Audit log в БД **NEW**
+│       ├── path-validator.js Path traversal защита **NEW**
 │       ├── transliterate.js  Кириллица → латиница
 │       ├── file-scanner.js   Сканирование файлов
 │       ├── sanitize.js       Санитизация путей
 │       └── encoding.js       Работа с кодировками
 │
 ├── public/                   Frontend
+│   ├── index.html            Login page (JWT auth) **NEW**
 │   ├── admin.html            Панель администратора
 │   ├── speaker.html          Панель спикера
 │   ├── player-videojs.html   Плеер (Video.js)
 │   │
 │   ├── js/
-│   │   ├── admin/            Admin модули (10)
+│   │   ├── admin/            Admin модули (13+) **← EXPANDED!**
+│   │   │   ├── auth.js       JWT аутентификация **NEW**
+│   │   │   ├── modal.js      User management **NEW**
+│   │   │   ├── upload-ui.js  Загрузка файлов (с проверкой размера)
+│   │   │   ├── device-card.js Карточки устройств
+│   │   │   ├── files-manager.js Управление файлами
+│   │   │   ├── devices-manager.js Управление устройствами
+│   │   │   ├── system-monitor.js Системный мониторинг
+│   │   │   └── ui-helpers.js UI утилиты
+│   │   ├── speaker/          Speaker модули **← NEW!**
+│   │   │   └── auth.js       JWT аутентификация
 │   │   ├── shared/           Shared модули (2)
 │   │   ├── admin.js          Главный admin
 │   │   ├── speaker.js        Главный speaker
 │   │   ├── player-videojs.js Главный player
 │   │   ├── utils.js          Утилиты
-│   │   └── theme.js          Темы (dark/light)
+│   │   └── theme.js          Темы (dark/light, SVG icons)
 │   │
 │   ├── css/                  Стили
 │   ├── vendor/               Сторонние библиотеки
@@ -187,15 +249,29 @@ videocontrol/
 │   └── setup-kiosk.sh             Kiosk режим
 │
 ├── nginx/                    NGINX конфигурация
-│   └── install-nginx.sh      Установка NGINX
+│   ├── videocontrol.conf          Стандартный конфиг
+│   └── videocontrol-secure.conf   Конфиг с IP защитой **NEW**
+│
+├── logs/                     Winston логи (автосоздается) **← NEW!**
+│   ├── combined-YYYY-MM-DD.log    Все логи (14 дней)
+│   ├── error-YYYY-MM-DD.log       Только ошибки (30 дней)
+│   ├── exceptions-YYYY-MM-DD.log  Исключения
+│   └── rejections-YYYY-MM-DD.log  Promise rejections
+│
+├── plan/                     Планирование и документация **← NEW!**
+│   ├── ROADMAP.md            Детальный roadmap развития
+│   ├── TODO.md               Текущие задачи
+│   ├── SECURITY_LEVELS.md    Два уровня безопасности
+│   └── GETTING_STARTED.md    Быстрый старт
 │
 ├── docs/                     Документация
 │   ├── INSTALL.md            Детальная установка
+│   ├── CODE_REVIEW_SUMMARY.md Обзор кодовой базы **NEW**
+│   ├── DATA_DISK_SETUP.md    Настройка отдельного диска **NEW**
+│   ├── HARDWARE_REQUIREMENTS.md Требования к железу **NEW**
 │   ├── ANDROID.md            Android приложение
 │   ├── FOLDERS_FEATURE.md    Функция папок с изображениями
-│   ├── STRUCTURE.md          Структура проекта
-│   ├── ROADMAP.md            Планы развития
-│   └── VLC.md                VLC клиент
+│   └── STRUCTURE.md          Структура проекта
 │
 └── .converted/               Кэш конвертированных файлов (не в git)
 ```
@@ -204,29 +280,40 @@ videocontrol/
 
 ## 🚀 Возможности
 
-### Backend (модульный)
+### Backend (модульный + безопасный)
 - ✅ **SQLite database** - быстрая БД вместо JSON (WAL mode, индексы)
-- ✅ **26 модулей** вместо монолита (server.js: 1,947 → 170 строк, -91%)
-- ✅ **7 роутеров** - devices, files, folders, conversion, placeholder, video-info, system
+- ✅ **35+ модулей** вместо монолита (server.js: 1,947 → 220 строк, -89%)
+- ✅ **8 роутеров** - auth, devices, files, folders, conversion, placeholder, video-info, system
 - ✅ **Socket.IO** - реальное время для всех клиентов (5 модулей)
+- ✅ **JWT Authentication** - 12h access, 30d refresh tokens **NEW**
+- ✅ **Audit Logging** - запись всех операций в БД **NEW**
+- ✅ **Winston Logging** - структурированные JSON логи с ротацией **NEW**
+- ✅ **Rate Limiting** - защита от brute-force и DDoS **NEW**
+- ✅ **Path Validation** - защита от path traversal **NEW**
 - ✅ **FFmpeg** - автоматическая оптимизация видео (720p/1080p)
 - ✅ **PDF/PPTX → изображения** - LibreOffice конвертация
 - ✅ **ZIP → папки** - автоматическая распаковка изображений
 - ✅ **Транслитерация** - кириллица → латиница для безопасных имен
 - ✅ **TCP оптимизация** - буферы 16MB для быстрой загрузки файлов
+- ✅ **Загрузка до 5GB** - увеличенный лимит на файл **NEW**
 - ✅ **Отдельный диск** - поддержка внешнего хранилища через DATA_ROOT
 
-### Frontend (модульный)
-- ✅ **17 модулей** вместо монолита (admin.js: 1,094 → 267 строк, -76%)
-- ✅ **3 панели** - Admin, Speaker, Player
+### Frontend (модульный + защищенный)
+- ✅ **20+ модулей** вместо монолита (admin.js: 1,094 → 304 строк, -72%)
+- ✅ **4 панели** - Login (NEW), Admin, Speaker, Player
+- ✅ **JWT Auth UI** - login page с автоматической авторизацией **NEW**
+- ✅ **User Management** - создание/удаление пользователей (admin) **NEW**
+- ✅ **File Size Validation** - проверка до загрузки (5GB limit) **NEW**
+- ✅ **Device Name in Header** - имя устройства + счетчик файлов **NEW**
 - ✅ **Drag & Drop** - перемещение файлов и папок между устройствами
 - ✅ **Thumbnail Grids** - превью миниатюр для папок и презентаций
 - ✅ **Interactive Navigation** - клик по миниатюре → показ слайда (Speaker)
 - ✅ **Folder Upload** - прямой выбор папки или drag & drop
 - ✅ **Live Preview** - предпросмотр в iframe
+- ✅ **System Monitor** - CPU, Memory, Disk usage в админке **NEW**
 - ✅ **Адаптивный UI** - desktop, tablet, mobile
 - ✅ **PWA** - offline поддержка, иконки
-- ✅ **Dark/Light** - переключение тем
+- ✅ **Dark/Light** - переключение тем (SVG icons) **NEW**
 
 ### Android MediaPlayer (ExoPlayer)
 - ✅ **ExoPlayer** - стабильное воспроизведение с кэшем (500 MB)
@@ -253,15 +340,74 @@ videocontrol/
 
 ---
 
+## 🔐 Безопасность и аудит
+
+### Двухуровневая защита:
+
+**Level 1: Network (Nginx IP-based)**
+- IP белые списки для admin/device сетей
+- Geo-правила автоматически настраиваются при установке
+- Защита от несанкционированного доступа
+
+**Level 2: Application (JWT)**
+- JSON Web Tokens для аутентификации
+- Access Token: 12 часов
+- Refresh Token: 30 дней
+- Роли: admin (полный доступ), speaker (управление контентом)
+
+### Защита от атак:
+
+- ✅ **Brute-force**: Rate limiting на login (5 попыток / 15 мин)
+- ✅ **DDoS**: Global rate limiting (отключен для локальной сети)
+- ✅ **Path Traversal**: Валидация всех файловых путей
+- ✅ **Upload Bombs**: Лимит 5GB на файл
+- ✅ **MIME Type Spoofing**: Проверка типов файлов
+
+### Логирование:
+
+**Winston Structured Logs** (`logs/`):
+- `combined-YYYY-MM-DD.log` - все логи (14 дней)
+- `error-YYYY-MM-DD.log` - только ошибки (30 дней)
+- `exceptions-YYYY-MM-DD.log` - необработанные исключения
+- JSON формат для машинного анализа
+
+**Audit Log** (БД `audit_log` таблица):
+- Все логины/логауты
+- Создание/удаление пользователей, устройств, файлов
+- События безопасности (path traversal, brute-force)
+- IP адреса, User-Agent, timestamps
+- SQL запросы для анализа
+
+**Пример анализа:**
+```bash
+# Неудачные попытки логина (brute-force detection)
+sqlite3 config/main.db "
+  SELECT ip_address, COUNT(*) as attempts 
+  FROM audit_log 
+  WHERE action = 'auth.login_failed' 
+  GROUP BY ip_address 
+  HAVING attempts >= 3;"
+
+# История действий пользователя
+sqlite3 config/main.db "
+  SELECT action, resource, created_at 
+  FROM audit_log 
+  WHERE user_id = 1 
+  ORDER BY created_at DESC LIMIT 20;"
+```
+
+---
+
 ## 📖 Документация
 
 ### Для пользователей:
 - [📘 Установка сервера](docs/INSTALL.md)
+- [🔐 Безопасность (два уровня)](plan/SECURITY_LEVELS.md) **← NEW!**
+- [📝 Roadmap развития](plan/ROADMAP.md) **← NEW!**
 - [📱 Android приложение](docs/ANDROID.md)
 - [🖥️ Linux MPV клиент](clients/mpv/README.md) **← NEW!**
 - [📁 Папки с изображениями](docs/FOLDERS_FEATURE.md)
 - [🎬 Структура проекта](docs/STRUCTURE.md)
-- [🚀 Roadmap](docs/ROADMAP.md)
 
 ---
 

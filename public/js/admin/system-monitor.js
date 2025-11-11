@@ -4,12 +4,15 @@
  */
 
 let systemInfoInterval = null;
+let fetchFunction = null;
 
 /**
  * Инициализация системного монитора
  */
-export function initSystemMonitor() {
+export function initSystemMonitor(adminFetch) {
   console.log('Initializing system monitor...');
+  
+  fetchFunction = adminFetch;
   
   // Создаем UI для системной информации
   createSystemMonitorUI();
@@ -89,8 +92,13 @@ function createSystemMonitorUI() {
  * Загрузить информацию о системе
  */
 async function loadSystemInfo() {
+  if (!fetchFunction) {
+    console.warn('System monitor: fetchFunction not set');
+    return;
+  }
+  
   try {
-    const response = await fetch('/api/system/info');
+    const response = await fetchFunction('/api/system/info');
     
     if (!response.ok) {
       console.error('Failed to load system info:', response.status);

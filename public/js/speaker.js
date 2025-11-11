@@ -1,5 +1,6 @@
 import { initThemeToggle } from './theme.js';
 import { sortDevices, debounce, getPageSize, loadNodeNames } from './utils.js';
+import { ensureAuth, speakerFetch, logout } from './speaker/auth.js';
 
 const socket = io();
 
@@ -29,6 +30,27 @@ function truncateText(text, maxLength = 40) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   initThemeToggle(document.getElementById('themeBtn'), 'vc_theme_speaker');
+  
+  try {
+    const authorized = await ensureAuth();
+    if (!authorized) return;
+  } catch (err) {
+    return;
+  }
+  
+  // Показываем имя пользователя
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const userInfo = document.getElementById('userInfo');
+  if (userInfo && user.username) {
+    userInfo.textContent = `👤 ${user.username}`;
+  }
+  
+  // Обработчик кнопки logout
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.onclick = logout;
+  }
+  
   nodeNames = await loadNodeNames();
   await loadDevices();
   attachTouchGestures();
@@ -46,7 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 /* Загрузка списка устройств */
 async function loadDevices() {
   try {
-    const res = await fetch('/api/devices');
+    const res = await speakerFetch('/api/devices');
     if (!res.ok) {
       console.error('Failed to load devices:', res.status);
       return;
@@ -199,7 +221,7 @@ async function loadFiles() {
   
   try {
     // КРИТИЧНО: Используем files-with-status для получения разрешения видео
-    const res = await fetch(`/api/devices/${encodeURIComponent(currentDevice)}/files-with-status`);
+    const res = await speakerFetch(`/api/devices/${encodeURIComponent(currentDevice)}/files-with-status`);
     if (!res.ok) {
       console.error('Failed to load files:', res.status);
       fileList.innerHTML = '<li class="item" style="text-align:center; padding:var(--space-xl)"><div class="meta">Ошибка загрузки файлов</div></li>';
@@ -351,7 +373,7 @@ async function loadFiles() {
         if (!hasExtension) {
           // Это папка с изображениями
           try {
-            const res = await fetch(`/api/devices/${encodeURIComponent(currentDevice)}/folder/${encodeURIComponent(safeName)}/images`);
+            const res = await speakerFetch(`/api/devices/${encodeURIComponent(currentDevice)}/folder/${encodeURIComponent(safeName)}/images`);
             const data = await res.json();
             images = data.images || [];
             // Создаем URLs для изображений из папки
@@ -365,7 +387,7 @@ async function loadFiles() {
           // Это презентация
           try {
             const urlType = ext === 'pdf' ? 'page' : 'slide';
-            const res = await fetch(`/api/devices/${encodeURIComponent(currentDevice)}/slides-count?file=${encodeURIComponent(safeName)}`);
+            const res = await speakerFetch(`/api/devices/${encodeURIComponent(currentDevice)}/slides-count?file=${encodeURIComponent(safeName)}`);
             const data = await res.json();
             const count = data.count || 0;
             // Создаем URLs для слайдов
@@ -629,7 +651,7 @@ socket.on('players/onlineSnapshot', (list) => {
 
 socket.on('devices/updated', onDevicesUpdated);
 const onPreviewRefresh = debounce(async ({ device_id }) => {
-  await fetch('/api/devices')
+  await speakerFetch('/api/devices')
     .then(res => res.json())
     .then(data => {
       devices = sortDevices(data);

@@ -1,0 +1,384 @@
+/**
+ * Authentication routes
+ * @module routes/auth
+ */
+
+import express from 'express';
+import bcrypt from 'bcrypt';
+import { body, validationResult } from 'express-validator';
+import { getDatabase } from '../database/database.js';
+import { 
+  generateAccessToken, 
+  generateRefreshToken, 
+  requireAuth,
+  requireAdmin
+} from '../middleware/auth.js';
+
+const router = express.Router();
+
+/**
+ * POST /api/auth/login
+ * Вход в систему
+ */
+router.post('/login',
+  body('username').trim().notEmpty(),
+  body('password').notEmpty(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { username, password } = req.body;
+    const db = getDatabase();
+
+    try {
+      // Находим пользователя
+      const user = db.prepare(`
+        SELECT id, username, full_name, password_hash, role, is_active 
+        FROM users 
+        WHERE username = ?
+      `).get(username);
+
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      if (!user.is_active) {
+        return res.status(403).json({ error: 'Account disabled' });
+      }
+
+      // Проверяем пароль
+      const passwordMatch = await bcrypt.compare(password, user.password_hash);
+      
+      if (!passwordMatch) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      // Генерируем токены
+      const accessToken = generateAccessToken(user.id, user.username, user.role);
+      const refreshToken = generateRefreshToken(user.id);
+
+      // Сохраняем refresh token в БД
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 дней
+
+      db.prepare(`
+        INSERT INTO refresh_tokens (user_id, token, expires_at, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        user.id,
+        refreshToken,
+        expiresAt.toISOString(),
+        req.ip,
+        req.get('user-agent')
+      );
+
+      // Обновляем last_login
+      db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+
+      // Логируем вход
+      db.prepare(`
+        INSERT INTO audit_log (user_id, action, ip_address, user_agent)
+        VALUES (?, ?, ?, ?)
+      `).run(user.id, 'LOGIN', req.ip, req.get('user-agent'));
+
+      res.json({
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          username: user.username,
+          full_name: user.full_name,
+          role: user.role
+        }
+      });
+    } catch (err) {
+      console.error('[Auth] Login error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/refresh
+ * Обновление access token
+ */
+router.post('/refresh',
+  body('refreshToken').notEmpty(),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { refreshToken } = req.body;
+    const db = getDatabase();
+
+    try {
+      // Проверяем refresh token в БД
+      const tokenRecord = db.prepare(`
+        SELECT rt.user_id, rt.expires_at, u.username, u.role, u.is_active
+        FROM refresh_tokens rt
+        JOIN users u ON rt.user_id = u.id
+        WHERE rt.token = ?
+      `).get(refreshToken);
+
+      if (!tokenRecord) {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+      }
+
+      if (!tokenRecord.is_active) {
+        return res.status(403).json({ error: 'Account disabled' });
+      }
+
+      // Проверяем срок действия
+      if (new Date(tokenRecord.expires_at) < new Date()) {
+        // Удаляем истекший токен
+        db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshToken);
+        return res.status(401).json({ error: 'Refresh token expired' });
+      }
+
+      // Генерируем новый access token
+      const accessToken = generateAccessToken(
+        tokenRecord.user_id,
+        tokenRecord.username,
+        tokenRecord.role
+      );
+
+      // Обновляем last_used
+      db.prepare(`
+        UPDATE refresh_tokens 
+        SET last_used = CURRENT_TIMESTAMP 
+        WHERE token = ?
+      `).run(refreshToken);
+
+      res.json({
+        accessToken,
+        expiresIn: 900 // 15 минут в секундах
+      });
+    } catch (err) {
+      console.error('[Auth] Refresh error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /api/auth/logout
+ * Выход из системы
+ */
+router.post('/logout', requireAuth, async (req, res) => {
+  const { refreshToken } = req.body;
+  const db = getDatabase();
+
+  try {
+    if (refreshToken) {
+      // Удаляем refresh token
+      db.prepare('DELETE FROM refresh_tokens WHERE token = ?').run(refreshToken);
+    }
+
+    // Логируем выход
+    db.prepare(`
+      INSERT INTO audit_log (user_id, action, ip_address)
+      VALUES (?, ?, ?)
+    `).run(req.user.userId, 'LOGOUT', req.ip);
+
+    res.json({ message: 'Logged out successfully' });
+  } catch (err) {
+    console.error('[Auth] Logout error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Получить текущего пользователя
+ */
+router.get('/me', requireAuth, async (req, res) => {
+  const db = getDatabase();
+
+  try {
+    const user = db.prepare(`
+      SELECT id, username, full_name, role, created_at, last_login
+      FROM users
+      WHERE id = ?
+    `).get(req.user.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(user);
+  } catch (err) {
+    console.error('[Auth] Me error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/auth/register
+ * Регистрация пользователя (только admin)
+ */
+router.post('/register',
+  requireAuth,
+  requireAdmin,
+  body('username').trim().isLength({ min: 3, max: 50 }),
+  body('full_name').trim().isLength({ min: 1, max: 100 }),
+  body('password').isLength({ min: 8 }),
+  body('role').isIn(['admin', 'speaker']),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { username, full_name, password, role } = req.body;
+    const db = getDatabase();
+
+    try {
+      // Проверяем уникальность
+      const existing = db.prepare(`
+        SELECT id FROM users WHERE username = ?
+      `).get(username);
+
+      if (existing) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
+
+      // Хешируем пароль
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      // Создаем пользователя
+      const result = db.prepare(`
+        INSERT INTO users (username, full_name, password_hash, role)
+        VALUES (?, ?, ?, ?)
+      `).run(username, full_name, passwordHash, role);
+
+      // Логируем создание
+      db.prepare(`
+        INSERT INTO audit_log (user_id, action, resource_type, resource_id, details)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(
+        req.user.userId,
+        'CREATE_USER',
+        'user',
+        result.lastInsertRowid,
+        JSON.stringify({ username, role })
+      );
+
+      res.status(201).json({
+        id: result.lastInsertRowid,
+        username,
+        full_name,
+        role
+      });
+    } catch (err) {
+      console.error('[Auth] Register error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * GET /api/auth/users
+ * Получить список пользователей (только admin)
+ */
+router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+  const db = getDatabase();
+
+  try {
+    const users = db.prepare(`
+      SELECT id, username, full_name, role, is_active, created_at, last_login
+      FROM users
+      ORDER BY created_at DESC
+    `).all();
+
+    res.json(users);
+  } catch (err) {
+    console.error('[Auth] Users list error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/auth/users/:id/toggle
+ * Включить/отключить пользователя (только admin)
+ */
+router.post('/users/:id/toggle',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    const userId = parseInt(req.params.id);
+    const { is_active } = req.body;
+    const db = getDatabase();
+
+    try {
+      // Нельзя отключить себя
+      if (userId === req.user.userId) {
+        return res.status(400).json({ error: 'Cannot disable yourself' });
+      }
+
+      // Обновляем статус
+      db.prepare(`
+        UPDATE users SET is_active = ? WHERE id = ?
+      `).run(is_active ? 1 : 0, userId);
+
+      // Логируем
+      db.prepare(`
+        INSERT INTO audit_log (user_id, action, resource_type, resource_id)
+        VALUES (?, ?, ?, ?)
+      `).run(
+        req.user.userId,
+        is_active ? 'ENABLE_USER' : 'DISABLE_USER',
+        'user',
+        userId
+      );
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[Auth] Toggle user error:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * DELETE /api/auth/users/:id
+ * Удалить пользователя (только admin)
+ */
+router.delete('/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  const userId = parseInt(req.params.id);
+  const db = getDatabase();
+
+  try {
+    // Нельзя удалить себя
+    if (userId === req.user.userId) {
+      return res.status(400).json({ error: 'Cannot delete yourself' });
+    }
+
+    // Нельзя удалить первого admin
+    if (userId === 1) {
+      return res.status(400).json({ error: 'Cannot delete default admin' });
+    }
+
+    // Удаляем пользователя (каскадно удалятся refresh_tokens)
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+    // Логируем
+    db.prepare(`
+      INSERT INTO audit_log (user_id, action, resource_type, resource_id)
+      VALUES (?, ?, ?, ?)
+    `).run(req.user.userId, 'DELETE_USER', 'user', userId);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[Auth] Delete user error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export function createAuthRouter() {
+  return router;
+}
+

@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { DEVICES } from '../config/constants.js';
 import { sanitizeDeviceId } from '../utils/sanitize.js';
+import { deleteDevice as deleteDeviceFromDB, deleteDeviceFileNames } from '../database/database.js';
 
 const router = express.Router();
 
@@ -17,9 +18,9 @@ const router = express.Router();
  * @returns {express.Router} Настроенный роутер
  */
 export function createDevicesRouter(deps) {
-  const { devices, io, saveDevicesJson, fileNamesMap, saveFileNamesMap } = deps;
+  const { devices, io, saveDevicesJson, fileNamesMap, saveFileNamesMap, requireAdmin } = deps;
   
-  // GET /api/devices - Получить список всех устройств
+  // GET /api/devices - Получить список всех устройств (доступно speaker)
   router.get('/', (req, res) => {
     res.json(Object.entries(devices).map(([id, d]) => ({
       device_id: id, 
@@ -42,8 +43,8 @@ export function createDevicesRouter(deps) {
     })));
   });
   
-  // POST /api/devices - Создать новое устройство
-  router.post('/', (req, res) => {
+  // POST /api/devices - Создать новое устройство (только admin)
+  router.post('/', requireAdmin, (req, res) => {
     const { device_id, name } = req.body;
     
     if (!device_id) {
@@ -78,8 +79,8 @@ export function createDevicesRouter(deps) {
     res.json({ ok: true });
   });
   
-  // POST /api/devices/:id/rename - Переименовать устройство
-  router.post('/:id/rename', (req, res) => {
+  // POST /api/devices/:id/rename - Переименовать устройство (только admin)
+  router.post('/:id/rename', requireAdmin, (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -96,8 +97,8 @@ export function createDevicesRouter(deps) {
     res.json({ ok: true });
   });
   
-  // DELETE /api/devices/:id - Удалить устройство
-  router.delete('/:id', (req, res) => {
+  // DELETE /api/devices/:id - Удалить устройство (только admin)
+  router.delete('/:id', requireAdmin, (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -111,27 +112,30 @@ export function createDevicesRouter(deps) {
     
     console.log(`[DELETE device] Удаление устройства: ${id} (folder: ${d.folder})`);
     
-    // Удаляем папку устройства
+    // 1. Удаляем из БД
+    deleteDeviceFromDB(id);
+    console.log(`[DELETE device] ✅ Удалено из БД: ${id}`);
+    
+    // 2. Удаляем папку устройства
     const devicePath = path.join(DEVICES, d.folder);
     console.log(`[DELETE device] Удаление папки: ${devicePath}`);
     fs.rmSync(devicePath, { recursive: true, force: true });
+    console.log(`[DELETE device] ✅ Папка удалена: ${devicePath}`);
     
-    // Удаляем из devices
+    // 3. Удаляем из devices (память)
     delete devices[id];
-    console.log(`[DELETE device] Удалено из devices: ${id}`);
+    console.log(`[DELETE device] ✅ Удалено из devices (память): ${id}`);
     
-    // КРИТИЧНО: Удаляем из fileNamesMap
+    // 4. Удаляем из fileNamesMap
     if (fileNamesMap[id]) {
       console.log(`[DELETE device] Удаление из fileNamesMap: ${id} (${Object.keys(fileNamesMap[id]).length} файлов)`);
       delete fileNamesMap[id];
       saveFileNamesMap(fileNamesMap);
-    } else {
-      console.log(`[DELETE device] ℹ️ Устройство ${id} не найдено в fileNamesMap`);
     }
     
+    // 5. Уведомляем клиентов
     io.emit('devices/updated');
-    saveDevicesJson(devices);
-    console.log(`[DELETE device] ✅ Устройство ${id} полностью удалено`);
+    console.log(`[DELETE device] ✅ Устройство ${id} полностью удалено (БД + диск + память)`);
     res.json({ ok: true });
   });
   

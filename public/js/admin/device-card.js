@@ -6,6 +6,9 @@ import { setupUploadUI } from './upload-ui.js';
 
 export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, renderTVList, openDevice, renderFilesPane, socket) {
   const did = encodeURIComponent(d.device_id);
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin = user.role === 'admin';
+  
   const card = document.createElement('div');
   card.className = 'card';
   card.style.display = 'flex';
@@ -16,12 +19,12 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
   card.innerHTML = `
     <div class="header" style="margin-bottom:0">
       <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-sm)">
-        <div class="title" id="deviceName" style="flex:1; cursor:pointer; padding:var(--space-sm) var(--space-md); border-radius:var(--radius-sm); transition:all 0.2s; display:flex; align-items:center; min-height:36px; font-size:var(--font-size-base); margin:0" contenteditable="false">${name}</div>
-        <button class="primary" id="renameSaveBtn" style="display:none; min-width:36px; width:36px; height:36px; padding:0; border-radius:var(--radius-sm); flex-shrink:0; align-items:center; justify-content:center; font-size:var(--font-size-lg); line-height:1; transition:all 0.2s; box-shadow:var(--shadow-sm)" title="Сохранить">
+        <div class="title" id="deviceName" style="flex:1; ${isAdmin ? 'cursor:pointer;' : ''} padding:var(--space-sm) var(--space-md); border-radius:var(--radius-sm); transition:all 0.2s; display:flex; align-items:center; min-height:36px; font-size:var(--font-size-base); margin:0" contenteditable="false">${name}</div>
+        ${isAdmin ? `<button class="primary" id="renameSaveBtn" style="display:none; min-width:36px; width:36px; height:36px; padding:0; border-radius:var(--radius-sm); flex-shrink:0; align-items:center; justify-content:center; font-size:var(--font-size-lg); line-height:1; transition:all 0.2s; box-shadow:var(--shadow-sm)" title="Сохранить">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-        </button>
+        </button>` : ''}
       </div>
     </div>
     <div class="meta" style="margin-top:var(--space-sm); margin-bottom:var(--space-sm)">
@@ -35,7 +38,7 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
     <div style="display:flex; flex-wrap:wrap; gap:var(--space-sm); align-items:center; margin-top:var(--space-md)">
       <button class="secondary playerBtn" style="flex:1; min-width:90px">Плеер</button>
       <button class="secondary speakerBtn" style="flex:1; min-width:90px">Спикер</button>
-      <button class="danger delBtn" style="flex:1; min-width:90px">Удалить</button>
+      ${isAdmin ? '<button class="danger delBtn" style="flex:1; min-width:90px">Удалить</button>' : ''}
     </div>
 
     <div class="preview panel" style="margin-top:var(--space-md); display:block; flex:1 1 auto; min-height:0; aspect-ratio:16/9; max-height:380px">
@@ -65,24 +68,28 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
   // Действия
   card.querySelector('.playerBtn').onclick = () => window.open(`/player-videojs.html?device_id=${did}`, '_blank');
   card.querySelector('.speakerBtn').onclick = () => window.open(`/speaker.html`, '_blank');
-  card.querySelector('.delBtn').onclick = async () => {
-    if (!confirm(`Удалить устройство ${d.device_id}?`)) return;
-    await adminFetch(`/api/devices/${encodeURIComponent(d.device_id)}`, { method:'DELETE' });
-    // loadDevices, renderTVList, clearDetail, clearFilesPane - переданы как параметры
-    await loadDevices();
-    clearDetail();
-    clearFilesPane();
-    renderTVList();
-  };
+  
+  // Удаление только для admin
+  const delBtn = card.querySelector('.delBtn');
+  if (delBtn) {
+    delBtn.onclick = async () => {
+      if (!confirm(`Удалить устройство ${d.device_id}?`)) return;
+      await adminFetch(`/api/devices/${encodeURIComponent(d.device_id)}`, { method:'DELETE' });
+      await loadDevices();
+      clearDetail();
+      clearFilesPane();
+      renderTVList();
+    };
+  }
 
-  // Inline редактирование имени устройства
+  // Inline редактирование имени устройства (только для admin)
   const nameEl = card.querySelector('#deviceName');
   const saveBtn = card.querySelector('#renameSaveBtn');
   let originalName = name;
   let isEditing = false;
   let savingFromButton = false;
 
-  if (nameEl) {
+  if (nameEl && isAdmin) {
     nameEl.addEventListener('click', () => {
       if (!isEditing) {
         isEditing = true;

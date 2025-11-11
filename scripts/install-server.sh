@@ -50,12 +50,46 @@ echo ""
 echo "Installing npm packages..."
 npm install
 
+# Create .env file with JWT secret
+echo ""
+echo "Setting up authentication..."
+if [ ! -f .env ]; then
+    JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
+    cat > .env << EOF
+NODE_ENV=production
+PORT=3000
+HOST=127.0.0.1
+
+JWT_SECRET=$JWT_SECRET
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+EOF
+    echo "Created .env with JWT secret"
+fi
+
 # Create necessary directories
 echo ""
 echo "Creating directories..."
 mkdir -p public/content
 mkdir -p config
 mkdir -p .converted
+mkdir -p logs
+
+# Initialize database and run migrations
+echo ""
+echo "Initializing database..."
+if [ ! -f config/main.db ]; then
+    sqlite3 config/main.db < src/database/schema.sql
+    sqlite3 config/main.db < src/database/migrations/001_add_users.sql
+    
+    # Create default admin user (password: admin123)
+    ADMIN_HASH='$2b$10$cHr4hJlG2h.Zqv2TNeNbru4MqpiqSs5Pc9hnN.qxvrNjTRpRpkqRO'
+    sqlite3 config/main.db "INSERT INTO users (id, username, full_name, password_hash, role, is_active) VALUES (1, 'admin', 'Администратор', '$ADMIN_HASH', 'admin', 1);"
+    
+    echo "Database initialized with default admin user (admin/admin123)"
+else
+    echo "Database already exists, skipping initialization"
+fi
 
 # Create default config files if not exist
 if [ ! -f config/devices.json ]; then

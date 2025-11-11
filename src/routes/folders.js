@@ -18,10 +18,10 @@ const router = express.Router();
  * @returns {express.Router} Настроенный роутер
  */
 export function createFoldersRouter(deps) {
-  const { devices } = deps;
+  const { devices, requireAuth } = deps;
   
-  // GET /api/devices/:id/folder/:folderName/images - Получить список изображений в папке
-  router.get('/:id/folder/:folderName/images', async (req, res) => {
+  // GET /api/devices/:id/folder/:folderName/images - Получить список изображений (требует auth)
+  router.get('/:id/folder/:folderName/images', requireAuth, async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     const folderName = req.params.folderName;
     
@@ -42,8 +42,8 @@ export function createFoldersRouter(deps) {
     }
   });
   
-  // GET /api/devices/:id/folder/:folderName/count - Получить количество изображений в папке
-  router.get('/:id/folder/:folderName/count', async (req, res) => {
+  // GET /api/devices/:id/folder/:folderName/count - Получить количество (требует auth)
+  router.get('/:id/folder/:folderName/count', requireAuth, async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     const folderName = req.params.folderName;
     
@@ -64,7 +64,7 @@ export function createFoldersRouter(deps) {
     }
   });
   
-  // GET /api/devices/:id/folder/:folderName/image/:index - Получить изображение по индексу (1-based)
+  // GET /api/devices/:id/folder/:folderName/image/:index - Получить изображение (публичный - для <img>)
   router.get('/:id/folder/:folderName/image/:index', async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     const folderName = req.params.folderName;

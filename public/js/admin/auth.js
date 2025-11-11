@@ -1,101 +1,149 @@
 /**
- * Модуль аутентификации для админ-панели
+ * JWT Authentication для админ-панели
  * @module admin/auth
  */
 
-const ADMIN_AUTH_KEY = 'adminBasicAuth';
-let adminAuth = sessionStorage.getItem(ADMIN_AUTH_KEY) || null;
-
 /**
- * Запросить логин и пароль у пользователя
- * @param {boolean} retry - Повторная попытка
- * @returns {Promise<boolean>} true если успешно
+ * Проверить токен и редиректнуть на login если нужно
  */
-export async function askLogin(retry = false) {
-  const u = prompt('Логин администратора:');
-  const p = prompt('Пароль администратора:');
+export async function ensureAuth() {
+  const token = localStorage.getItem('accessToken');
+  const userStr = localStorage.getItem('user');
   
-  if (u && p) {
-    adminAuth = 'Basic ' + btoa(`${u}:${p}`);
-    sessionStorage.setItem(ADMIN_AUTH_KEY, adminAuth);
-    return true;
+  console.log('[Admin Auth] Checking auth - token:', !!token, 'user:', !!userStr);
+  
+  // Если нет токена - редирект на login
+  if (!token || !userStr) {
+    console.log('[Admin Auth] No token or user - redirecting to /');
+    localStorage.clear();
+    window.location.href = '/';
+    return false;
   }
   
-  if (!retry) {
-    alert('Требуется авторизация для доступа к админке');
+  // Проверяем роль
+  try {
+    const user = JSON.parse(userStr);
+    console.log('[Admin Auth] User role:', user.role);
+    
+    if (user.role === 'speaker') {
+      console.log('[Admin Auth] Speaker trying to access admin - redirecting to /speaker.html');
+      window.location.href = '/speaker.html';
+      return false;
+    }
+    
+    if (user.role !== 'admin') {
+      console.log('[Admin Auth] Invalid role - clearing and redirecting');
+      localStorage.clear();
+      window.location.href = '/';
+      return false;
+    }
+    
+    console.log('[Admin Auth] Access granted');
+    return true;
+  } catch (e) {
+    console.error('[Admin Auth] Error parsing user data:', e);
+    localStorage.clear();
+    window.location.href = '/';
+    return false;
+  }
+}
+
+/**
+ * Обновить access token через refresh token
+ */
+async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem('refreshToken');
+  
+  if (!refreshToken) {
+    return false;
+  }
+  
+  try {
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      localStorage.setItem('accessToken', data.accessToken);
+      return true;
+    }
+  } catch (err) {
+    console.error('Refresh token failed:', err);
   }
   
   return false;
 }
 
 /**
- * Проверить авторизацию (запросить если нужно)
- * @returns {Promise<boolean>} true если авторизован
- */
-export async function ensureAuth() {
-  if (!adminAuth) {
-    const ok = await askLogin();
-    
-    if (!ok) {
-      document.body.innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:center; height:100vh; background:var(--bg); color:var(--text); font-family:var(--font-family); font-size:var(--font-size-lg); text-align:center; padding:var(--space-xl)">
-          <div>
-            <h1 style="color:var(--danger); margin-bottom:var(--space-md)">Доступ запрещен</h1>
-            <p>Требуется авторизация для доступа к админ-панели.</p>
-            <p style="margin-top:var(--space-md)">
-              <button onclick="location.reload()" class="primary">Повторить</button>
-            </p>
-          </div>
-        </div>
-      `;
-      throw new Error('Authorization required');
-    }
-    
-    return ok;
-  }
-  
-  return true;
-}
-
-/**
- * Fetch с автоматической авторизацией
- * @param {string} url - URL для запроса
- * @param {Object} opts - Опции fetch
- * @returns {Promise<Response>} Response объект
+ * Fetch с автоматической JWT авторизацией
  */
 export async function adminFetch(url, opts = {}) {
-  await ensureAuth();
+  const token = localStorage.getItem('accessToken');
+  
+  if (!token) {
+    window.location.href = '/login.html';
+    throw new Error('No token');
+  }
   
   const init = {
     ...opts,
     headers: {
       ...(opts.headers || {}),
-      Authorization: adminAuth
+      'Authorization': `Bearer ${token}`
     }
   };
   
   const res = await fetch(url, init);
   
-  // Если 401 - запрашиваем авторизацию заново
+  // Если 401 - токен истек, пробуем refresh
   if (res.status === 401) {
-    sessionStorage.removeItem(ADMIN_AUTH_KEY);
-    adminAuth = null;
-    const ok = await askLogin(true);
-    if (!ok) throw new Error('Unauthorized');
-    return adminFetch(url, opts); // Повторяем запрос
+    const refreshed = await refreshAccessToken();
+    
+    if (refreshed) {
+      // Повторяем запрос с новым токеном
+      return adminFetch(url, opts);
+    } else {
+      // Не удалось обновить - logout
+      localStorage.clear();
+      window.location.href = '/';
+      throw new Error('Session expired');
+    }
   }
   
   return res;
 }
 
 /**
- * Установить заголовки авторизации для XMLHttpRequest
- * @param {XMLHttpRequest} xhr - XMLHttpRequest объект
+ * Установить JWT токен для XMLHttpRequest (для upload)
  */
 export function setXhrAuth(xhr) {
-  if (adminAuth) {
-    xhr.setRequestHeader('Authorization', adminAuth);
+  const token = localStorage.getItem('accessToken');
+  if (token) {
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
   }
+}
+
+/**
+ * Logout
+ */
+export async function logout() {
+  const refreshToken = localStorage.getItem('refreshToken');
+  
+  try {
+    await adminFetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+  } catch (err) {
+    // Игнорируем ошибки при logout
+  }
+  
+  localStorage.clear();
+  window.location.href = '/';
 }
 
 

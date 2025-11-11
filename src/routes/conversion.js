@@ -18,10 +18,10 @@ const router = express.Router();
  * @returns {express.Router} Настроенный роутер
  */
 export function createConversionRouter(deps) {
-  const { devices, getPageSlideCount, findFileFolder, autoConvertFileWrapper } = deps;
+  const { devices, getPageSlideCount, findFileFolder, autoConvertFileWrapper, requireAuth } = deps;
   
-  // GET /api/devices/:id/slides-count - Получить количество слайдов/страниц
-  router.get('/:id/slides-count', async (req, res) => {
+  // GET /api/devices/:id/slides-count - Получить количество слайдов/страниц (требует auth)
+  router.get('/:id/slides-count', requireAuth, async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -48,7 +48,7 @@ export function createConversionRouter(deps) {
     }
   });
   
-  // GET /api/devices/:id/converted/:file/:type/:num - Получить конвертированное изображение
+  // GET /api/devices/:id/converted/:file/:type/:num - Получить изображение (публичный - для <img>)
   router.get('/:id/converted/:file/:type/:num', async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     

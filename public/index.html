@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Вход - VideoControl</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg"/>
+  <link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+  <div style="display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;">
+    <div class="card" style="max-width:400px; width:100%;">
+      <div class="header">
+        <div class="title">🔐 Вход в VideoControl</div>
+      </div>
+      
+      <form id="loginForm" style="display:flex; flex-direction:column; gap:16px;">
+        <div>
+          <label style="display:block; margin-bottom:4px; font-weight:500;">Логин</label>
+          <input 
+            type="text" 
+            id="username" 
+            class="input" 
+            placeholder="admin" 
+            autocomplete="username"
+            required 
+            autofocus
+          />
+        </div>
+        
+        <div>
+          <label style="display:block; margin-bottom:4px; font-weight:500;">Пароль</label>
+          <input 
+            type="password" 
+            id="password" 
+            class="input" 
+            placeholder="Введите пароль" 
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        
+        <div id="error" style="color:var(--danger); font-size:0.875rem; display:none;"></div>
+        
+        <button type="submit" class="primary" id="loginBtn" style="width:100%;">
+          Войти
+        </button>
+      </form>
+      
+      <div class="meta" style="margin-top:16px; text-align:center;">
+        Дефолтный логин: <code>admin</code> / <code>admin123</code>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const errorEl = document.getElementById('error');
+    const loginBtn = document.getElementById('loginBtn');
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      
+      if (!username || !password) {
+        showError('Заполните все поля');
+        return;
+      }
+      
+      // Блокируем кнопку
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Вход...';
+      errorEl.style.display = 'none';
+      
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, password })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          // Сохраняем токены
+          localStorage.setItem('accessToken', data.accessToken);
+          localStorage.setItem('refreshToken', data.refreshToken);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          
+          // Редирект в зависимости от роли
+          if (data.user.role === 'admin') {
+            window.location.href = '/admin.html';
+          } else if (data.user.role === 'speaker') {
+            window.location.href = '/speaker.html';
+          } else {
+            window.location.href = '/admin.html'; // Fallback
+          }
+        } else {
+          showError(data.error || 'Неверный логин или пароль');
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Войти';
+        }
+      } catch (err) {
+        console.error('Login error:', err);
+        showError('Ошибка подключения к серверу');
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Войти';
+      }
+    });
+    
+    function showError(message) {
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    }
+    
+    // Проверяем авторизацию при загрузке
+    (async function checkAuth() {
+      const token = localStorage.getItem('accessToken');
+      const userStr = localStorage.getItem('user');
+      
+      console.log('[Index] Token exists:', !!token, 'User exists:', !!userStr);
+      
+      // Если есть токен - проверяем его валидность и редиректим
+      if (token && userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          console.log('[Index] User role:', user.role);
+          
+          // Проверяем что токен валидный (быстрая проверка через API)
+          const response = await fetch('/api/auth/me', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          if (response.ok) {
+            // Токен валидный - редирект по роли
+            console.log('[Index] Token valid, redirecting to', user.role === 'speaker' ? 'speaker' : 'admin');
+            if (user.role === 'speaker') {
+              window.location.replace('/speaker.html');
+            } else {
+              window.location.replace('/admin.html');
+            }
+          } else {
+            // Токен невалидный - очищаем и показываем форму
+            console.log('[Index] Token invalid, clearing localStorage');
+            localStorage.clear();
+          }
+        } catch (e) {
+          console.error('[Index] Error checking auth:', e);
+          localStorage.clear();
+        }
+      } else {
+        console.log('[Index] No token - showing login form');
+      }
+    })();
+  </script>
+</body>
+</html>
+

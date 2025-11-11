@@ -58,7 +58,7 @@ echo -e "${BLUE}[1/7] Installing system dependencies...${NC}"
 apt-get update -qq
 
 # Устанавливаем базовые инструменты
-apt-get install -y curl wget git build-essential
+apt-get install -y curl wget git build-essential sqlite3
 
 # Node.js (если еще не установлен)
 if ! command -v node &> /dev/null; then
@@ -128,10 +128,39 @@ mkdir -p temp/nginx_upload
 chown -R $CURRENT_USER:$CURRENT_USER "$INSTALL_DIR"
 chmod 755 temp/nginx_upload
 
-# Создаем пустую БД (будет инициализирована при первом запуске)
+# Создаем .env с JWT secret
+echo "  Creating .env configuration..."
+if [ ! -f .env ]; then
+    JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
+    cat > .env << EOF
+NODE_ENV=production
+PORT=3000
+HOST=127.0.0.1
+
+JWT_SECRET=$JWT_SECRET
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+EOF
+    chown $CURRENT_USER:$CURRENT_USER .env
+    echo -e "  ${GREEN}✅ .env created with secure JWT secret${NC}"
+fi
+
+# Инициализируем БД и применяем миграции
 echo "  Initializing SQLite database..."
-touch config/main.db
-chown $CURRENT_USER:$CURRENT_USER config/main.db
+if [ ! -f config/main.db ]; then
+    sqlite3 config/main.db < src/database/schema.sql
+    sqlite3 config/main.db < src/database/migrations/001_add_users.sql
+    
+    # Создаем дефолтного admin (admin/admin123)
+    ADMIN_HASH='$2b$10$cHr4hJlG2h.Zqv2TNeNbru4MqpiqSs5Pc9hnN.qxvrNjTRpRpkqRO'
+    sqlite3 config/main.db "INSERT INTO users (id, username, full_name, password_hash, role, is_active) VALUES (1, 'admin', 'Администратор', '$ADMIN_HASH', 'admin', 1);"
+    
+    chown $CURRENT_USER:$CURRENT_USER config/main.db
+    echo -e "  ${GREEN}✅ Database initialized${NC}"
+    echo -e "  ${YELLOW}📝 Default admin: admin / admin123${NC}"
+else
+    echo -e "  ${YELLOW}⚠️  Database already exists${NC}"
+fi
 
 # Создаем конфигурацию видео-оптимизации если нет
 if [ ! -f config/video-optimization.json ]; then
@@ -170,12 +199,23 @@ if ! command -v nginx &> /dev/null; then
     apt-get install -y nginx
 fi
 
-# Копируем конфигурацию
-cp nginx/videocontrol.conf /etc/nginx/sites-available/videocontrol
+# Копируем secure конфигурацию (с защитой)
+cp nginx/videocontrol-secure.conf /etc/nginx/sites-available/videocontrol
 
-# Удаляем старые конфиги если есть
+# Обновляем IP адреса в конфиге
+SERVER_IP=$(hostname -I | awk '{print $1}')
+SUBNET=$(echo $SERVER_IP | cut -d'.' -f1-3).0/24
+
+echo "  Detected server IP: $SERVER_IP"
+echo "  Using subnet: $SUBNET"
+
+# Автоматически настраиваем geo правила
+sed -i "s|10.172.0.0/24|$SUBNET|g" /etc/nginx/sites-available/videocontrol
+
+# Удаляем старые конфиги
 rm -f /etc/nginx/sites-enabled/default
 rm -f /etc/nginx/sites-enabled/videocontrol.conf 2>/dev/null
+rm -f /etc/nginx/sites-available/videocontrol.conf 2>/dev/null
 
 # Создаем симлинк
 ln -sf /etc/nginx/sites-available/videocontrol /etc/nginx/sites-enabled/videocontrol

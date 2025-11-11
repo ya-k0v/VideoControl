@@ -40,7 +40,9 @@ import { createVideoInfoRouter } from './src/routes/video-info.js';
 import { createConversionRouter } from './src/routes/conversion.js';
 import { createSystemInfoRouter } from './src/routes/system-info.js';
 import { createFoldersRouter } from './src/routes/folders.js';
+import { createAuthRouter } from './src/routes/auth.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
+import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
 
@@ -92,13 +94,18 @@ const upload = createUploadMiddleware(devices);
 // API ROUTES (Модульные роутеры)
 // ========================================
 
+// Auth router (БЕЗ защиты - для login)
+const authRouter = createAuthRouter();
+app.use('/api/auth', authRouter);
+
 // Подключаем роутеры с зависимостями
 const devicesRouter = createDevicesRouter({ 
   devices, 
   io, 
   saveDevicesJson: saveDevicesToDB, 
   fileNamesMap, 
-  saveFileNamesMap: saveFileNamesToDB 
+  saveFileNamesMap: saveFileNamesToDB,
+  requireAdmin  // Передаем для защиты POST/DELETE
 });
 
 const placeholderRouter = createPlaceholderRouter({ 
@@ -129,23 +136,28 @@ const conversionRouter = createConversionRouter({
   devices,
   getPageSlideCount,
   findFileFolder,
-  autoConvertFileWrapper
+  autoConvertFileWrapper,
+  requireAuth  // Передаем middleware
 });
 
 const foldersRouter = createFoldersRouter({
-  devices
+  devices,
+  requireAuth  // Передаем middleware
 });
 
-app.use('/api/devices', devicesRouter);
-app.use('/api/devices', placeholderRouter);
-app.use('/api/devices', filesRouter);
-app.use('/api/devices', videoInfoRouter);
-app.use('/api/devices', conversionRouter);
+// Роутеры с избирательной защитой (применяют requireAuth внутри себя)
+app.use('/api/devices', conversionRouter);  
 app.use('/api/devices', foldersRouter);
+
+// ЗАЩИЩЕННЫЕ routes - требуют JWT везде
+app.use('/api/devices', requireAuth, devicesRouter);
+app.use('/api/devices', requireAuth, placeholderRouter);
+app.use('/api/devices', requireAuth, filesRouter);
+app.use('/api/devices', requireAuth, videoInfoRouter);
 
 // System info router
 const systemInfoRouter = createSystemInfoRouter();
-app.use('/api/system', systemInfoRouter);
+app.use('/api/system', requireAuth, systemInfoRouter);
 
 // ========================================
 // ВСЕ API ROUTES ПЕРЕНЕСЕНЫ В МОДУЛИ src/routes/

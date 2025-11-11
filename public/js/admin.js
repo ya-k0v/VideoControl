@@ -1,7 +1,7 @@
 import { initThemeToggle } from './theme.js';
 import { sortDevices, debounce, getPageSize, loadNodeNames } from './utils.js';
 import { DEVICE_ICONS, DEVICE_TYPE_NAMES } from './shared/constants.js';
-import { ensureAuth, adminFetch, setXhrAuth } from './admin/auth.js';
+import { ensureAuth, adminFetch, setXhrAuth, logout } from './admin/auth.js';
 import { setupSocketListeners } from './admin/socket-listeners.js';
 import { loadDevices as loadDevicesModule, renderTVList as renderTVListModule } from './admin/devices-manager.js';
 import { createDevice, renameDevice, deleteDevice } from './admin/device-crud.js';
@@ -12,6 +12,7 @@ import { clearDetail, clearFilesPane, openDevice as openDeviceHelper } from './a
 import { renderDeviceCard as renderDeviceCardModule } from './admin/device-card.js';
 import { setupUploadUI as setupUploadUIModule } from './admin/upload-ui.js';
 import { initSystemMonitor } from './admin/system-monitor.js';
+import { showDevicesModal, showUsersModal } from './admin/modal.js';
 
 const socket = io();
 const grid = document.getElementById('grid');
@@ -89,19 +90,54 @@ setupSocketListeners(socket, {
 
 document.addEventListener('DOMContentLoaded', async () => {
   initThemeToggle(document.getElementById('themeBtn'), 'vc_theme_admin');
+  
   try {
     const authorized = await ensureAuth();
     if (!authorized) return;
   } catch (err) {
     return;
   }
+  
+  // Показываем имя пользователя
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const userInfo = document.getElementById('userInfo');
+  if (userInfo && user.username) {
+    userInfo.textContent = `👤 ${user.username} (${user.role})`;
+  }
+  
+  // Обработчик кнопки Устройства (только для admin)
+  const devicesBtn = document.getElementById('devicesBtn');
+  if (devicesBtn && user.role === 'admin') {
+    devicesBtn.onclick = () => {
+      showDevicesModal(adminFetch, loadDevices, renderTVList, openDevice, renderFilesPane);
+    };
+  } else if (devicesBtn) {
+    devicesBtn.style.display = 'none'; // Speaker не может создавать устройства
+  }
+  
+  // Обработчик кнопки Пользователи (только для admin)
+  const usersBtn = document.getElementById('usersBtn');
+  if (usersBtn && user.role === 'admin') {
+    usersBtn.onclick = () => {
+      showUsersModal(adminFetch);
+    };
+  } else if (usersBtn) {
+    usersBtn.style.display = 'none';
+  }
+  
+  // Обработчик кнопки logout
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.onclick = logout;
+  }
+  
   await loadAndSetNodeNames();
   await loadDevices();
   renderLayout();
   initSelectionFromUrl();
   
-  // Инициализируем системный монитор
-  initSystemMonitor();
+  // Инициализируем системный монитор с adminFetch
+  initSystemMonitor(adminFetch);
 });
 
 async function loadDevices() {
@@ -151,35 +187,6 @@ function renderLayout() {
   `;
 
   renderTVList();
-  initDeviceSelectHandlers();
-}
-function initDeviceSelectHandlers() {
-  const createBtn = document.getElementById('createBtn');
-  const newIdEl = document.getElementById('newId');
-  const newNameEl = document.getElementById('newName');
-
-  if (createBtn && newIdEl) {
-    const doCreate = async () => {
-      const device_id = (newIdEl.value || '').trim();
-      const name = (newNameEl && newNameEl.value || '').trim();
-      if (!device_id) return;
-      await adminFetch('/api/devices', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ device_id, name })
-      });
-      if (newIdEl) newIdEl.value = '';
-      if (newNameEl) newNameEl.value = '';
-      await loadDevices();
-      currentDeviceId = device_id;
-      renderTVList();
-      openDevice(device_id);
-      renderFilesPane(device_id);
-    };
-    createBtn.onclick = doCreate;
-    newIdEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doCreate(); });
-    if (newNameEl) newNameEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') doCreate(); });
-  }
 }
 
 // ------ Заполнение select ------

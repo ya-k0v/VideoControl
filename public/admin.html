@@ -27,17 +27,23 @@
     <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
       <button id="themeBtn" class="secondary" type="button" aria-label="Переключить тему">Dark</button>
       <strong class="title">Админ‑панель</strong>
+      <span id="userInfo" class="meta" style="margin-left:8px;"></span>
     </div>
     <div style="flex:1; min-width:0;"></div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <input id="newId" class="input" placeholder="ID устройства" style="min-width:120px; flex:1; max-width:200px;"/>
-      <input id="newName" class="input" placeholder="Имя устройства" style="min-width:120px; flex:1; max-width:200px;"/>
-      <button id="createBtn" class="primary" type="button">Создать</button>
+      <button id="devicesBtn" class="primary" type="button">📱 Устройства</button>
+      <button id="usersBtn" class="secondary" type="button">👥 Пользователи</button>
+      <button id="logoutBtn" class="secondary" type="button">Выйти</button>
     </div>
   </header>
 
   <main style="flex:1; min-height:0;">
     <div id="grid"></div>
   </main>
+  
+  <!-- Modal overlay -->
+  <div id="modalOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+    <div id="modalContent" class="card" style="max-width:600px; width:100%; max-height:90vh; overflow-y:auto;"></div>
+  </div>
 </body>
 </html>

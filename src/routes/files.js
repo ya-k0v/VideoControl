@@ -11,6 +11,8 @@ import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
 import { extractZipToFolder } from '../converters/folder-converter.js';
 import { makeSafeFolderName } from '../utils/transliterate.js';
 import { scanDeviceFiles } from '../utils/file-scanner.js';
+import { validatePath } from '../utils/path-validator.js';
+import { uploadLimiter, deleteLimiter } from '../middleware/rate-limit.js';
 
 const router = express.Router();
 
@@ -33,7 +35,7 @@ export function createFilesRouter(deps) {
   } = deps;
   
   // POST /api/devices/:id/upload - Загрузка файлов
-  router.post('/:id/upload', async (req, res, next) => {
+  router.post('/:id/upload', uploadLimiter, async (req, res, next) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -469,7 +471,7 @@ export function createFilesRouter(deps) {
   });
   
   // DELETE /api/devices/:id/files/:name - Удаление файла или папки
-  router.delete('/:id/files/:name', (req, res) => {
+  router.delete('/:id/files/:name', deleteLimiter, (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -484,6 +486,15 @@ export function createFilesRouter(deps) {
     }
     
     const deviceFolder = path.join(DEVICES, d.folder);
+    
+    // ЗАЩИТА: Валидируем путь от path traversal
+    try {
+      validatePath(name, deviceFolder);
+    } catch (e) {
+      console.warn(`[DELETE file] Path traversal attempt: ${name}`);
+      return res.status(400).json({ error: 'invalid file path' });
+    }
+    
     const folderName = name.replace(/\.(pdf|pptx)$/i, '');
     const possibleFolder = path.join(deviceFolder, folderName);
     

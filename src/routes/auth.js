@@ -13,14 +13,16 @@ import {
   requireAuth,
   requireAdmin
 } from '../middleware/auth.js';
+import { authLimiter, createLimiter, deleteLimiter } from '../middleware/rate-limit.js';
 
 const router = express.Router();
 
 /**
  * POST /api/auth/login
- * Вход в систему
+ * Вход в систему (с rate limiting от brute-force)
  */
 router.post('/login',
+  authLimiter, // Защита от brute-force
   body('username').trim().notEmpty(),
   body('password').notEmpty(),
   async (req, res) => {
@@ -223,6 +225,7 @@ router.get('/me', requireAuth, async (req, res) => {
 router.post('/register',
   requireAuth,
   requireAdmin,
+  createLimiter, // Ограничение на создание
   body('username').trim().isLength({ min: 3, max: 50 }),
   body('full_name').trim().isLength({ min: 1, max: 100 }),
   body('password').isLength({ min: 8 }),
@@ -347,7 +350,7 @@ router.post('/users/:id/toggle',
  * DELETE /api/auth/users/:id
  * Удалить пользователя (только admin)
  */
-router.delete('/users/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/users/:id', requireAuth, requireAdmin, deleteLimiter, async (req, res) => {
   const userId = parseInt(req.params.id);
   const db = getDatabase();
 

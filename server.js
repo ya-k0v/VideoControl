@@ -43,6 +43,7 @@ import { createFoldersRouter } from './src/routes/folders.js';
 import { createAuthRouter } from './src/routes/auth.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
 import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth.js';
+import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
 
@@ -63,6 +64,10 @@ if (!fs.existsSync(DEVICES)) fs.mkdirSync(DEVICES, { recursive: true });
 
 setupExpressMiddleware(app);
 setupStaticFiles(app);
+
+// Rate limiting для всех API запросов
+app.use('/api/', globalLimiter);
+app.use('/api/', apiSpeedLimiter);
 
 // ========================================
 // DATABASE INITIALIZATION

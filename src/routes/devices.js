@@ -9,6 +9,7 @@ import path from 'path';
 import { DEVICES } from '../config/constants.js';
 import { sanitizeDeviceId } from '../utils/sanitize.js';
 import { deleteDevice as deleteDeviceFromDB, deleteDeviceFileNames } from '../database/database.js';
+import { createLimiter, deleteLimiter } from '../middleware/rate-limit.js';
 
 const router = express.Router();
 
@@ -44,7 +45,7 @@ export function createDevicesRouter(deps) {
   });
   
   // POST /api/devices - Создать новое устройство (только admin)
-  router.post('/', requireAdmin, (req, res) => {
+  router.post('/', requireAdmin, createLimiter, (req, res) => {
     const { device_id, name } = req.body;
     
     if (!device_id) {
@@ -98,7 +99,7 @@ export function createDevicesRouter(deps) {
   });
   
   // DELETE /api/devices/:id - Удалить устройство (только admin)
-  router.delete('/:id', requireAdmin, (req, res) => {
+  router.delete('/:id', requireAdmin, deleteLimiter, (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {

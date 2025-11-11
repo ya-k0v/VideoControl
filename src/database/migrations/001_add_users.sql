@@ -41,24 +41,25 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
 
 -- ========================================
--- AUDIT LOG TABLE
+-- AUDIT LOG TABLE (Week 3 - Structured Logging & Audit)
 -- ========================================
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER,
   action TEXT NOT NULL,
-  resource_type TEXT,
-  resource_id TEXT,
+  resource TEXT,
   details TEXT,
   ip_address TEXT,
   user_agent TEXT,
+  status TEXT DEFAULT 'success',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
-CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource);
+CREATE INDEX IF NOT EXISTS idx_audit_log_status ON audit_log(status);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
 
 -- ========================================

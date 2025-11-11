@@ -13,6 +13,8 @@ import { makeSafeFolderName } from '../utils/transliterate.js';
 import { scanDeviceFiles } from '../utils/file-scanner.js';
 import { validatePath } from '../utils/path-validator.js';
 import { uploadLimiter, deleteLimiter } from '../middleware/rate-limit.js';
+import { auditLog, AuditAction } from '../utils/audit-logger.js';
+import logger, { logFile, logSecurity } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -211,6 +213,32 @@ export function createFilesRouter(deps) {
       devices[id].files = result;
       devices[id].fileNames = fileNames;
       io.emit('devices/updated');
+      
+      // Audit log
+      if (uploaded.length > 0) {
+        await auditLog({
+          userId: req.user?.id || null,
+          action: AuditAction.FILE_UPLOAD,
+          resource: `device:${id}`,
+          details: { 
+            deviceId: id, 
+            filesCount: uploaded.length,
+            files: uploaded,
+            folderName: folderName || null,
+            uploadedBy: req.user?.username || 'anonymous'
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          status: 'success'
+        });
+        logFile('info', 'Files uploaded', { 
+          deviceId: id, 
+          filesCount: uploaded.length, 
+          folderName: folderName || null,
+          uploadedBy: req.user?.username || 'anonymous'
+        });
+      }
+      
       res.json({ ok: true, files: result, uploaded });
     });
   });
@@ -471,7 +499,7 @@ export function createFilesRouter(deps) {
   });
   
   // DELETE /api/devices/:id/files/:name - Удаление файла или папки
-  router.delete('/:id/files/:name', deleteLimiter, (req, res) => {
+  router.delete('/:id/files/:name', deleteLimiter, async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -491,7 +519,21 @@ export function createFilesRouter(deps) {
     try {
       validatePath(name, deviceFolder);
     } catch (e) {
-      console.warn(`[DELETE file] Path traversal attempt: ${name}`);
+      // Логируем подозрительную активность
+      await auditLog({
+        userId: req.user?.id || null,
+        action: AuditAction.PATH_TRAVERSAL_ATTEMPT,
+        resource: `device:${id}`,
+        details: { attemptedPath: name, deviceId: id },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        status: 'failure'
+      });
+      logSecurity('warn', 'Path traversal attempt detected on file delete', { 
+        deviceId: id, 
+        attemptedPath: name, 
+        ip: req.ip 
+      });
       return res.status(400).json({ error: 'invalid file path' });
     }
     
@@ -576,6 +618,29 @@ export function createFilesRouter(deps) {
     d.files = result;
     d.fileNames = fileNames;
     io.emit('devices/updated');
+    
+    // Audit log
+    await auditLog({
+      userId: req.user?.id || null,
+      action: AuditAction.FILE_DELETE,
+      resource: `device:${id}`,
+      details: { 
+        deviceId: id, 
+        fileName: deletedFileName, 
+        isFolder, 
+        deletedBy: req.user?.username || 'anonymous' 
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      status: 'success'
+    });
+    logFile('info', 'File deleted', { 
+      deviceId: id, 
+      fileName: deletedFileName, 
+      isFolder, 
+      deletedBy: req.user?.username || 'anonymous' 
+    });
+    
     res.json({ ok: true });
   });
   

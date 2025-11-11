@@ -10,6 +10,8 @@ import { DEVICES } from '../config/constants.js';
 import { sanitizeDeviceId } from '../utils/sanitize.js';
 import { deleteDevice as deleteDeviceFromDB, deleteDeviceFileNames } from '../database/database.js';
 import { createLimiter, deleteLimiter } from '../middleware/rate-limit.js';
+import { auditLog, AuditAction } from '../utils/audit-logger.js';
+import logger, { logDevice } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -45,7 +47,7 @@ export function createDevicesRouter(deps) {
   });
   
   // POST /api/devices - Создать новое устройство (только admin)
-  router.post('/', requireAdmin, createLimiter, (req, res) => {
+  router.post('/', requireAdmin, createLimiter, async (req, res) => {
     const { device_id, name } = req.body;
     
     if (!device_id) {
@@ -63,9 +65,9 @@ export function createDevicesRouter(deps) {
     // Чтобы Nginx (www-data) мог читать файлы
     try {
       fs.chmodSync(devicePath, 0o755);
-      console.log(`[create device] ✅ Создана папка с правами 755: ${devicePath}`);
+      logDevice('info', `Device folder created with permissions 755`, { deviceId: device_id, path: devicePath });
     } catch (e) {
-      console.warn(`[create device] ⚠️ Не удалось установить права на ${devicePath}: ${e}`);
+      logDevice('warn', `Failed to set permissions on device folder`, { deviceId: device_id, path: devicePath, error: e.message });
     }
     
     devices[device_id] = { 
@@ -77,6 +79,19 @@ export function createDevicesRouter(deps) {
     
     io.emit('devices/updated');
     saveDevicesJson(devices);
+    
+    // Audit log
+    await auditLog({
+      userId: req.user.id,
+      action: AuditAction.DEVICE_CREATE,
+      resource: `device:${device_id}`,
+      details: { deviceId: device_id, name: name || device_id, createdBy: req.user.username },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      status: 'success'
+    });
+    logDevice('info', 'Device created', { deviceId: device_id, name: name || device_id, createdBy: req.user.username });
+    
     res.json({ ok: true });
   });
   
@@ -99,7 +114,7 @@ export function createDevicesRouter(deps) {
   });
   
   // DELETE /api/devices/:id - Удалить устройство (только admin)
-  router.delete('/:id', requireAdmin, deleteLimiter, (req, res) => {
+  router.delete('/:id', requireAdmin, deleteLimiter, async (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
     if (!id) {
@@ -111,32 +126,50 @@ export function createDevicesRouter(deps) {
       return res.status(404).json({ error: 'not found' });
     }
     
-    console.log(`[DELETE device] Удаление устройства: ${id} (folder: ${d.folder})`);
+    logDevice('info', `Deleting device`, { deviceId: id, folder: d.folder });
     
     // 1. Удаляем из БД
     deleteDeviceFromDB(id);
-    console.log(`[DELETE device] ✅ Удалено из БД: ${id}`);
+    logDevice('info', `Device deleted from DB`, { deviceId: id });
     
     // 2. Удаляем папку устройства
     const devicePath = path.join(DEVICES, d.folder);
-    console.log(`[DELETE device] Удаление папки: ${devicePath}`);
+    logDevice('info', `Deleting device folder`, { deviceId: id, path: devicePath });
     fs.rmSync(devicePath, { recursive: true, force: true });
-    console.log(`[DELETE device] ✅ Папка удалена: ${devicePath}`);
+    logDevice('info', `Device folder deleted`, { deviceId: id, path: devicePath });
     
     // 3. Удаляем из devices (память)
     delete devices[id];
-    console.log(`[DELETE device] ✅ Удалено из devices (память): ${id}`);
+    logDevice('info', `Device removed from memory`, { deviceId: id });
     
     // 4. Удаляем из fileNamesMap
     if (fileNamesMap[id]) {
-      console.log(`[DELETE device] Удаление из fileNamesMap: ${id} (${Object.keys(fileNamesMap[id]).length} файлов)`);
+      const fileCount = Object.keys(fileNamesMap[id]).length;
+      logDevice('info', `Deleting file names from map`, { deviceId: id, fileCount });
       delete fileNamesMap[id];
       saveFileNamesMap(fileNamesMap);
     }
     
     // 5. Уведомляем клиентов
     io.emit('devices/updated');
-    console.log(`[DELETE device] ✅ Устройство ${id} полностью удалено (БД + диск + память)`);
+    
+    // Audit log
+    await auditLog({
+      userId: req.user.id,
+      action: AuditAction.DEVICE_DELETE,
+      resource: `device:${id}`,
+      details: { 
+        deviceId: id, 
+        deviceName: d.name, 
+        folder: d.folder,
+        deletedBy: req.user.username 
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      status: 'success'
+    });
+    logDevice('warn', 'Device deleted completely', { deviceId: id, deletedBy: req.user.username });
+    
     res.json({ ok: true });
   });
   

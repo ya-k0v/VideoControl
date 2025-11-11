@@ -14,6 +14,8 @@ import {
   requireAdmin
 } from '../middleware/auth.js';
 import { authLimiter, createLimiter, deleteLimiter } from '../middleware/rate-limit.js';
+import { auditLog, AuditAction } from '../utils/audit-logger.js';
+import logger, { logAuth, logSecurity } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -43,10 +45,32 @@ router.post('/login',
       `).get(username);
 
       if (!user) {
+        // Логируем неудачную попытку логина
+        await auditLog({
+          userId: null,
+          action: AuditAction.LOGIN_FAILED,
+          resource: username,
+          details: { reason: 'user_not_found' },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          status: 'failure'
+        });
+        logSecurity('warn', 'Failed login attempt: user not found', { username, ip: req.ip });
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
       if (!user.is_active) {
+        // Логируем попытку входа в отключенный аккаунт
+        await auditLog({
+          userId: user.id,
+          action: AuditAction.LOGIN_FAILED,
+          resource: username,
+          details: { reason: 'account_disabled' },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          status: 'failure'
+        });
+        logSecurity('warn', 'Failed login attempt: account disabled', { username, userId: user.id, ip: req.ip });
         return res.status(403).json({ error: 'Account disabled' });
       }
 
@@ -54,6 +78,17 @@ router.post('/login',
       const passwordMatch = await bcrypt.compare(password, user.password_hash);
       
       if (!passwordMatch) {
+        // Логируем неудачную попытку с неверным паролем
+        await auditLog({
+          userId: user.id,
+          action: AuditAction.LOGIN_FAILED,
+          resource: username,
+          details: { reason: 'invalid_password' },
+          ipAddress: req.ip,
+          userAgent: req.get('user-agent'),
+          status: 'failure'
+        });
+        logSecurity('warn', 'Failed login attempt: invalid password', { username, userId: user.id, ip: req.ip });
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
@@ -79,11 +114,17 @@ router.post('/login',
       // Обновляем last_login
       db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
 
-      // Логируем вход
-      db.prepare(`
-        INSERT INTO audit_log (user_id, action, ip_address, user_agent)
-        VALUES (?, ?, ?, ?)
-      `).run(user.id, 'LOGIN', req.ip, req.get('user-agent'));
+      // Логируем успешный вход
+      await auditLog({
+        userId: user.id,
+        action: AuditAction.LOGIN,
+        resource: username,
+        details: { role: user.role },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        status: 'success'
+      });
+      logAuth('info', 'User logged in successfully', { username, userId: user.id, role: user.role, ip: req.ip });
 
       res.json({
         accessToken,
@@ -96,7 +137,7 @@ router.post('/login',
         }
       });
     } catch (err) {
-      console.error('[Auth] Login error:', err);
+      logger.error('Login error', { error: err.message, stack: err.stack, username });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -181,14 +222,20 @@ router.post('/logout', requireAuth, async (req, res) => {
     }
 
     // Логируем выход
-    db.prepare(`
-      INSERT INTO audit_log (user_id, action, ip_address)
-      VALUES (?, ?, ?)
-    `).run(req.user.userId, 'LOGOUT', req.ip);
+    await auditLog({
+      userId: req.user.id,
+      action: AuditAction.LOGOUT,
+      resource: req.user.username,
+      details: { role: req.user.role },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      status: 'success'
+    });
+    logAuth('info', 'User logged out', { username: req.user.username, userId: req.user.id, ip: req.ip });
 
     res.json({ message: 'Logged out successfully' });
   } catch (err) {
-    console.error('[Auth] Logout error:', err);
+    logger.error('Logout error', { error: err.message, stack: err.stack, userId: req.user.id });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -258,26 +305,33 @@ router.post('/register',
         VALUES (?, ?, ?, ?)
       `).run(username, full_name, passwordHash, role);
 
+      const newUserId = result.lastInsertRowid;
+
       // Логируем создание
-      db.prepare(`
-        INSERT INTO audit_log (user_id, action, resource_type, resource_id, details)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(
-        req.user.userId,
-        'CREATE_USER',
-        'user',
-        result.lastInsertRowid,
-        JSON.stringify({ username, role })
-      );
+      await auditLog({
+        userId: req.user.id,
+        action: AuditAction.USER_CREATE,
+        resource: `user:${newUserId}`,
+        details: { username, full_name, role, createdBy: req.user.username },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        status: 'success'
+      });
+      logAuth('info', 'User created', { 
+        newUserId, 
+        username, 
+        role, 
+        createdBy: req.user.username 
+      });
 
       res.status(201).json({
-        id: result.lastInsertRowid,
+        id: newUserId,
         username,
         full_name,
         role
       });
     } catch (err) {
-      console.error('[Auth] Register error:', err);
+      logger.error('Register error', { error: err.message, stack: err.stack, username });
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -356,7 +410,7 @@ router.delete('/users/:id', requireAuth, requireAdmin, deleteLimiter, async (req
 
   try {
     // Нельзя удалить себя
-    if (userId === req.user.userId) {
+    if (userId === req.user.id) {
       return res.status(400).json({ error: 'Cannot delete yourself' });
     }
 
@@ -365,18 +419,39 @@ router.delete('/users/:id', requireAuth, requireAdmin, deleteLimiter, async (req
       return res.status(400).json({ error: 'Cannot delete default admin' });
     }
 
+    // Получаем информацию о пользователе перед удалением
+    const userToDelete = db.prepare('SELECT username, role FROM users WHERE id = ?').get(userId);
+    
+    if (!userToDelete) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     // Удаляем пользователя (каскадно удалятся refresh_tokens)
     db.prepare('DELETE FROM users WHERE id = ?').run(userId);
 
-    // Логируем
-    db.prepare(`
-      INSERT INTO audit_log (user_id, action, resource_type, resource_id)
-      VALUES (?, ?, ?, ?)
-    `).run(req.user.userId, 'DELETE_USER', 'user', userId);
+    // Логируем удаление
+    await auditLog({
+      userId: req.user.id,
+      action: AuditAction.USER_DELETE,
+      resource: `user:${userId}`,
+      details: { 
+        deletedUsername: userToDelete.username, 
+        deletedRole: userToDelete.role,
+        deletedBy: req.user.username 
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+      status: 'success'
+    });
+    logAuth('warn', 'User deleted', { 
+      deletedUserId: userId, 
+      deletedUsername: userToDelete.username,
+      deletedBy: req.user.username 
+    });
 
     res.json({ success: true });
   } catch (err) {
-    console.error('[Auth] Delete user error:', err);
+    logger.error('Delete user error', { error: err.message, stack: err.stack, userId });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

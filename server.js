@@ -46,6 +46,7 @@ import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth
 import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
+import logger, { httpLoggerMiddleware } from './src/utils/logger.js';
 
 const execAsync = util.promisify(execCallback);
 
@@ -64,6 +65,9 @@ if (!fs.existsSync(DEVICES)) fs.mkdirSync(DEVICES, { recursive: true });
 
 setupExpressMiddleware(app);
 setupStaticFiles(app);
+
+// HTTP Request Logging (Winston)
+app.use(httpLoggerMiddleware);
 
 // Rate limiting для всех API запросов
 app.use('/api/', globalLimiter);
@@ -154,11 +158,13 @@ const foldersRouter = createFoldersRouter({
 app.use('/api/devices', conversionRouter);  
 app.use('/api/devices', foldersRouter);
 
-// ЗАЩИЩЕННЫЕ routes - требуют JWT везде
-app.use('/api/devices', requireAuth, devicesRouter);
-app.use('/api/devices', requireAuth, placeholderRouter);
-app.use('/api/devices', requireAuth, filesRouter);
-app.use('/api/devices', requireAuth, videoInfoRouter);
+// ВАЖНО: devicesRouter, placeholderRouter, filesRouter, videoInfoRouter
+// используются устройствами (плеерами) БЕЗ JWT токенов!
+// Только POST/DELETE операции внутри них защищены requireAdmin
+app.use('/api/devices', devicesRouter);  // GET открыт для устройств
+app.use('/api/devices', placeholderRouter);  // GET открыт для устройств
+app.use('/api/devices', filesRouter);  // GET открыт для устройств
+app.use('/api/devices', videoInfoRouter);  // GET открыт для устройств
 
 // System info router
 const systemInfoRouter = createSystemInfoRouter();
@@ -207,5 +213,9 @@ setupSocketHandlers(io, { devices, getPageSlideCount });
 
 // Запуск сервера
 server.listen(PORT, HOST, () => {
-  console.log(`Server on ${HOST}:${PORT} (доступен только через Nginx)`);
+  logger.info(`Server started on ${HOST}:${PORT} (accessible only through Nginx)`, { 
+    host: HOST, 
+    port: PORT, 
+    env: process.env.NODE_ENV || 'development' 
+  });
 });

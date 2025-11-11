@@ -40,9 +40,9 @@ echo ""
 echo "Installing system dependencies..."
 if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
     sudo apt-get update
-    sudo apt-get install -y ffmpeg libreoffice imagemagick unzip
+    sudo apt-get install -y ffmpeg libreoffice imagemagick unzip sqlite3
 elif [ "$OS" = "centos" ] || [ "$OS" = "rhel" ]; then
-    sudo yum install -y ffmpeg libreoffice ImageMagick unzip
+    sudo yum install -y ffmpeg libreoffice ImageMagick unzip sqlite
 fi
 
 # Install npm packages
@@ -60,11 +60,17 @@ NODE_ENV=production
 PORT=3000
 HOST=127.0.0.1
 
+# JWT Authentication (12h access, 30d refresh)
 JWT_SECRET=$JWT_SECRET
-JWT_ACCESS_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
+JWT_ACCESS_EXPIRES_IN=12h
+JWT_REFRESH_EXPIRES_IN=30d
+
+# Logging level
+LOG_LEVEL=info
 EOF
-    echo "Created .env with JWT secret"
+    echo "✅ Created .env with secure JWT secret"
+    echo "   Access Token: 12 hours"
+    echo "   Refresh Token: 30 days"
 fi
 
 # Create necessary directories
@@ -158,30 +164,48 @@ fi
 
 echo ""
 echo "==================================="
-echo "Installation Complete!"
+echo "✅ Installation Complete!"
 echo "==================================="
 echo ""
+echo "🔐 Default Admin Credentials:"
+echo "  Username: admin"
+echo "  Password: admin123"
+echo "  🚨 ОБЯЗАТЕЛЬНО смените после первого входа!"
+echo ""
 echo "📁 Project structure created:"
-echo "  ✅ config/ - configuration files"
-echo "  ✅ public/content/ - device content"
+echo "  ✅ config/ - configuration files + main.db"
+echo "  ✅ public/content/ - device content (up to 5GB per file)"
 echo "  ✅ .converted/ - converted PDF/PPTX cache"
+echo "  ✅ logs/ - Winston structured logs (will be created)"
 echo ""
 echo "🚀 Start server:"
 echo "  Development: npm start"
-echo "  Production: sudo systemctl start videocontrol"
+echo "  Production:  sudo systemctl start videocontrol"
 echo ""
 echo "🌐 Access URLs:"
-echo "  Admin Panel:  http://localhost/admin.html"
+echo "  Login:        http://localhost/"
+echo "  Admin Panel:  http://localhost/ (admin/admin123)"
 echo "  Speaker Panel: http://localhost/speaker.html"
-echo "  Player: http://localhost/player-videojs.html?device_id=YOUR_ID"
+echo "  Player:       http://localhost/player-videojs.html?device_id=YOUR_ID"
+echo ""
+echo "🔒 Security Features:"
+echo "  ✅ JWT Authentication (12h access, 30d refresh)"
+echo "  ✅ Rate limiting (disabled for local network)"
+echo "  ✅ Path traversal protection"
+echo "  ✅ Audit logging to database"
 echo ""
 echo "📊 Monitoring:"
-echo "  Status: sudo systemctl status videocontrol"
-echo "  Logs: sudo journalctl -u videocontrol -f"
+echo "  Status:  sudo systemctl status videocontrol"
+echo "  Logs:    tail -f logs/combined-*.log"
+echo "  Errors:  tail -f logs/error-*.log"
+echo "  Audit:   sqlite3 config/main.db 'SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 10;'"
+echo "  Journal: sudo journalctl -u videocontrol -f"
 echo ""
 echo "📖 Documentation:"
-echo "  📘 Installation: docs/INSTALL.md"
-echo "  📁 Folders feature: docs/FOLDERS_FEATURE.md"
-echo "  📱 Android app: docs/ANDROID.md"
+echo "  📘 Installation:  docs/INSTALL.md"
+echo "  🔐 Security:      plan/SECURITY_LEVELS.md"
+echo "  📝 Roadmap:       plan/ROADMAP.md"
+echo "  📁 Folders:       docs/FOLDERS_FEATURE.md"
+echo "  📱 Android:       docs/ANDROID.md"
 echo ""
 

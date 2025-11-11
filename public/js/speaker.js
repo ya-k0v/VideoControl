@@ -225,12 +225,23 @@ async function selectDevice(id) {
 async function loadFiles() {
   if (!currentDevice) return;
   
+  // Находим устройство для отображения имени и количества файлов
+  const device = devices.find(d => d.device_id === currentDevice);
+  const deviceName = device ? (device.name || nodeNames[currentDevice] || currentDevice) : currentDevice;
+  
+  // Обновляем заголовок плитки файлов
+  const title = document.getElementById('filesPaneTitle');
+  const meta = document.getElementById('filesPaneMeta');
+  if (title) title.textContent = `Файлы на ${deviceName}`;
+  if (meta) meta.textContent = 'Загрузка...';
+  
   try {
     // КРИТИЧНО: Используем files-with-status для получения разрешения видео
     const res = await speakerFetch(`/api/devices/${encodeURIComponent(currentDevice)}/files-with-status`);
     if (!res.ok) {
       console.error('Failed to load files:', res.status);
       fileList.innerHTML = '<li class="item" style="text-align:center; padding:var(--space-xl)"><div class="meta">Ошибка загрузки файлов</div></li>';
+      if (meta) meta.textContent = '0 файлов';
       return;
     }
     const filesData = await res.json();
@@ -256,8 +267,13 @@ async function loadFiles() {
     // Очистить пейджер файлов если есть
     const pager = document.getElementById('filePager');
     if (pager) pager.innerHTML = '';
+    if (meta) meta.textContent = '0 файлов';
     return;
   }
+  
+  // Обновляем счетчик файлов
+  const totalFilesCount = allFiles.length;
+  if (meta) meta.textContent = `${totalFilesCount} файл${totalFilesCount === 1 ? '' : totalFilesCount > 1 && totalFilesCount < 5 ? 'а' : 'ов'}`;
 
   // Пагинация файлов
   const pageSize = getPageSize();

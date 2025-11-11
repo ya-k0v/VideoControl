@@ -16,6 +16,7 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
   let folderName = null; // Имя выбранной папки
   const allowed = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx|zip)$/i;
   const imageExtensions = /\.(png|jpg|jpeg|gif|webp)$/i;
+  const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
 
   function renderQueue() {
     if (!pending.length) { 
@@ -45,10 +46,32 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
   }
 
   function addToQueue(files) {
+    const rejected = [];
     for (const f of files) {
-      if (!allowed.test(f.name)) continue;
+      // Проверка расширения
+      if (!allowed.test(f.name)) {
+        rejected.push({ name: f.name, reason: 'Неподдерживаемый формат' });
+        continue;
+      }
+      
+      // Проверка размера файла
+      if (f.size > MAX_FILE_SIZE) {
+        rejected.push({ 
+          name: f.name, 
+          reason: `Размер ${(f.size/1024/1024/1024).toFixed(2)} GB превышает лимит 5 GB` 
+        });
+        continue;
+      }
+      
       pending.push(f);
     }
+    
+    // Показываем предупреждение о отклоненных файлах
+    if (rejected.length > 0) {
+      const messages = rejected.map(r => `• ${r.name}\n  ${r.reason}`).join('\n\n');
+      alert(`⚠️ Следующие файлы не были добавлены:\n\n${messages}`);
+    }
+    
     renderQueue();
   }
 
@@ -94,7 +117,32 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
         folderName = 'uploaded_folder';
       }
       
-      pending = imageFiles;
+      // Проверка размера файлов в папке
+      const rejected = [];
+      const validFiles = [];
+      for (const f of imageFiles) {
+        if (f.size > MAX_FILE_SIZE) {
+          rejected.push({ 
+            name: f.name, 
+            reason: `Размер ${(f.size/1024/1024/1024).toFixed(2)} GB превышает лимит 5 GB` 
+          });
+        } else {
+          validFiles.push(f);
+        }
+      }
+      
+      if (rejected.length > 0) {
+        const messages = rejected.map(r => `• ${r.name}\n  ${r.reason}`).join('\n\n');
+        alert(`⚠️ Следующие файлы из папки не будут загружены:\n\n${messages}`);
+      }
+      
+      if (validFiles.length === 0) {
+        alert('❌ Нет файлов для загрузки (все файлы превышают лимит 5 GB)');
+        folderInput.value = '';
+        return;
+      }
+      
+      pending = validFiles;
       renderQueue();
       folderInput.value = '';
     };
@@ -128,7 +176,32 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
               
               if (imageFiles.length > 0) {
                 folderName = entry.name;
-                pending = imageFiles;
+                
+                // Проверка размера файлов в папке
+                const rejected = [];
+                const validFiles = [];
+                for (const f of imageFiles) {
+                  if (f.size > MAX_FILE_SIZE) {
+                    rejected.push({ 
+                      name: f.name, 
+                      reason: `Размер ${(f.size/1024/1024/1024).toFixed(2)} GB превышает лимит 5 GB` 
+                    });
+                  } else {
+                    validFiles.push(f);
+                  }
+                }
+                
+                if (rejected.length > 0) {
+                  const messages = rejected.map(r => `• ${r.name}\n  ${r.reason}`).join('\n\n');
+                  alert(`⚠️ Следующие файлы из папки не будут загружены:\n\n${messages}`);
+                }
+                
+                if (validFiles.length === 0) {
+                  alert('❌ Нет файлов для загрузки (все файлы превышают лимит 5 GB)');
+                  return;
+                }
+                
+                pending = validFiles;
                 renderQueue();
                 return;
               }

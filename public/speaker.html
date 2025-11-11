@@ -125,7 +125,10 @@
     </aside>
     <section class="speaker-main">
       <div class="panel files-panel">
-        <h3 class="title">Файлы</h3>
+        <div class="header" style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-sm); margin-bottom:var(--space-sm)">
+          <h3 class="title" id="filesPaneTitle" style="margin:0">Файлы</h3>
+          <div class="meta" id="filesPaneMeta" style="margin:0; white-space:nowrap">Выберите устройство слева</div>
+        </div>
         <ul id="fileList" class="list"></ul>
       </div>
       <div class="panel preview-panel">

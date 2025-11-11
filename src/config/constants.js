@@ -38,7 +38,7 @@ export const FILE_NAMES_MAP_PATH = path.join(ROOT, 'config', 'file-names-map.jso
 export const VIDEO_OPTIMIZATION_CONFIG_PATH = path.join(ROOT, 'config', 'video-optimization.json');
 
 // Лимиты файлов
-export const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+export const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
 export const ALLOWED_EXT = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx|zip)$/i;
 
 // Сетевые настройки

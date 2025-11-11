@@ -185,7 +185,7 @@ function renderLayout() {
 
     <div id="filesPane" class="card" style="min-height:0; display:flex; flex-direction:column">
       <div class="header" style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-sm); margin-bottom:var(--space-sm)">
-        <div class="title" style="margin:0; font-size:var(--font-size-base)">Файлы</div>
+        <div class="title" id="filesPaneTitle" style="margin:0; font-size:var(--font-size-base)">Файлы</div>
         <div class="meta" id="filesPaneMeta" style="margin:0; white-space:nowrap">Выберите устройство слева</div>
       </div>
       <div id="filesPanel" style="flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden"></div>
@@ -241,12 +241,27 @@ function renderDeviceCard(d) {
 
 // ------ Правая колонка: файлы выбранной ноды ------
 async function renderFilesPane(deviceId) {
+  const title = document.getElementById('filesPaneTitle');
   const meta = document.getElementById('filesPaneMeta');
   const panel = document.getElementById('filesPanel');
   if (!panel) return;
-  if (meta) meta.textContent = `ID: ${deviceId}`;
+  
+  // Находим устройство для отображения имени и количества файлов
+  const device = devicesCache.find(d => d.device_id === deviceId);
+  const deviceName = device ? (device.name || nodeNames[deviceId] || deviceId) : deviceId;
+  const filesCount = device ? (device.files?.length || 0) : 0;
+  
+  // Обновляем заголовок и meta
+  if (title) title.textContent = `Файлы на ${deviceName}`;
+  if (meta) meta.textContent = `${filesCount} файл${filesCount === 1 ? '' : filesCount > 1 && filesCount < 5 ? 'а' : 'ов'}`;
+  
   panel.innerHTML = `<div class="meta">Загрузка списка...</div>`;
   await refreshFilesPanel(deviceId, panel);
+  
+  // Обновляем счетчик файлов после загрузки
+  const updatedDevice = devicesCache.find(d => d.device_id === deviceId);
+  const updatedFilesCount = updatedDevice ? (updatedDevice.files?.length || 0) : filesCount;
+  if (meta) meta.textContent = `${updatedFilesCount} файл${updatedFilesCount === 1 ? '' : updatedFilesCount > 1 && updatedFilesCount < 5 ? 'а' : 'ов'}`;
 }
 
 

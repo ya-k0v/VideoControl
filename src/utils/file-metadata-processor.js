@@ -5,7 +5,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { calculateMD5, saveFileMetadata, findDuplicateFile } from '../database/files-metadata.js';
+import { calculateMD5, saveFileMetadata, findDuplicateFile, getFileMetadata } from '../database/files-metadata.js';
 import { checkVideoParameters } from '../video/ffmpeg-wrapper.js';
 import logger, { logFile } from '../utils/logger.js';
 
@@ -35,17 +35,52 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
     // Вычисляем MD5 (в фоне, не блокируем upload response)
     const md5Hash = await calculateMD5(filePath);
     
-    logFile('debug', 'MD5 calculated', { deviceId, safeName, md5Hash });
+    logFile('debug', 'MD5 calculated', { deviceId, safeName, md5Hash: md5Hash.substring(0, 12) });
     
     // Проверяем есть ли дубликат на других устройствах
     const duplicate = findDuplicateFile(md5Hash, fileSize, deviceId);
-    if (duplicate) {
-      logFile('info', 'Duplicate file detected', {
+    let deduplicationApplied = false;
+    
+    if (duplicate && fs.existsSync(duplicate.file_path)) {
+      // Дубликат найден! Заменяем загруженный файл копией
+      logFile('info', '🔄 Duplicate detected - replacing with copy', {
         deviceId,
         safeName,
         duplicateDevice: duplicate.device_id,
         duplicateFile: duplicate.safe_name,
-        md5Hash
+        md5: md5Hash.substring(0, 12),
+        savedSpaceMB: (fileSize / 1024 / 1024).toFixed(2)
+      });
+      
+      try {
+        // Удаляем только что загруженный файл
+        fs.unlinkSync(filePath);
+        
+        // Копируем файл с другого устройства
+        fs.copyFileSync(duplicate.file_path, filePath);
+        fs.chmodSync(filePath, 0o644);
+        
+        deduplicationApplied = true;
+        
+        logFile('info', '✅ File replaced with duplicate copy (saved upload time & space!)', {
+          deviceId,
+          safeName,
+          copiedFrom: `${duplicate.device_id}:${duplicate.safe_name}`
+        });
+      } catch (e) {
+        logFile('error', 'Failed to replace file with duplicate', {
+          error: e.message,
+          deviceId,
+          safeName
+        });
+        deduplicationApplied = false;
+      }
+    } else if (duplicate) {
+      logFile('warn', 'Duplicate found but source file missing', {
+        deviceId,
+        safeName,
+        duplicateDevice: duplicate.device_id,
+        missingFile: duplicate.file_path
       });
     }
     
@@ -53,8 +88,33 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
     let audioParams = {};
     let mimeType = null;
     
-    // Получаем метаданные видео (если это видео)
-    if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+    // Если применена дедупликация - копируем метаданные из источника
+    if (deduplicationApplied && duplicate) {
+      const sourceMetadata = getFileMetadata(duplicate.device_id, duplicate.safe_name);
+      if (sourceMetadata) {
+        videoParams = {
+          width: sourceMetadata.video_width,
+          height: sourceMetadata.video_height,
+          duration: sourceMetadata.video_duration,
+          codec: sourceMetadata.video_codec,
+          bitrate: sourceMetadata.video_bitrate
+        };
+        audioParams = {
+          codec: sourceMetadata.audio_codec,
+          bitrate: sourceMetadata.audio_bitrate,
+          channels: sourceMetadata.audio_channels
+        };
+        mimeType = sourceMetadata.mime_type;
+        
+        logFile('info', '✅ Metadata copied from duplicate (no FFmpeg needed!)', {
+          deviceId,
+          safeName,
+          resolution: `${videoParams.width}x${videoParams.height}`
+        });
+      }
+    }
+    // Иначе получаем метаданные через FFmpeg (только для новых файлов)
+    else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
       try {
         const params = await checkVideoParameters(filePath);
         if (params) {
@@ -72,7 +132,7 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
           };
           mimeType = `video/${ext.substring(1)}`;
           
-          logFile('debug', 'Video metadata extracted', { 
+          logFile('debug', 'Video metadata extracted via FFmpeg', { 
             deviceId, 
             safeName, 
             resolution: `${videoParams.width}x${videoParams.height}` 
@@ -112,9 +172,18 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
     logFile('info', 'File metadata saved to database', { 
       deviceId, 
       safeName, 
-      md5Hash,
-      duplicate: !!duplicate
+      md5: md5Hash.substring(0, 12),
+      deduplicated: deduplicationApplied,
+      resolution: videoParams.width ? `${videoParams.width}x${videoParams.height}` : null
     });
+    
+    // Возвращаем информацию о дедупликации
+    return {
+      deduplicated: deduplicationApplied,
+      sourceDevice: duplicate ? duplicate.device_id : null,
+      sourceFile: duplicate ? duplicate.safe_name : null,
+      md5Hash
+    };
     
   } catch (error) {
     logger.error('Error processing file metadata', { 
@@ -123,6 +192,11 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
       deviceId, 
       safeName 
     });
+    
+    return {
+      deduplicated: false,
+      error: error.message
+    };
   }
 }
 
@@ -143,11 +217,29 @@ export async function processUploadedFilesAsync(deviceId, files, folder, fileNam
   });
   
   // Обрабатываем все файлы параллельно
-  await Promise.allSettled(promises);
+  const results = await Promise.allSettled(promises);
+  
+  // Собираем статистику дедупликации
+  let deduplicatedCount = 0;
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value?.deduplicated) {
+      deduplicatedCount++;
+    }
+  }
   
   logFile('info', 'Batch file metadata processing completed', { 
     deviceId, 
-    filesCount: files.length 
+    filesCount: files.length,
+    deduplicatedCount,
+    newFilesCount: files.length - deduplicatedCount
   });
+  
+  if (deduplicatedCount > 0) {
+    logFile('info', `🎯 Deduplication saved ${deduplicatedCount} file upload(s)`, {
+      deviceId,
+      deduplicatedCount,
+      totalFiles: files.length
+    });
+  }
 }
 

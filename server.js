@@ -41,6 +41,7 @@ import { createConversionRouter } from './src/routes/conversion.js';
 import { createSystemInfoRouter } from './src/routes/system-info.js';
 import { createFoldersRouter } from './src/routes/folders.js';
 import { createAuthRouter } from './src/routes/auth.js';
+import { createDeduplicationRouter } from './src/routes/deduplication.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
 import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth.js';
 import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
@@ -155,9 +156,17 @@ const foldersRouter = createFoldersRouter({
   requireAuth  // Передаем middleware
 });
 
+const deduplicationRouter = createDeduplicationRouter({
+  devices,
+  io,
+  fileNamesMap,
+  saveFileNamesMap: saveFileNamesToDB
+});
+
 // Роутеры с избирательной защитой (применяют requireAuth внутри себя)
 app.use('/api/devices', conversionRouter);  
 app.use('/api/devices', foldersRouter);
+app.use('/api/devices', deduplicationRouter);  // Дедупликация (check-duplicate, copy-from-duplicate)
 
 // ВАЖНО: devicesRouter, placeholderRouter, filesRouter, videoInfoRouter
 // используются устройствами (плеерами) БЕЗ JWT токенов!
@@ -170,6 +179,9 @@ app.use('/api/devices', videoInfoRouter);  // GET открыт для устро
 // System info router
 const systemInfoRouter = createSystemInfoRouter();
 app.use('/api/system', requireAuth, systemInfoRouter);
+
+// Duplicates list (admin only)
+app.use('/api/duplicates', requireAuth, deduplicationRouter);
 
 // ========================================
 // ВСЕ API ROUTES ПЕРЕНЕСЕНЫ В МОДУЛИ src/routes/

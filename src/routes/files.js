@@ -18,6 +18,7 @@ import logger, { logFile, logSecurity } from '../utils/logger.js';
 import { getCachedResolution, clearResolutionCache } from '../video/resolution-cache.js';
 import { processUploadedFilesAsync } from '../utils/file-metadata-processor.js';
 import { getFileMetadata, deleteFileMetadata } from '../database/files-metadata.js';
+import { checkAndDeduplicateUploadedFile } from '../utils/upload-deduplication.js';
 
 const router = express.Router();
 
@@ -174,47 +175,11 @@ export function createFilesRouter(deps) {
         }
       }
       
-      // Обновляем список файлов
-      const result = [];
-      const fileNames = [];
-      if (fs.existsSync(folder)) {
-        const entries = fs.readdirSync(folder);
-        for (const entry of entries) {
-          const entryPath = path.join(folder, entry);
-          const stat = fs.statSync(entryPath);
-          
-          if (stat.isFile()) {
-            if (!isSystemFile(entry)) {
-              result.push(entry);
-              const originalName = fileNamesMap[id]?.[entry] || entry;
-              fileNames.push(originalName);
-            }
-          } else if (stat.isDirectory()) {
-            const folderContents = fs.readdirSync(entryPath);
-            const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-            
-            if (originalFile) {
-              // Папка с PDF/PPTX
-              result.push(originalFile);
-              const originalName = fileNamesMap[id]?.[entry] || originalFile;
-              fileNames.push(originalName);
-            } else {
-              // Проверяем, есть ли изображения в папке (папка изображений)
-              const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
-              if (hasImages) {
-                // Это папка с изображениями - добавляем её как файл
-                result.push(entry); // Добавляем имя папки
-                // Используем оригинальное имя если есть маппинг
-                const originalName = fileNamesMap[id]?.[entry] || entry;
-                fileNames.push(originalName);
-              }
-            }
-          }
-        }
-      }
+      // Обновляем список файлов через scanDeviceFiles (единая логика)
+      const { files: scannedFiles, fileNames: scannedFileNames } = scanDeviceFiles(id, folder, fileNamesMap);
       
-      devices[id].files = result;
-      devices[id].fileNames = fileNames;
+      devices[id].files = scannedFiles;
+      devices[id].fileNames = scannedFileNames;
       io.emit('devices/updated');
       
       // Audit log
@@ -605,35 +570,11 @@ export function createFilesRouter(deps) {
       saveFileNamesMap(fileNamesMap);
     }
     
-    // Обновляем список файлов
-    const result = [];
-    const fileNames = [];
-    if (fs.existsSync(deviceFolder)) {
-      const entries = fs.readdirSync(deviceFolder);
-      for (const entry of entries) {
-        const entryPath = path.join(deviceFolder, entry);
-        const stat = fs.statSync(entryPath);
-        
-        if (stat.isFile()) {
-          if (!isSystemFile(entry)) {
-            result.push(entry);
-            const originalName = fileNamesMap[id]?.[entry] || entry;
-            fileNames.push(originalName);
-          }
-        } else if (stat.isDirectory()) {
-          const folderContents = fs.readdirSync(entryPath);
-          const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-          if (originalFile) {
-            result.push(originalFile);
-            const originalName = fileNamesMap[id]?.[entry] || originalFile;
-            fileNames.push(originalName);
-          }
-        }
-      }
-    }
+    // Обновляем список файлов через scanDeviceFiles (единая логика)
+    const { files: scannedFiles, fileNames: scannedFileNames } = scanDeviceFiles(id, deviceFolder, fileNamesMap);
     
-    d.files = result;
-    d.fileNames = fileNames;
+    d.files = scannedFiles;
+    d.fileNames = scannedFileNames;
     io.emit('devices/updated');
     
     // Audit log

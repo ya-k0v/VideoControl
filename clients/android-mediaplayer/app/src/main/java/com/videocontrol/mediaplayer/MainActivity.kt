@@ -36,6 +36,7 @@ import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import java.net.URISyntaxException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -50,6 +51,9 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var simpleCache: SimpleCache? = null
     private val pingHandler = Handler(Looper.getMainLooper())
+    private val retryHandler = Handler(Looper.getMainLooper())
+    private var retryRunnable: Runnable? = null
+    private var placeholderJob: Job? = null
     private var isPlayingPlaceholder: Boolean = false
     
     // Новые компоненты
@@ -225,7 +229,7 @@ class MainActivity : AppCompatActivity() {
                             showStatus("Ошибка воспроизведения, попытка $errorRetryCount/$maxAttempts...")
                             
                             // Автоматический retry для стабильности 24/7
-                            Handler(Looper.getMainLooper()).postDelayed({
+                            retryRunnable = Runnable {
                                 if (errorRetryCount < maxAttempts) {
                                     errorRetryCount++
                                     Log.i(TAG, "Retrying playback (attempt $errorRetryCount/$maxAttempts) [content=${!isPlayingPlaceholder}]...")
@@ -244,7 +248,8 @@ class MainActivity : AppCompatActivity() {
                                     errorRetryCount = 0
                                     loadPlaceholder()
                                 }
-                            }, 5000) // 5 секунд для сетевых ошибок
+                            }
+                            retryHandler.postDelayed(retryRunnable!!, 5000) // 5 секунд для сетевых ошибок
                         }
 
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -854,7 +859,8 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun loadPlaceholderFromServer() {
-        CoroutineScope(Dispatchers.IO).launch {
+        placeholderJob?.cancel()  // Отменяем предыдущую загрузку если была
+        placeholderJob = CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = java.net.URL("$SERVER_URL/api/devices/$DEVICE_ID/placeholder")
                 val connection = url.openConnection() as java.net.HttpURLConnection
@@ -871,7 +877,7 @@ class MainActivity : AppCompatActivity() {
                         Log.i(TAG, "✅ Placeholder found: $placeholderFile")
                         
                         // Определяем тип заглушки (видео или изображение)
-                        val ext = placeholderFile.substringAfterLast('.', "").toLowerCase()
+                        val ext = placeholderFile.substringAfterLast('.', "").lowercase()
                         
                         // СОХРАНЯЕМ В КЭШ для быстрой загрузки в следующий раз!
                         cachedPlaceholderFile = placeholderFile
@@ -912,12 +918,13 @@ class MainActivity : AppCompatActivity() {
     
     private fun scheduleRetryPlaceholder() {
         // Retry через 10 секунд
-        Handler(Looper.getMainLooper()).postDelayed({
+        retryRunnable = Runnable {
             if (cachedPlaceholderFile == null && socket?.connected() == true) {
                 Log.i(TAG, "🔄 Retrying to load placeholder...")
                 loadPlaceholder()
             }
-        }, 10000)
+        }
+        retryHandler.postDelayed(retryRunnable!!, 10000)
     }
 
     private val statusHandler = Handler(Looper.getMainLooper())
@@ -977,13 +984,21 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         Log.i(TAG, "=== MainActivity onDestroy ===")
         
+        // Очищаем все Handler
         stopPingTimer()
+        statusHandler.removeCallbacks(hideStatusRunnable)
+        retryHandler.removeCallbacksAndMessages(null)
+        
+        // Отменяем корутины
+        placeholderJob?.cancel()
+        
+        // Освобождаем ресурсы
         player?.release()
         socket?.disconnect()
         wakeLock?.release()
         simpleCache?.release()
         
-        Log.i(TAG, "MainActivity destroyed")
+        Log.i(TAG, "MainActivity destroyed - all resources released")
     }
 
     override fun onPause() {

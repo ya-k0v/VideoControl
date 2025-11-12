@@ -45,25 +45,29 @@ setupSocketListeners(socket, {
   onFileProcessing: (device_id, file) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
+      // ИСПРАВЛЕНО: НЕ обновляем панель при начале обработки (избегаем мерцания)
+      // if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
     }
   },
   onFileProgress: (device_id, file, progress) => {
     if (currentDeviceId === device_id) {
-      const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
+      // ИСПРАВЛЕНО: Обновляем только прогресс-бар, НЕ перерисовываем всю панель
+      // Это сохраняет текущую страницу и избегает мерцания UI
+      updateFileProgress(device_id, file, progress);
     }
   },
   onFileReady: (device_id, file) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
+      // ИСПРАВЛЕНО: Обновляем панель с сохранением текущей страницы
+      if (panel) refreshFilesPanel(device_id, panel);
     }
   },
   onFileError: (device_id, file, error) => {
     if (currentDeviceId === device_id) {
       const panel = document.getElementById('filesPanel');
-      if (panel) refreshFilesPanel(device_id, panel, adminFetch, getPageSize, filePage, socket);
+      // ИСПРАВЛЕНО: Обновляем панель с сохранением текущей страницы
+      if (panel) refreshFilesPanel(device_id, panel);
     }
   },
   onPreviewRefresh: async () => {
@@ -269,7 +273,53 @@ async function renderFilesPane(deviceId) {
 
 // refreshFilesPanel перенесена в files-manager.js
 async function refreshFilesPanel(deviceId, panelEl) {
+  // ИСПРАВЛЕНО: Передаем текущее значение filePage
   return await refreshFilesPanelModule(deviceId, panelEl, adminFetch, getPageSize, filePage, socket);
+}
+
+// НОВАЯ: Функция для обновления только прогресса файла без перерисовки всей панели
+function updateFileProgress(deviceId, fileName, progress) {
+  // Находим элемент файла в списке
+  const fileElements = document.querySelectorAll('.file-item');
+  
+  for (const fileEl of fileElements) {
+    const fileNameEl = fileEl.querySelector('.file-name');
+    if (fileNameEl && fileNameEl.textContent === fileName) {
+      // Находим или создаем прогресс-бар
+      let progressBar = fileEl.querySelector('.optimization-progress');
+      
+      if (!progressBar) {
+        // Создаем прогресс-бар, если его нет
+        progressBar = document.createElement('div');
+        progressBar.className = 'optimization-progress';
+        progressBar.style.cssText = 'height: 4px; background: #e0e0e0; border-radius: 2px; margin-top: 4px; overflow: hidden;';
+        
+        const progressFill = document.createElement('div');
+        progressFill.className = 'optimization-progress-fill';
+        progressFill.style.cssText = 'height: 100%; background: linear-gradient(90deg, #4CAF50, #8BC34A); transition: width 0.3s ease;';
+        
+        progressBar.appendChild(progressFill);
+        fileEl.appendChild(progressBar);
+      }
+      
+      // Обновляем ширину прогресс-бара
+      const progressFill = progressBar.querySelector('.optimization-progress-fill');
+      if (progressFill) {
+        progressFill.style.width = `${progress}%`;
+      }
+      
+      // Если оптимизация завершена (100%), удаляем прогресс-бар через 1 секунду
+      if (progress >= 100) {
+        setTimeout(() => {
+          if (progressBar && progressBar.parentNode) {
+            progressBar.remove();
+          }
+        }, 1000);
+      }
+      
+      break;
+    }
+  }
 }
 
 // setupUploadUI перенесена в upload-ui.js

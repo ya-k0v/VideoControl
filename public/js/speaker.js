@@ -204,9 +204,13 @@ function showLivePreviewForTV(deviceId) {
 }
 
 /* Выбор устройства: обновляем подсветку и список файлов, не сбрасывая выбранный файл, если он ещё существует */
-async function selectDevice(id) {
+async function selectDevice(id, resetPage = true) {
   currentDevice = id;
-  filePage = 0; // Сброс пагинации файлов при смене устройства
+  
+  // ИСПРАВЛЕНО: Сбрасываем страницу только при явном выборе устройства пользователем
+  if (resetPage) {
+    filePage = 0; // Сброс пагинации файлов при смене устройства
+  }
   
   // Обновляем URL при переключении устройства
   const url = new URL(location.href);
@@ -643,7 +647,8 @@ const onDevicesUpdated = debounce(async () => {
   const prevFile = currentFile;
   await loadDevices();
   if (prevDevice && devices.find(d => d.device_id === prevDevice)) {
-    await selectDevice(prevDevice);
+    // ИСПРАВЛЕНО: НЕ сбрасываем страницу при обновлении (false)
+    await selectDevice(prevDevice, false);
     if (prevFile) {
       const btn = fileList.querySelector(`.previewBtn[data-safe='${encodeURIComponent(prevFile)}']`);
       if (btn) {

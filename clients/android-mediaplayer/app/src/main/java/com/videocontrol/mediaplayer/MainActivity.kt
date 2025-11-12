@@ -330,6 +330,13 @@ class MainActivity : AppCompatActivity() {
             socket?.on("reconnect") { args ->
                 val attempt = if (args.isNotEmpty()) args[0].toString() else "?"
                 Log.i(TAG, "🔄 Socket reconnected (attempt $attempt)")
+                
+                // ИСПРАВЛЕНО: Регистрируемся заново при reconnect (в т.ч. после transport upgrade)
+                runOnUiThread {
+                    registerDevice()
+                    startPingTimer()
+                    Log.i(TAG, "📡 Re-registered device after reconnect")
+                }
             }
             
             socket?.on("reconnect_attempt") { args ->

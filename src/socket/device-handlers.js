@@ -94,7 +94,7 @@ export function setupDeviceHandlers(socket, deps) {
       timestamp: Date.now()
     });
     
-    console.log(`[Server] ✅ Player registered: ${device_id} (socket: ${socket.id})`);
+    console.log(`[Server] ✅ Player registered: ${device_id} (socket: ${socket.id}, transport: ${socket.conn.transport.name})`);
   });
     
   // player/ping - Keep-alive пинг

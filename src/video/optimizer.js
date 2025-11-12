@@ -46,10 +46,8 @@ export function needsOptimization(params) {
     params.fps > (thresholds.maxFps || 30) ||
     params.bitrate > (thresholds.maxBitrate || 6000000) ||
     params.profile === 'High 10' ||
+    params.profile === 'High 4:2:2' ||  // ИСПРАВЛЕНО: Добавлена проверка High 4:2:2
     params.profile === 'High 4:4:4 Predictive' ||
-    params.profile === 'High 4:2:2' ||
-    params.profile === 'High' ||  // RK3318 не поддерживает High Profile
-    params.level > 31 ||  // RK3318 поддерживает только до Level 3.1
     (params.codec !== 'h264' && params.codec !== 'H.264');
   
   return needsOpt;
@@ -73,8 +71,19 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
     return { success: false, message: 'Video optimization disabled' };
   }
   
-  const deviceFolder = path.join(DEVICES, d.folder);
-  const filePath = path.join(deviceFolder, fileName);
+  // ИСПРАВЛЕНО: Получаем путь из БД для новой архитектуры storage
+  const { getFileMetadata } = await import('../database/files-metadata.js');
+  const metadata = getFileMetadata(deviceId, fileName);
+  
+  let filePath;
+  if (metadata && metadata.file_path) {
+    // Медиафайл из БД (в /content/)
+    filePath = metadata.file_path;
+  } else {
+    // Fallback для PDF/PPTX/folders (в /content/{device}/)
+    const deviceFolder = path.join(DEVICES, d.folder);
+    filePath = path.join(deviceFolder, fileName);
+  }
   
   if (!fs.existsSync(filePath)) {
     return { success: false, message: 'File not found' };
@@ -136,12 +145,15 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
   
   // КРИТИЧНО: Всегда конвертируем в MP4 (даже если оригинал WebM/MKV/AVI)
   const outputExt = '.mp4';
-  const tempPath = path.join(deviceFolder, `.optimizing_${Date.now()}${outputExt}`);
+  
+  // ИСПРАВЛЕНО: Временный файл сохраняем в той же папке что и оригинал
+  const fileDir = path.dirname(filePath);
+  const tempPath = path.join(fileDir, `.optimizing_${Date.now()}${outputExt}`);
   
   // Определяем финальное имя файла
   const baseFileName = path.basename(fileName, ext);
   const finalFileName = ext === '.mp4' ? fileName : `${baseFileName}.mp4`;
-  const finalPath = path.join(deviceFolder, finalFileName);
+  const finalPath = path.join(fileDir, finalFileName);
   
   console.log(`[VideoOpt] 🎬 Начало конвертации: ${fileName}`);
   if (ext !== '.mp4') {
@@ -272,6 +284,33 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       // Устанавливаем права
       fs.chmodSync(finalPath, 0o644);
       
+      // НОВОЕ: Обновляем метаданные в БД (удаляем старую запись, создаем новую)
+      if (metadata) {
+        const { deleteFileMetadata, saveFileMetadata } = await import('../database/files-metadata.js');
+        const newStats = fs.statSync(finalPath);
+        const newParams = await checkVideoParameters(finalPath);
+        
+        // Удаляем старую запись (.webm)
+        deleteFileMetadata(deviceId, fileName);
+        
+        // Создаем новую запись (.mp4)
+        saveFileMetadata({
+          deviceId,
+          safeName: finalFileName,
+          originalName: fileNamesMap[deviceId]?.[finalFileName] || finalFileName,
+          filePath: finalPath,
+          fileSize: newStats.size,
+          md5Hash: metadata.md5_hash,
+          partialMd5: metadata.partial_md5,
+          mimeType: 'video/mp4',
+          videoParams: newParams.video || {},
+          audioParams: newParams.audio || {},
+          fileMtime: newStats.mtimeMs
+        });
+        
+        console.log(`[VideoOpt] 📊 Метаданные обновлены в БД (${fileName} → ${finalFileName})`);
+      }
+      
       // Обновляем список файлов устройства
       const fileIndex = d.files.indexOf(fileName);
       if (fileIndex >= 0) {
@@ -299,6 +338,29 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       
       // Устанавливаем права
       fs.chmodSync(filePath, 0o644);
+      
+      // НОВОЕ: Обновляем метаданные в БД после оптимизации
+      if (metadata) {
+        const { saveFileMetadata } = await import('../database/files-metadata.js');
+        const newStats = fs.statSync(filePath);
+        const newParams = await checkVideoParameters(filePath);
+        
+        saveFileMetadata({
+          deviceId,
+          safeName: fileName,
+          originalName: metadata.original_name,
+          filePath,
+          fileSize: newStats.size,
+          md5Hash: metadata.md5_hash,  // MD5 сохраняем старый (т.к. для дедупликации)
+          partialMd5: metadata.partial_md5,
+          mimeType: 'video/mp4',
+          videoParams: newParams.video || {},
+          audioParams: newParams.audio || {},
+          fileMtime: newStats.mtimeMs
+        });
+        
+        console.log(`[VideoOpt] 📊 Метаданные обновлены в БД`);
+      }
       
       // Устанавливаем статус "готово"
       setFileStatus(deviceId, fileName, { status: 'ready', progress: 100, canPlay: true });

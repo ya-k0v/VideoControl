@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS files_metadata (
   video_height INTEGER,
   video_duration REAL,
   video_codec TEXT,
+  video_profile TEXT,
   video_bitrate INTEGER,
   
   -- Метаданные аудио

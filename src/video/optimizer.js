@@ -99,14 +99,27 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
   // Устанавливаем статус "проверка"
   setFileStatus(deviceId, fileName, { status: 'checking', progress: 0, canPlay: false });
   
-  // Проверяем параметры видео
-  const params = await checkVideoParameters(filePath);
-  if (!params) {
-    deleteFileStatus(deviceId, fileName);
-    return { success: false, message: 'Cannot read video parameters' };
+  // НОВОЕ: Сначала проверяем метаданные из БД (быстрее чем FFmpeg!)
+  let params;
+  if (metadata && metadata.video_width && metadata.video_profile) {
+    params = {
+      codec: metadata.video_codec,
+      width: metadata.video_width,
+      height: metadata.video_height,
+      fps: 30,  // Приблизительно
+      bitrate: metadata.video_bitrate || 0,
+      profile: metadata.video_profile  // КРИТИЧНО!
+    };
+    console.log(`[VideoOpt] 📊 Параметры из БД: ${params.width}x${params.height}, ${params.codec}/${params.profile}`);
+  } else {
+    // Fallback: получаем через FFmpeg если нет в БД
+    params = await checkVideoParameters(filePath);
+    if (!params) {
+      deleteFileStatus(deviceId, fileName);
+      return { success: false, message: 'Cannot read video parameters' };
+    }
+    console.log(`[VideoOpt] 📊 Параметры через FFmpeg: ${params.width}x${params.height} @ ${params.fps}fps, ${Math.round(params.bitrate/1000)}kbps, ${params.codec}/${params.profile}`);
   }
-  
-  console.log(`[VideoOpt] 📊 Параметры: ${params.width}x${params.height} @ ${params.fps}fps, ${Math.round(params.bitrate/1000)}kbps, ${params.codec}/${params.profile}`);
   
   // Проверяем нужна ли оптимизация
   if (!needsOptimization(params)) {
@@ -303,8 +316,19 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
           md5Hash: metadata.md5_hash,
           partialMd5: metadata.partial_md5,
           mimeType: 'video/mp4',
-          videoParams: newParams.video || {},
-          audioParams: newParams.audio || {},
+          videoParams: {
+            width: newParams.width,
+            height: newParams.height,
+            duration: newParams.duration,
+            codec: newParams.codec,
+            profile: newParams.profile,  // КРИТИЧНО: Сохраняем новый profile!
+            bitrate: newParams.bitrate
+          },
+          audioParams: {
+            codec: metadata.audio_codec,
+            bitrate: metadata.audio_bitrate,
+            channels: metadata.audio_channels
+          },
           fileMtime: newStats.mtimeMs
         });
         
@@ -354,8 +378,19 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
           md5Hash: metadata.md5_hash,  // MD5 сохраняем старый (т.к. для дедупликации)
           partialMd5: metadata.partial_md5,
           mimeType: 'video/mp4',
-          videoParams: newParams.video || {},
-          audioParams: newParams.audio || {},
+          videoParams: {
+            width: newParams.width,
+            height: newParams.height,
+            duration: newParams.duration,
+            codec: newParams.codec,
+            profile: newParams.profile,  // КРИТИЧНО: Сохраняем новый profile!
+            bitrate: newParams.bitrate
+          },
+          audioParams: {
+            codec: metadata.audio_codec,
+            bitrate: metadata.audio_bitrate,
+            channels: metadata.audio_channels
+          },
           fileMtime: newStats.mtimeMs
         });
         

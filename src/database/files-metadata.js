@@ -78,9 +78,9 @@ export function saveFileMetadata({
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO files_metadata (
         device_id, safe_name, original_name, file_path, file_size, md5_hash, partial_md5, mime_type,
-        video_width, video_height, video_duration, video_codec, video_bitrate,
+        video_width, video_height, video_duration, video_codec, video_profile, video_bitrate,
         audio_codec, audio_bitrate, audio_channels, file_mtime
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
@@ -96,6 +96,7 @@ export function saveFileMetadata({
       videoParams.height || null,
       videoParams.duration || null,
       videoParams.codec || null,
+      videoParams.profile || null,  // НОВОЕ: Сохраняем profile
       videoParams.bitrate || null,
       audioParams.codec || null,
       audioParams.bitrate || null,

@@ -306,16 +306,7 @@ export function createFilesRouter(deps) {
             console.error(`[upload] ❌ Ошибка обработки ZIP ${fileName}:`, err);
           });
         }
-          // Автоматическая оптимизация видео
-          else if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
-            autoOptimizeVideoWrapper(id, fileName).then(result => {
-              if (result.success) {
-                console.log(`[upload] 🎬 Видео обработано: ${fileName} (optimized=${result.optimized})`);
-              }
-            }).catch(err => {
-              console.error(`[upload] ❌ Ошибка оптимизации ${fileName}:`, err);
-            });
-          }
+          // УДАЛЕНО: Автоматическая оптимизация переносится ПОСЛЕ сохранения метаданных
         }
       }
       
@@ -360,6 +351,29 @@ export function createFilesRouter(deps) {
               logger.error('Metadata processing failed', { 
                 error: err.message, 
                 deviceId: id 
+              });
+            }
+          }
+          
+          // НОВОЕ: Автоматическая оптимизация ПОСЛЕ сохранения метаданных
+          // Теперь оптимизатор может прочитать profile из БД!
+          for (const fileName of uploaded) {
+            const ext = path.extname(fileName).toLowerCase();
+            if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+              autoOptimizeVideoWrapper(id, fileName).then(result => {
+                if (result.success) {
+                  logFile('info', 'Video processed', { 
+                    deviceId: id, 
+                    fileName, 
+                    optimized: result.optimized 
+                  });
+                }
+              }).catch(err => {
+                logger.error('Video optimization failed', { 
+                  error: err.message, 
+                  deviceId: id, 
+                  fileName 
+                });
               });
             }
           }

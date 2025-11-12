@@ -134,8 +134,9 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
             width: params.width,
             height: params.height,
             duration: params.duration,
-            codec: params.videoCodec,
-            bitrate: params.videoBitrate
+            codec: params.codec,
+            profile: params.profile,  // НОВОЕ: Сохраняем profile!
+            bitrate: params.bitrate
           };
           audioParams = {
             codec: params.audioCodec,

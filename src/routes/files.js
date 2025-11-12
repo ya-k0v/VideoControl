@@ -175,8 +175,37 @@ export function createFilesRouter(deps) {
       const uploaded = (req.files || []).map(f => f.filename);
       const folderName = req.body.folderName; // Имя папки если загружается через выбор папки
       
-      // Если это загрузка папки - создаем в /content/{device}/ (для PPTX/изображений)
-      // Если обычные файлы - они уже в /content/ (через Multer)
+      // ИСПРАВЛЕНО: Перемещаем PDF/PPTX/ZIP в /content/{device}/
+      // Только видео/аудио/одиночные изображения остаются в /content/ для дедупликации
+      
+      // Проверяем есть ли PDF/PPTX/ZIP среди загруженных файлов
+      const documentsToMove = req.files ? req.files.filter(file => {
+        const ext = path.extname(file.filename).toLowerCase();
+        return ext === '.pdf' || ext === '.pptx' || ext === '.zip';
+      }) : [];
+      
+      // Перемещаем документы в папку устройства
+      if (documentsToMove.length > 0) {
+        const deviceFolder = path.join(DEVICES, devices[id].folder);
+        if (!fs.existsSync(deviceFolder)) {
+          fs.mkdirSync(deviceFolder, { recursive: true });
+        }
+        
+        for (const file of documentsToMove) {
+          try {
+            const sourcePath = path.join(DEVICES, file.filename);  // Из /content/
+            const targetPath = path.join(deviceFolder, file.filename);  // В /content/{device}/
+            
+            fs.renameSync(sourcePath, targetPath);
+            fs.chmodSync(targetPath, 0o644);
+            console.log(`[upload] 📄 Документ перемещен: ${file.filename} -> ${devices[id].folder}/`);
+          } catch (e) {
+            console.warn(`[upload] ⚠️ Ошибка перемещения документа ${file.filename}:`, e);
+          }
+        }
+      }
+      
+      // Если это загрузка папки - создаем в /content/{device}/ (для изображений)
       if (folderName && req.files && req.files.length > 0) {
         console.log(`[upload] 📁 Обнаружена загрузка папки: ${folderName}`);
         
@@ -290,12 +319,6 @@ export function createFilesRouter(deps) {
         }
       }
       
-      // НОВОЕ: Обновляем список файлов из БД (вместо сканирования файловой системы)
-      updateDeviceFilesFromDB(id, devices, fileNamesMap);
-      
-      const updatedFiles = devices[id].files || [];
-      io.emit('devices/updated');
-      
       // Audit log
       if (uploaded.length > 0) {
         await auditLog({
@@ -320,17 +343,34 @@ export function createFilesRouter(deps) {
           uploadedBy: req.user?.username || 'anonymous'
         });
         
-        // Асинхронно обрабатываем метаданные (MD5, разрешение) - не блокируем ответ
-        // Обрабатываем только обычные файлы (не папки)
+        // ИСПРАВЛЕНО: Обрабатываем метаданные и ЖДЕМ завершения перед обновлением списка
+        // Обрабатываем только обычные файлы (не папки, не PDF/PPTX/ZIP)
         if (!folderName) {
-          processUploadedFilesAsync(id, req.files || [], DEVICES, fileNamesMap).catch(err => {
-            logger.error('Background metadata processing failed', { 
-              error: err.message, 
-              deviceId: id 
-            });
+          // Фильтруем файлы: только видео/аудио/изображения (не PDF/PPTX/ZIP)
+          const filesToProcess = (req.files || []).filter(file => {
+            const ext = path.extname(file.filename).toLowerCase();
+            return ext !== '.pdf' && ext !== '.pptx' && ext !== '.zip';
           });
+          
+          if (filesToProcess.length > 0) {
+            try {
+              await processUploadedFilesAsync(id, filesToProcess, DEVICES, fileNamesMap);
+              logFile('debug', 'File metadata processed successfully', { deviceId: id, filesCount: filesToProcess.length });
+            } catch (err) {
+              logger.error('Metadata processing failed', { 
+                error: err.message, 
+                deviceId: id 
+              });
+            }
+          }
         }
       }
+      
+      // НОВОЕ: Обновляем список файлов из БД (ПОСЛЕ обработки метаданных)
+      updateDeviceFilesFromDB(id, devices, fileNamesMap);
+      
+      const updatedFiles = devices[id].files || [];
+      io.emit('devices/updated');
       
       res.json({ ok: true, files: updatedFiles, uploaded });
     });

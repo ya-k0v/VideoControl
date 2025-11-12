@@ -39,12 +39,12 @@ export function initDatabase(dbPath) {
     console.log(`[DB] 📊 WAL mode enabled, cache_size=64MB`);
     
     // Загружаем схему
-    const schemaPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf-8');
+    const initPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'init.sql');
+    const initSQL = fs.readFileSync(initPath, 'utf-8');
     
     // Выполняем схему
-    db.exec(schema);
-    console.log('[DB] ✅ Schema applied');
+    db.exec(initSQL);
+    console.log('[DB] ✅ Database schema initialized');
     
     return db;
   } catch (e) {

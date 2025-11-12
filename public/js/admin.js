@@ -34,6 +34,8 @@ setupSocketListeners(socket, {
     if (tvPage >= totalPages) tvPage = totalPages - 1;
     if (prev && devicesCache.find(d => d.device_id === prev)) {
       openDevice(prev);
+      // ИСПРАВЛЕНО: Обновляем список файлов для текущего устройства
+      await renderFilesPane(prev);
     } else {
       clearDetail();
       clearFilesPane();

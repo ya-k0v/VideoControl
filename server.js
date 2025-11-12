@@ -6,8 +6,7 @@ import mime from 'mime';
 
 // Импорты из модулей
 import { 
-  ROOT, PUBLIC, DEVICES, CONVERTED_CACHE, NAMES_PATH, 
-  FILE_NAMES_MAP_PATH, MAX_FILE_SIZE, ALLOWED_EXT, PORT, HOST 
+  ROOT, PUBLIC, DEVICES, CONVERTED_CACHE, MAX_FILE_SIZE, ALLOWED_EXT, PORT, HOST 
 } from './src/config/constants.js';
 import { createSocketServer } from './src/config/socket-config.js';
 import { sanitizeDeviceId, isSystemFile } from './src/utils/sanitize.js';

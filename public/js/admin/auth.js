@@ -24,20 +24,20 @@ export async function ensureAuth() {
   try {
     const user = JSON.parse(userStr);
     console.log('[Admin Auth] User role:', user.role);
-    
+  
     if (user.role === 'speaker') {
       console.log('[Admin Auth] Speaker trying to access admin - redirecting to /speaker.html');
       window.location.href = '/speaker.html';
       return false;
-    }
-    
+  }
+  
     if (user.role !== 'admin') {
       console.log('[Admin Auth] Invalid role - clearing and redirecting');
       localStorage.clear();
       window.location.href = '/';
-      return false;
-    }
-    
+  return false;
+}
+
     console.log('[Admin Auth] Access granted');
     return true;
   } catch (e) {
@@ -53,7 +53,7 @@ export async function ensureAuth() {
  */
 async function refreshAccessToken() {
   const refreshToken = localStorage.getItem('refreshToken');
-  
+    
   if (!refreshToken) {
     return false;
   }

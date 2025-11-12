@@ -73,13 +73,13 @@ export function renderDeviceCard(d, nodeNames, readyDevices, loadDevices, render
   const delBtn = card.querySelector('.delBtn');
   if (delBtn) {
     delBtn.onclick = async () => {
-      if (!confirm(`Удалить устройство ${d.device_id}?`)) return;
-      await adminFetch(`/api/devices/${encodeURIComponent(d.device_id)}`, { method:'DELETE' });
-      await loadDevices();
-      clearDetail();
-      clearFilesPane();
-      renderTVList();
-    };
+    if (!confirm(`Удалить устройство ${d.device_id}?`)) return;
+    await adminFetch(`/api/devices/${encodeURIComponent(d.device_id)}`, { method:'DELETE' });
+    await loadDevices();
+    clearDetail();
+    clearFilesPane();
+    renderTVList();
+  };
   }
 
   // Inline редактирование имени устройства (только для admin)

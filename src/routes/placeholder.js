@@ -9,6 +9,8 @@ import path from 'path';
 import { DEVICES, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
 import { scanDeviceFiles } from '../utils/file-scanner.js';
+import { getDatabase } from '../database/database.js';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -21,6 +23,7 @@ export function createPlaceholderRouter(deps) {
   const { devices, io, fileNamesMap } = deps;
   
   // GET /api/devices/:id/placeholder - Получить текущую заглушку устройства
+  // НОВОЕ: Используем БД вместо поиска файла default.*
   router.get('/:id/placeholder', (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
@@ -33,36 +36,37 @@ export function createPlaceholderRouter(deps) {
       return res.status(404).json({ error: 'device not found' });
     }
     
-    const folder = path.join(DEVICES, d.folder);
-    
-    if (!fs.existsSync(folder)) {
-      console.log(`[placeholder] ❌ Папка не существует: ${folder}`);
-      return res.json({ placeholder: null });
-    }
-    
-    const tryList = ['mp4','webm','ogg','mkv','mov','avi','mp3','wav','m4a','png','jpg','jpeg','gif','webp'];
-    
-    for (const ext of tryList) {
-      const fileName = `default.${ext}`;
-      const filePath = path.join(folder, fileName);
+    try {
+      // Ищем файл с флагом is_placeholder в БД
+      const db = getDatabase();
+      const placeholder = db.prepare(`
+        SELECT safe_name, file_path FROM files_metadata 
+        WHERE device_id = ? AND is_placeholder = 1
+        LIMIT 1
+      `).get(id);
       
-      // КРИТИЧНО: Проверяем не только существование, но и что это файл (не папка) и размер > 0
-      if (fs.existsSync(filePath)) {
-        const stats = fs.statSync(filePath);
-        if (stats.isFile() && stats.size > 0) {
-          console.log(`[placeholder] ✅ Найдена заглушка: ${fileName} (${stats.size} bytes)`);
-          return res.json({ placeholder: fileName });
-        } else if (stats.size === 0) {
-          console.log(`[placeholder] ⚠️ Файл ${fileName} пустой (0 bytes), пропускаем`);
-        }
+      if (placeholder && fs.existsSync(placeholder.file_path)) {
+        logger.info('[placeholder] ✅ Placeholder found in DB', { 
+          deviceId: id, 
+          fileName: placeholder.safe_name 
+        });
+        return res.json({ placeholder: placeholder.safe_name });
       }
-    }
-    
-    console.log(`[placeholder] ❌ Не найдена ни одна заглушка в ${folder}`);
+      
+      logger.info('[placeholder] ℹ️ No placeholder set', { deviceId: id });
+      res.json({ placeholder: null });
+      
+    } catch (error) {
+      logger.error('[placeholder] Error getting placeholder', { 
+        error: error.message, 
+        deviceId: id 
+      });
     res.json({ placeholder: null });
+    }
   });
   
   // POST /api/devices/:id/make-default - Установить файл как заглушку
+  // НОВОЕ: Мгновенная установка через БД (без копирования!)
   router.post('/:id/make-default', (req, res) => {
     const id = sanitizeDeviceId(req.params.id);
     
@@ -91,156 +95,53 @@ export function createPlaceholderRouter(deps) {
       return res.status(400).json({ error: 'pdf_pptx_not_allowed_as_placeholder' });
     }
 
-    const folder = path.join(DEVICES, d.folder);
-    const folderName = file.replace(/\.(pdf|pptx)$/i, '');
-    const possibleFolder = path.join(folder, folderName);
-    let src = path.join(folder, file);
-    
-    if (fs.existsSync(possibleFolder) && fs.statSync(possibleFolder).isDirectory()) {
-      const folderFile = path.join(possibleFolder, file);
-      if (fs.existsSync(folderFile)) src = folderFile;
-    }
-    
-    const dst = path.join(folder, `default${ext}`);
-    
-    if (!src.startsWith(DEVICES) || !dst.startsWith(DEVICES)) {
-      return res.status(403).json({ error: 'forbidden' });
-    }
-    
-    if (!fs.existsSync(src)) {
-      return res.status(404).json({ error: 'source not found' });
-    }
-
-    // КРИТИЧНО: Если src уже является default.*, то просто возвращаем success
-    // Избегаем удаления файла, который пытаемся скопировать
-    if (path.basename(src).match(/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i)) {
-      return res.json({ success: true, message: 'Already default file' });
-    }
-
-    // АТОМАРНАЯ ОПЕРАЦИЯ: Копируем сначала во временный файл, затем переименовываем
-    // Это предотвращает race condition когда клиенты запрашивают файл между удалением и копированием
-    const tmpPath = path.join(folder, `.tmp_default_${Date.now()}${ext}`);
-    
     try {
-      // Шаг 1: Копируем в временный файл
-      console.log(`[make-default] 📝 Копирование в временный файл: ${tmpPath}`);
-      fs.copyFileSync(src, tmpPath);
+      const db = getDatabase();
       
-      // Устанавливаем права сразу на временный файл
-      try {
-        fs.chmodSync(tmpPath, 0o644);
-        console.log(`[make-default] ✅ Права 644 установлены на временный файл`);
-      } catch (e) {
-        console.warn(`[make-default] ⚠️ Не удалось установить права на временный файл: ${e}`);
+      // 1. Снимаем флаг заглушки со всех файлов этого устройства
+      db.prepare(`
+        UPDATE files_metadata 
+        SET is_placeholder = 0 
+        WHERE device_id = ?
+      `).run(id);
+      
+      // 2. Устанавливаем флаг заглушки на выбранный файл
+      const result = db.prepare(`
+        UPDATE files_metadata 
+        SET is_placeholder = 1 
+        WHERE device_id = ? AND safe_name = ?
+      `).run(id, file);
+      
+      if (result.changes === 0) {
+        return res.status(404).json({ error: 'file not found in database' });
       }
       
-      // Проверяем что временный файл доступен для чтения
-      try {
-        fs.accessSync(tmpPath, fs.constants.R_OK);
-        const tmpStats = fs.statSync(tmpPath);
-        console.log(`[make-default] ✅ Временный файл готов, размер: ${tmpStats.size} bytes`);
-        
-        // Проверяем что размер совпадает с источником
-        const srcStats = fs.statSync(src);
-        if (tmpStats.size !== srcStats.size) {
-          throw new Error(`Size mismatch: src=${srcStats.size}, tmp=${tmpStats.size}`);
-        }
-      } catch (e) {
-        console.error(`[make-default] ❌ Ошибка проверки временного файла: ${e}`);
-        try { fs.unlinkSync(tmpPath); } catch {}
-        return res.status(500).json({ error: 'temporary file validation failed', detail: String(e) });
-      }
-      
-      // Шаг 2: Удаляем существующие default.* файлы (кроме src)
-      console.log(`[make-default] 🗑️ Удаление старых заглушек...`);
-      try {
-        const existing = fs.readdirSync(folder);
-        for (const f of existing) {
-          if (/^default\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp|pdf|pptx)$/i.test(f)) {
-            const fullPath = path.join(folder, f);
-            // НЕ удаляем исходный файл если он default.*
-            if (fullPath !== src) {
-              try { 
-                fs.unlinkSync(fullPath);
-                console.log(`[make-default] 🗑️ Удален: ${f}`);
-              } catch {}
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`[make-default] ⚠️ Ошибка удаления старых заглушек: ${e}`);
-      }
-      
-      // Шаг 3: АТОМАРНОЕ переименование временного файла → default.*
-      // Это гарантирует что файл либо существует полностью, либо не существует вообще
-      console.log(`[make-default] 🔄 Атомарное переименование: ${path.basename(tmpPath)} → ${path.basename(dst)}`);
-      fs.renameSync(tmpPath, dst);
-      
-      // Финальная проверка
-      try {
-        fs.accessSync(dst, fs.constants.R_OK);
-        const finalStats = fs.statSync(dst);
-        console.log(`[make-default] ✅ Заглушка установлена успешно! Размер: ${finalStats.size} bytes`);
-        console.log(`[make-default] 📍 Путь: ${dst}`);
-      } catch (e) {
-        console.error(`[make-default] ❌ Финальная проверка не пройдена: ${e}`);
-        return res.status(500).json({ error: 'final validation failed', detail: String(e) });
-      }
-      
-    } catch (e) {
-      console.error(`[make-default] ❌ Ошибка атомарного копирования: ${e}`);
-      // Очищаем временный файл в случае ошибки
-      try { 
-        if (fs.existsSync(tmpPath)) {
-          fs.unlinkSync(tmpPath);
-          console.log(`[make-default] 🧹 Временный файл удален после ошибки`);
-        }
-      } catch {}
-      return res.status(500).json({ error: 'atomic copy failed', detail: String(e) });
-    }
-
-    // Обновляем список файлов через scanDeviceFiles (единая логика)
-    const { files: scannedFiles, fileNames: scannedFileNames } = scanDeviceFiles(id, folder, fileNamesMap);
-    
-    d.files = scannedFiles;
-    d.fileNames = scannedFileNames;
+      logger.info('[make-default] ✅ Placeholder set instantly via DB', { 
+        deviceId: id, 
+        fileName: file 
+      });
 
     io.emit('devices/updated');
     io.to(`device:${id}`).emit('player/stop');
     
-    // КРИТИЧНО: Увеличенная задержка + проверка готовности файла
-    // Даем файловой системе, Nginx и клиентскому кэшу время синхронизироваться
-    console.log(`[make-default] ⏳ Ожидание синхронизации перед отправкой событий...`);
+      // Возвращаем успешный ответ
+      res.json({ ok: true, placeholder: file, instant: true });
     
-    // Возвращаем успешный ответ клиенту немедленно
-    res.json({ ok: true, default: path.basename(dst) });
-    
-    // Асинхронно проверяем готовность и отправляем события
-    setTimeout(async () => {
-      try {
-        // Финальная проверка что файл всё ещё доступен и не поврежден
-        const finalCheck = fs.statSync(dst);
-        if (finalCheck.size === 0) {
-          console.error(`[make-default] ❌ Файл пустой (0 bytes), отменяем отправку событий`);
-          return;
-        }
-        
-        // Проверяем что файл читаемый
-        fs.accessSync(dst, fs.constants.R_OK);
-        
-        console.log(`[make-default] ✅ Финальная проверка OK: ${finalCheck.size} bytes`);
-        
-        // Отправляем события клиентам
+      // Асинхронно отправляем события клиентам
+      setTimeout(() => {
         io.to(`device:${id}`).emit('placeholder/refresh');
         io.emit('preview/refresh', { device_id: id });
-        console.log(`[make-default] 📡 События placeholder/refresh отправлены для ${id}`);
+        logger.info('[make-default] 📡 Placeholder refresh events sent', { deviceId: id });
+      }, 100); // Минимальная задержка для синхронизации
         
       } catch (e) {
-        console.error(`[make-default] ❌ Финальная проверка не пройдена, события НЕ отправлены: ${e}`);
-      }
-    }, 1500); // Увеличено с 500ms до 1500ms для гарантии синхронизации
-    
-    return; // res.json уже вызван выше
+      logger.error('[make-default] Error setting placeholder', { 
+        error: e.message, 
+        deviceId: id, 
+        file 
+      });
+      return res.status(500).json({ error: 'failed to set placeholder', detail: e.message });
+    }
   });
   
   return router;

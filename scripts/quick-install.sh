@@ -159,7 +159,7 @@ if [ ! -f config/main.db ]; then
     ADMIN_HASH='$2b$10$cHr4hJlG2h.Zqv2TNeNbru4MqpiqSs5Pc9hnN.qxvrNjTRpRpkqRO'
     sqlite3 config/main.db "INSERT INTO users (id, username, full_name, password_hash, role, is_active) VALUES (1, 'admin', 'Администратор', '$ADMIN_HASH', 'admin', 1);"
     
-    chown $CURRENT_USER:$CURRENT_USER config/main.db
+chown $CURRENT_USER:$CURRENT_USER config/main.db
     echo -e "  ${GREEN}✅ Database initialized${NC}"
     echo -e "  ${YELLOW}📝 Default admin: admin / admin123${NC}"
 else

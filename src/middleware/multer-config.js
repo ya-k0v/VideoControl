@@ -26,11 +26,13 @@ export function createUploadMiddleware(devices) {
       const d = devices[id];
       if (!d) return cb(new Error('device not found'));
       
-      const folder = path.join(DEVICES, d.folder);
+      // НОВОЕ: Загружаем все файлы в общую папку /content/
+      const folder = DEVICES;  // /vid/videocontrol/public/content/
       if (!fs.existsSync(folder)) {
         fs.mkdirSync(folder, { recursive: true });
       }
       
+      console.log(`[Multer] 📂 Upload destination: ${folder} (shared storage)`);
       cb(null, folder);
     },
     
@@ -66,8 +68,9 @@ export function createUploadMiddleware(devices) {
       
       // Создаем безопасное имя файла через транслитерацию
       const safe = makeSafeFilename(base);
-      const folder = path.join(DEVICES, devices[id].folder);
-      const dest = path.join(folder, safe);
+      
+      // НОВОЕ: Проверяем конфликты в общей папке /content/
+      const dest = path.join(DEVICES, safe);
       
       let finalSafeName = safe;
       
@@ -77,6 +80,7 @@ export function createUploadMiddleware(devices) {
         const name = path.basename(safe, ext);
         const suffix = '_' + crypto.randomBytes(3).toString('hex');
         finalSafeName = `${name}${suffix}${ext}`;
+        console.log(`[Multer] ⚠️ Файл существует, добавлен суффикс: ${safe} → ${finalSafeName}`);
       }
       
       req.originalFileNames.set(finalSafeName, base);

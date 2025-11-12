@@ -109,8 +109,8 @@ export function scanDeviceFiles(deviceId, deviceFolder, fileNamesMap) {
         if (hasImages) {
           // Это папка с изображениями - добавляем её как файл
           files.push(entry); // Добавляем имя папки
-          const originalName = fileNamesMap[deviceId]?.[entry] || entry;
-          fileNames.push(originalName);
+        const originalName = fileNamesMap[deviceId]?.[entry] || entry;
+        fileNames.push(originalName);
         }
       }
     }

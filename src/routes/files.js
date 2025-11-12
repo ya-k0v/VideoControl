@@ -6,6 +6,7 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { DEVICES, ALLOWED_EXT } from '../config/constants.js';
 import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
 import { extractZipToFolder } from '../converters/folder-converter.js';
@@ -17,9 +18,124 @@ import { auditLog, AuditAction } from '../utils/audit-logger.js';
 import logger, { logFile, logSecurity } from '../utils/logger.js';
 import { getCachedResolution, clearResolutionCache } from '../video/resolution-cache.js';
 import { processUploadedFilesAsync } from '../utils/file-metadata-processor.js';
-import { getFileMetadata, deleteFileMetadata } from '../database/files-metadata.js';
+import { getFileMetadata, deleteFileMetadata, getDeviceFilesMetadata, saveFileMetadata, countFileReferences } from '../database/files-metadata.js';
 
 const router = express.Router();
+
+/**
+ * Копировать папку физически (асинхронно через streams)
+ * Для PPTX/PDF/изображений которые должны оставаться в /content/{device}/
+ */
+async function copyFolderPhysically(sourceId, targetId, folderName, move, devices, fileNamesMap, saveFileNamesMap, io, res) {
+  const sourceFolder = path.join(DEVICES, devices[sourceId].folder);
+  const targetFolder = path.join(DEVICES, devices[targetId].folder);
+  
+  const sourcePath = path.join(sourceFolder, folderName);
+  const targetPath = path.join(targetFolder, folderName);
+  
+  if (fs.existsSync(targetPath)) {
+    return res.status(409).json({ error: 'folder already exists on target' });
+  }
+  
+  try {
+    // Асинхронное копирование папки
+    logFile('info', '📁 Copying folder (async)', { sourceId, targetId, folderName });
+    
+    await fs.promises.cp(sourcePath, targetPath, { recursive: true });
+    
+    // Устанавливаем права
+    await fs.promises.chmod(targetPath, 0o755);
+    
+    // Копируем маппинг
+    if (fileNamesMap[sourceId]?.[folderName]) {
+      if (!fileNamesMap[targetId]) fileNamesMap[targetId] = {};
+      fileNamesMap[targetId][folderName] = fileNamesMap[sourceId][folderName];
+      saveFileNamesMap(fileNamesMap);
+    }
+    
+    // Если move - удаляем из источника
+    if (move) {
+      await fs.promises.rm(sourcePath, { recursive: true, force: true });
+      if (fileNamesMap[sourceId]?.[folderName]) {
+        delete fileNamesMap[sourceId][folderName];
+        saveFileNamesMap(fileNamesMap);
+      }
+    }
+    
+    // Обновляем оба устройства
+    updateDeviceFilesFromDB(targetId, devices, fileNamesMap);
+    if (move) updateDeviceFilesFromDB(sourceId, devices, fileNamesMap);
+    
+    io.emit('devices/updated');
+    
+    logFile('info', `✅ Folder ${move ? 'moved' : 'copied'} successfully`, {
+      sourceDevice: sourceId,
+      targetDevice: targetId,
+      folderName
+    });
+    
+    res.json({ 
+      ok: true, 
+      action: move ? 'moved' : 'copied', 
+      file: folderName, 
+      from: sourceId, 
+      to: targetId,
+      type: 'folder'
+    });
+    
+  } catch (e) {
+    logger.error('[copy-folder] Error', { error: e.message, sourceId, targetId, folderName });
+    return res.status(500).json({ error: 'folder copy failed', detail: e.message });
+  }
+}
+
+/**
+ * Обновить список файлов устройства из БД + папки
+ * @param {string} deviceId - ID устройства
+ * @param {Object} devices - Объект devices
+ * @param {Object} fileNamesMap - Маппинг имен
+ */
+function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
+  const device = devices[deviceId];
+  if (!device) return;
+  
+  // 1. Получаем файлы из БД (обычные файлы)
+  const filesMetadata = getDeviceFilesMetadata(deviceId);
+  let files = filesMetadata.map(f => f.safe_name);
+  let fileNames = filesMetadata.map(f => f.original_name);
+  
+  // 2. Сканируем папку устройства для PDF/PPTX/image папок (они остаются в /content/{device}/)
+  const deviceFolder = path.join(DEVICES, device.folder);
+  if (fs.existsSync(deviceFolder)) {
+    const folderEntries = fs.readdirSync(deviceFolder);
+    for (const entry of folderEntries) {
+      if (entry.startsWith('.')) continue; // Пропускаем скрытые
+      
+      const entryPath = path.join(deviceFolder, entry);
+      try {
+        const stat = fs.statSync(entryPath);
+        
+        if (stat.isDirectory()) {
+          // Это папка (PPTX/PDF или изображения) - добавляем
+          files.push(entry);
+          fileNames.push(fileNamesMap[deviceId]?.[entry] || entry);
+        }
+      } catch (e) {
+        // Игнорируем ошибки доступа к файлам
+      }
+    }
+  }
+  
+  device.files = files;
+  device.fileNames = fileNames;
+  
+  logFile('debug', 'Device files updated from DB + folders', {
+    deviceId,
+    dbFiles: filesMetadata.length,
+    folders: files.length - filesMetadata.length,
+    total: files.length
+  });
+}
 
 /**
  * Настройка роутера для файлов
@@ -59,15 +175,15 @@ export function createFilesRouter(deps) {
       const uploaded = (req.files || []).map(f => f.filename);
       const folderName = req.body.folderName; // Имя папки если загружается через выбор папки
       
-      const folder = path.join(DEVICES, devices[id].folder);
-      
-      // Если это загрузка папки, создаем структуру папки
+      // Если это загрузка папки - создаем в /content/{device}/ (для PPTX/изображений)
+      // Если обычные файлы - они уже в /content/ (через Multer)
       if (folderName && req.files && req.files.length > 0) {
         console.log(`[upload] 📁 Обнаружена загрузка папки: ${folderName}`);
         
         // Создаем безопасное имя папки через транслитерацию
         const safeFolderName = makeSafeFolderName(folderName);
-        const targetFolder = path.join(folder, safeFolderName);
+        const deviceFolder = path.join(DEVICES, devices[id].folder);
+        const targetFolder = path.join(deviceFolder, safeFolderName);
         
         console.log(`[upload] 📝 Имя папки: "${folderName}" → "${safeFolderName}"`);
         
@@ -76,10 +192,10 @@ export function createFilesRouter(deps) {
           fs.chmodSync(targetFolder, 0o755);
         }
         
-        // Перемещаем файлы из временной папки в целевую
+        // Перемещаем файлы из /content/ в /content/{device}/{folder}/
         for (const file of req.files) {
           try {
-            const sourcePath = path.join(folder, file.filename);
+            const sourcePath = path.join(DEVICES, file.filename);  // Из /content/
             
             // Получаем оригинальное имя файла из originalname
             // originalname может содержать путь "folder/subfolder/file.jpg"
@@ -112,7 +228,7 @@ export function createFilesRouter(deps) {
         // Чтобы Nginx (www-data) мог их прочитать
         for (const file of (req.files || [])) {
           try {
-            const filePath = path.join(folder, file.filename);
+            const filePath = path.join(DEVICES, file.filename);  // В /content/
             fs.chmodSync(filePath, 0o644);
             console.log(`[upload] ✅ Права 644 установлены: ${file.filename}`);
           } catch (e) {
@@ -174,11 +290,10 @@ export function createFilesRouter(deps) {
         }
       }
       
-      // Обновляем список файлов через scanDeviceFiles (единая логика)
-      const { files: scannedFiles, fileNames: scannedFileNames } = scanDeviceFiles(id, folder, fileNamesMap);
+      // НОВОЕ: Обновляем список файлов из БД (вместо сканирования файловой системы)
+      updateDeviceFilesFromDB(id, devices, fileNamesMap);
       
-      devices[id].files = scannedFiles;
-      devices[id].fileNames = scannedFileNames;
+      const updatedFiles = devices[id].files || [];
       io.emit('devices/updated');
       
       // Audit log
@@ -206,19 +321,23 @@ export function createFilesRouter(deps) {
         });
         
         // Асинхронно обрабатываем метаданные (MD5, разрешение) - не блокируем ответ
-        processUploadedFilesAsync(id, req.files || [], folder, fileNamesMap).catch(err => {
-          logger.error('Background metadata processing failed', { 
-            error: err.message, 
-            deviceId: id 
+        // Обрабатываем только обычные файлы (не папки)
+        if (!folderName) {
+          processUploadedFilesAsync(id, req.files || [], DEVICES, fileNamesMap).catch(err => {
+            logger.error('Background metadata processing failed', { 
+              error: err.message, 
+              deviceId: id 
+            });
           });
-        });
+        }
       }
       
-      res.json({ ok: true, files: scannedFiles, uploaded });
+      res.json({ ok: true, files: updatedFiles, uploaded });
     });
   });
   
   // POST /api/devices/:targetId/copy-file - Копирование/перемещение файла между устройствами
+  // НОВОЕ: Мгновенное копирование через БД для файлов, физическое для папок
   router.post('/:targetId/copy-file', async (req, res) => {
     const targetId = sanitizeDeviceId(req.params.targetId);
     const { sourceDeviceId, fileName, move } = req.body;
@@ -236,128 +355,132 @@ export function createFilesRouter(deps) {
       return res.status(400).json({ error: 'fileName required' });
     }
     
-    const sourceFolder = path.join(DEVICES, devices[sourceId].folder);
-    const targetFolder = path.join(DEVICES, devices[targetId].folder);
-    
-    let sourceFile = path.join(sourceFolder, fileName);
-    let isDirectory = false;
-    let actualFileName = fileName;
-    
-    // Проверяем PDF/PPTX папки
-    const folderName = fileName.replace(/\.(pdf|pptx)$/i, '');
-    const possibleFolder = path.join(sourceFolder, folderName);
-    
-    if (fs.existsSync(possibleFolder) && fs.statSync(possibleFolder).isDirectory()) {
-      sourceFile = possibleFolder;
-      isDirectory = true;
-      actualFileName = folderName;
-    } 
-    // Проверяем папки с изображениями (без расширения)
-    else if (!fileName.includes('.')) {
-      const folderPath = path.join(sourceFolder, fileName);
-      if (fs.existsSync(folderPath) && fs.statSync(folderPath).isDirectory()) {
-        sourceFile = folderPath;
-        isDirectory = true;
-        actualFileName = fileName;
-      }
-    }
-    
-    if (!fs.existsSync(sourceFile)) {
-      return res.status(404).json({ error: 'source file not found' });
-    }
-    
     try {
-      const targetFileName = isDirectory ? actualFileName : fileName;
-      const targetFile = path.join(targetFolder, targetFileName);
+      // Проверяем это файл или папка
+    const sourceFolder = path.join(DEVICES, devices[sourceId].folder);
+      const sourcePath = path.join(sourceFolder, fileName);
       
-      if (isDirectory) {
-        // Копируем всю папку (для PDF/PPTX или папок с изображениями)
-        if (!fs.existsSync(targetFolder)) {
-          fs.mkdirSync(targetFolder, { recursive: true });
-        }
-        
-        if (fs.existsSync(targetFile)) {
-          return res.status(409).json({ error: 'target already exists' });
-        }
-        
-        console.log(`[copy-file] 📁 Копирование папки: ${actualFileName} (${sourceId} -> ${targetId})`);
-        fs.cpSync(sourceFile, targetFile, { recursive: true });
-        fs.chmodSync(targetFile, 0o755);
-        
-        // Устанавливаем права на все файлы внутри папки
-        const items = fs.readdirSync(targetFile);
-        for (const item of items) {
-          const itemPath = path.join(targetFile, item);
-          const stat = fs.statSync(itemPath);
-          if (stat.isFile()) {
-            fs.chmodSync(itemPath, 0o644);
-          }
-        }
-        
-        console.log(`[copy-file] ✅ Папка скопирована: ${actualFileName}`);
-      } else {
-        // Копируем обычный файл
-        fs.copyFileSync(sourceFile, targetFile);
-        fs.chmodSync(targetFile, 0o644);
-      }
+      // Если это папка (PPTX/PDF/изображения) - используем физическое копирование
+      if (fs.existsSync(sourcePath) && fs.statSync(sourcePath).isDirectory()) {
+        return await copyFolderPhysically(sourceId, targetId, fileName, move, devices, fileNamesMap, saveFileNamesMap, io, res);
+    } 
       
-      // Копируем маппинг имени (если есть)
-      const sourceMappingKey = isDirectory ? actualFileName : fileName;
-      if (fileNamesMap[sourceId] && fileNamesMap[sourceId][sourceMappingKey]) {
+      // 1. Получаем метаданные файла из источника (обычный файл)
+      const sourceMetadata = getFileMetadata(sourceId, fileName);
+      
+      if (!sourceMetadata) {
+        return res.status(404).json({ error: 'source file not found in database' });
+    }
+    
+      logFile('info', '📋 Copying file metadata', {
+        sourceDevice: sourceId,
+        targetDevice: targetId,
+        fileName,
+        filePath: sourceMetadata.file_path,
+        md5: sourceMetadata.md5_hash?.substring(0, 12)
+      });
+      
+      // 2. Проверяем не существует ли уже на целевом устройстве
+      let targetSafeName = fileName;
+      const existingOnTarget = getFileMetadata(targetId, fileName);
+      
+      if (existingOnTarget) {
+        // Если файл существует - генерируем уникальное имя (как в Multer)
+        const ext = path.extname(fileName);
+        const name = path.basename(fileName, ext);
+        const suffix = '_' + crypto.randomBytes(3).toString('hex');
+        targetSafeName = `${name}${suffix}${ext}`;
+        
+        logFile('info', '⚠️ File exists on target, using unique name', {
+          original: fileName,
+          unique: targetSafeName
+        });
+        }
+        
+      // 3. ⚡ МГНОВЕННОЕ КОПИРОВАНИЕ: просто INSERT метаданных с тем же file_path!
+      saveFileMetadata({
+        deviceId: targetId,
+        safeName: targetSafeName,
+        originalName: sourceMetadata.original_name,
+        filePath: sourceMetadata.file_path,  // ✅ ТОТ ЖЕ физический файл!
+        fileSize: sourceMetadata.file_size,
+        md5Hash: sourceMetadata.md5_hash,
+        partialMd5: sourceMetadata.partial_md5,
+        mimeType: sourceMetadata.mime_type,
+        videoParams: {
+          width: sourceMetadata.video_width,
+          height: sourceMetadata.video_height,
+          duration: sourceMetadata.video_duration,
+          codec: sourceMetadata.video_codec,
+          bitrate: sourceMetadata.video_bitrate
+        },
+        audioParams: {
+          codec: sourceMetadata.audio_codec,
+          bitrate: sourceMetadata.audio_bitrate,
+          channels: sourceMetadata.audio_channels
+        },
+        fileMtime: sourceMetadata.file_mtime
+      });
+      
+      // 4. Копируем маппинг имени
+      if (fileNamesMap[sourceId] && fileNamesMap[sourceId][fileName]) {
         if (!fileNamesMap[targetId]) fileNamesMap[targetId] = {};
-        fileNamesMap[targetId][sourceMappingKey] = fileNamesMap[sourceId][sourceMappingKey];
+        fileNamesMap[targetId][targetSafeName] = fileNamesMap[sourceId][fileName];
         saveFileNamesMap(fileNamesMap);
       }
       
-      // Если перемещение - удаляем из источника
+      // 5. Если move - удаляем из источника (только из БД!)
       if (move) {
-        if (isDirectory) {
-          console.log(`[copy-file] 🗑️ Удаление папки из источника: ${actualFileName} (${sourceId})`);
-          fs.rmSync(sourceFile, { recursive: true, force: true });
-        } else {
-          fs.unlinkSync(sourceFile);
-        }
+        deleteFileMetadata(sourceId, fileName);
         
-        // Удаляем маппинг из источника
-        const sourceMappingKey = isDirectory ? actualFileName : fileName;
-        if (fileNamesMap[sourceId] && fileNamesMap[sourceId][sourceMappingKey]) {
-          delete fileNamesMap[sourceId][sourceMappingKey];
+        if (fileNamesMap[sourceId] && fileNamesMap[sourceId][fileName]) {
+          delete fileNamesMap[sourceId][fileName];
           if (Object.keys(fileNamesMap[sourceId]).length === 0) {
             delete fileNamesMap[sourceId];
           }
           saveFileNamesMap(fileNamesMap);
         }
         
-        console.log(`[copy-file] 🗑️ Файл удален из источника: ${isDirectory ? actualFileName : fileName} (${sourceId})`);
+        logFile('info', '🔄 File moved (metadata only)', {
+          from: sourceId,
+          to: targetId,
+          fileName
+        });
       }
       
-      // КРИТИЧНО: Обновляем devices.files для обоих устройств ВСЕГДА
-      console.log(`[copy-file] 🔄 Начинаем обновление devices.files...`);
-      
-      // sourceFolder и targetFolder уже объявлены выше (строки 234-235)
-      // Обновляем списки файлов обоих устройств используя общую утилиту
-      
-      console.log(`[copy-file] 📂 Сканируем source: ${sourceFolder}`);
-      const sourceResult = scanDeviceFiles(sourceId, sourceFolder, fileNamesMap);
-      devices[sourceId].files = sourceResult.files;
-      devices[sourceId].fileNames = sourceResult.fileNames;
-      
-      console.log(`[copy-file] 📂 Сканируем target: ${targetFolder}`);
-      const targetResult = scanDeviceFiles(targetId, targetFolder, fileNamesMap);
-      devices[targetId].files = targetResult.files;
-      devices[targetId].fileNames = targetResult.fileNames;
-      
-      console.log(`[copy-file] ✅ Файлы обновлены: source=${devices[sourceId].files.length}, target=${devices[targetId].files.length}`);
-      console.log(`[copy-file] 📡 Отправляем devices/updated...`);
+      // 6. Обновляем devices.files из БД
+      updateDeviceFilesFromDB(targetId, devices, fileNamesMap);
+      if (move) {
+        updateDeviceFilesFromDB(sourceId, devices, fileNamesMap);
+      }
       
       io.emit('devices/updated');
       
-      console.log(`[copy-file] ✅ Успешно завершено: ${move ? 'moved' : 'copied'} ${fileName}`);
-      res.json({ ok: true, action: move ? 'moved' : 'copied', file: fileName, from: sourceId, to: targetId });
+      logFile('info', `✅ File ${move ? 'moved' : 'copied'} instantly via DB`, {
+        sourceDevice: sourceId,
+        targetDevice: targetId,
+        fileName,
+        sharedFilePath: sourceMetadata.file_path,
+        timeTaken: '<1ms'
+      });
+      
+      res.json({ 
+        ok: true, 
+        action: move ? 'moved' : 'copied', 
+        file: fileName, 
+        from: sourceId, 
+        to: targetId,
+        instant: true  // Мгновенное копирование!
+      });
       
     } catch (e) {
-      console.error(`[copy-file] ❌ Ошибка: ${e}`);
-      return res.status(500).json({ error: 'copy/move failed', detail: String(e) });
+      logger.error('[copy-file] Error', { 
+        error: e.message, 
+        sourceId, 
+        targetId, 
+        fileName 
+      });
+      return res.status(500).json({ error: 'copy/move failed', detail: e.message });
     }
   });
   
@@ -545,18 +668,56 @@ export function createFilesRouter(deps) {
         }
       }
     } else {
-      // Обычный файл
-      const abs = path.join(deviceFolder, name);
-      if (!fs.existsSync(abs)) {
-        return res.status(404).json({ error: 'not found' });
+      // НОВОЕ: Обычный файл - умное удаление с подсчетом ссылок
+      
+      // 1. Получаем метаданные из БД
+      const metadata = getFileMetadata(id, name);
+      
+      if (!metadata) {
+        logFile('warn', 'File not found in DB', { deviceId: id, fileName: name });
+        return res.status(404).json({ error: 'file not found' });
       }
-      fs.unlinkSync(abs);
       
-      // Очищаем кэш разрешения для удаленного видео
-      clearResolutionCache(abs);
+      const physicalPath = metadata.file_path;
       
-      // Удаляем метаданные из БД
+      // 2. Удаляем запись из БД
       deleteFileMetadata(id, name);
+      
+      // 3. Подсчитываем сколько еще устройств используют этот файл
+      const refCount = countFileReferences(physicalPath);
+      
+      logFile('info', 'File reference removed', {
+        deviceId: id,
+        fileName: name,
+        physicalPath,
+        remainingReferences: refCount
+      });
+      
+      // 4. Если никто не использует - удаляем физический файл
+      if (refCount === 0) {
+        try {
+          if (fs.existsSync(physicalPath)) {
+            fs.unlinkSync(physicalPath);
+            logFile('info', '🗑️ Physical file deleted (no references)', {
+              filePath: physicalPath,
+              sizeMB: (metadata.file_size / 1024 / 1024).toFixed(2)
+            });
+          }
+        } catch (e) {
+          logger.error('Failed to delete physical file', {
+            error: e.message,
+            filePath: physicalPath
+          });
+        }
+      } else {
+        logFile('info', '✅ Physical file kept (still used)', {
+          filePath: physicalPath,
+          usedByDevices: refCount
+        });
+      }
+      
+      // Очищаем кэш разрешения
+      clearResolutionCache(physicalPath);
     }
     
     // Удаляем из маппинга
@@ -569,11 +730,8 @@ export function createFilesRouter(deps) {
       saveFileNamesMap(fileNamesMap);
     }
     
-    // Обновляем список файлов через scanDeviceFiles (единая логика)
-    const { files: scannedFiles, fileNames: scannedFileNames } = scanDeviceFiles(id, deviceFolder, fileNamesMap);
-    
-    d.files = scannedFiles;
-    d.fileNames = scannedFileNames;
+    // НОВОЕ: Обновляем список файлов из БД (а не из файловой системы)
+    updateDeviceFilesFromDB(id, devices, fileNamesMap);
     io.emit('devices/updated');
     
     // Audit log
@@ -614,7 +772,6 @@ export function createFilesRouter(deps) {
       return res.status(404).json({ error: 'not found' });
     }
     
-    const folder = path.join(DEVICES, d.folder);
     const files = d.files || [];
     const fileNames = d.fileNames || files;
     
@@ -664,9 +821,9 @@ export function createFilesRouter(deps) {
           };
         } else if (fileStatus.status !== 'processing' && fileStatus.status !== 'checking') {
           // Fallback: если метаданных нет в БД - используем кэш с FFmpeg
-          // (это может быть для старых файлов загруженных до миграции)
+          // (для файлов загруженных до миграции БД)
           try {
-            const filePath = path.join(DEVICES, d.folder, safeName);
+            const filePath = metadata?.file_path || path.join(DEVICES, safeName);
             resolution = await getCachedResolution(filePath, checkVideoParameters);
           } catch (e) {
             // Игнорируем ошибки

@@ -36,6 +36,7 @@ import { createSystemInfoRouter } from './src/routes/system-info.js';
 import { createFoldersRouter } from './src/routes/folders.js';
 import { createAuthRouter } from './src/routes/auth.js';
 import { createDeduplicationRouter } from './src/routes/deduplication.js';
+import fileResolverRouter from './src/routes/file-resolver.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
 import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth.js';
 import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
@@ -81,8 +82,41 @@ let fileNamesMap = {};
 devices = loadDevicesFromDB();
 fileNamesMap = loadFileNamesFromDB();
 
-// Сканируем файлы в папках устройств
-scanAllDevices(devices, fileNamesMap);
+// НОВОЕ: Гибридная загрузка - файлы из БД + сканирование папок (PPTX/изображения)
+const { getDeviceFilesMetadata } = await import('./src/database/files-metadata.js');
+
+for (const deviceId in devices) {
+  // 1. Загружаем файлы из БД (обычные файлы)
+  const filesMetadata = getDeviceFilesMetadata(deviceId);
+  let files = filesMetadata.map(f => f.safe_name);
+  let fileNames = filesMetadata.map(f => f.original_name);
+  
+  // 2. Сканируем папку устройства для PDF/PPTX/image папок (они не в БД)
+  const deviceFolder = path.join(DEVICES, devices[deviceId].folder);
+  if (fs.existsSync(deviceFolder)) {
+    const folderEntries = fs.readdirSync(deviceFolder);
+    for (const entry of folderEntries) {
+      const entryPath = path.join(deviceFolder, entry);
+      const stat = fs.statSync(entryPath);
+      
+      if (stat.isDirectory()) {
+        // Это папка - добавляем (PPTX/PDF или изображения)
+        files.push(entry);
+        fileNames.push(fileNamesMap[deviceId]?.[entry] || entry);
+      }
+    }
+  }
+  
+  devices[deviceId].files = files;
+  devices[deviceId].fileNames = fileNames;
+  
+  logger.info('Device files loaded (DB + folders)', { 
+    deviceId, 
+    dbFiles: filesMetadata.length,
+    folders: files.length - filesMetadata.length,
+    total: files.length
+  });
+}
 
 // Сохраняем обновленное состояние в БД
 saveDevicesToDB(devices);
@@ -96,6 +130,9 @@ const upload = createUploadMiddleware(devices);
 // ========================================
 // API ROUTES (Модульные роутеры)
 // ========================================
+
+// File resolver (БЕЗ защиты - для плееров)
+app.use('/api/files', fileResolverRouter);
 
 // Auth router (БЕЗ защиты - для login)
 const authRouter = createAuthRouter();

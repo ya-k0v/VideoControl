@@ -301,3 +301,27 @@ export function needsMetadataUpdate(deviceId, safeName, currentMtime) {
   return metadata.file_mtime !== currentMtime; // Файл изменился
 }
 
+/**
+ * Подсчитать количество ссылок на физический файл
+ * @param {string} filePath - Путь к физическому файлу
+ * @returns {number} Количество устройств использующих этот файл
+ */
+export function countFileReferences(filePath) {
+  try {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count FROM files_metadata 
+      WHERE file_path = ?
+    `);
+    
+    const result = stmt.get(filePath);
+    const count = result?.count || 0;
+    
+    logFile('debug', 'File references counted', { filePath, count });
+    return count;
+  } catch (error) {
+    logger.error('Failed to count file references', { error: error.message, filePath });
+    return 0;
+  }
+}
+

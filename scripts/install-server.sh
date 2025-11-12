@@ -93,17 +93,7 @@ else
     echo "ℹ️  Database already exists, skipping initialization"
 fi
 
-# Create default config files if not exist (deprecated - kept for backward compatibility)
-if [ ! -f config/devices.json ]; then
-    echo '{}' > config/devices.json
-    echo "Created config/devices.json"
-fi
-
-if [ ! -f config/file-names-map.json ]; then
-    echo '{}' > config/file-names-map.json
-    echo "Created config/file-names-map.json"
-fi
-
+# Create default config files if not exist
 if [ ! -f config/video-optimization.json ]; then
     echo '{"enabled": true, "targetResolution": "1080p"}' > config/video-optimization.json
     echo "Created config/video-optimization.json"

@@ -53,33 +53,34 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
     let deduplicationApplied = false;
     
     if (duplicate && fs.existsSync(duplicate.file_path)) {
-      // Дубликат найден! Заменяем загруженный файл копией
-      logFile('info', '🔄 Duplicate detected - replacing with copy', {
+      // Дубликат найден! НОВАЯ АРХИТЕКТУРА: удаляем загруженный файл, используем существующий
+      logFile('info', '⚡ Duplicate detected - using existing file (instant deduplication)', {
         deviceId,
         safeName,
         duplicateDevice: duplicate.device_id,
         duplicateFile: duplicate.safe_name,
+        sharedPath: duplicate.file_path,
         md5: md5Hash.substring(0, 12),
         savedSpaceMB: (fileSize / 1024 / 1024).toFixed(2)
       });
       
       try {
-        // Удаляем только что загруженный файл
+        // Удаляем только что загруженный файл (не нужен, используем существующий)
         fs.unlinkSync(filePath);
         
-        // Копируем файл с другого устройства
-        fs.copyFileSync(duplicate.file_path, filePath);
-        fs.chmodSync(filePath, 0o644);
+        // НОВОЕ: Заменяем filePath на путь к существующему файлу (shared storage)
+        filePath = duplicate.file_path;
         
         deduplicationApplied = true;
         
-        logFile('info', '✅ File replaced with duplicate copy (saved upload time & space!)', {
+        logFile('info', '✅ Instant deduplication applied (0 bytes copied, saved disk space!)', {
           deviceId,
           safeName,
-          copiedFrom: `${duplicate.device_id}:${duplicate.safe_name}`
+          referencesTo: duplicate.file_path,
+          copiedMetadataFrom: `${duplicate.device_id}:${duplicate.safe_name}`
         });
       } catch (e) {
-        logFile('error', 'Failed to replace file with duplicate', {
+        logFile('error', 'Failed to deduplicate file', {
           error: e.message,
           deviceId,
           safeName

@@ -81,7 +81,7 @@ export function createDeduplicationRouter(deps) {
   
   /**
    * POST /api/devices/:id/copy-from-duplicate
-   * Скопировать файл с другого устройства (дедупликация)
+   * Мгновенное копирование файла через дедупликацию (только запись в БД)
    */
   router.post('/:id/copy-from-duplicate', async (req, res) => {
     const targetDeviceId = sanitizeDeviceId(req.params.id);
@@ -99,77 +99,67 @@ export function createDeduplicationRouter(deps) {
     }
     
     try {
-      const sourceDeviceFolder = path.join(DEVICES, srcDevice.folder);
-      const targetDeviceFolder = path.join(DEVICES, targetDevice.folder);
+      // Копируем метаданные из исходного файла (БЕЗ физического копирования!)
+      const sourceMetadata = getFileMetadata(sourceDevice, sourceFile);
       
-      const sourcePath = path.join(sourceDeviceFolder, sourceFile);
-      const targetPath = path.join(targetDeviceFolder, targetFilename);
+      if (!sourceMetadata) {
+        return res.status(404).json({ error: 'source metadata not found' });
+      }
       
-      // Проверяем существование исходного файла
-      if (!fs.existsSync(sourcePath)) {
+      // НОВОЕ: Проверяем существование физического файла
+      if (!fs.existsSync(sourceMetadata.file_path)) {
+        logFile('error', 'Physical file missing for metadata', {
+          sourceDevice,
+          sourceFile,
+          expectedPath: sourceMetadata.file_path
+        });
         return res.status(404).json({ error: 'source file not found' });
       }
       
-      // Копируем файл
-      fs.copyFileSync(sourcePath, targetPath);
-      fs.chmodSync(targetPath, 0o644);
+      const stats = fs.statSync(sourceMetadata.file_path);
       
-      logFile('info', 'File copied via deduplication', {
+      logFile('info', '⚡ Instant copy via deduplication (DB only)', {
         sourceDevice,
         sourceFile,
         targetDevice: targetDeviceId,
-        targetFile: targetFilename
+        targetFile: targetFilename,
+        sharedPath: sourceMetadata.file_path,
+        md5: sourceMetadata.md5_hash?.substring(0, 12),
+        partialMd5: sourceMetadata.partial_md5?.substring(0, 12),
+        sizeMB: (sourceMetadata.file_size / 1024 / 1024).toFixed(2)
       });
       
-      // Копируем метаданные из исходного файла
-      const sourceMetadata = getFileMetadata(sourceDevice, sourceFile);
-      if (sourceMetadata) {
-        const stats = fs.statSync(targetPath);
-        
-        logFile('info', '📋 Copying metadata from source', {
-          sourceDevice,
-          sourceFile,
-          targetDevice: targetDeviceId,
-          targetFile: targetFilename,
-          md5: sourceMetadata.md5_hash?.substring(0, 12),
-          partialMd5: sourceMetadata.partial_md5?.substring(0, 12)
-        });
-        
-        saveFileMetadata({
-          deviceId: targetDeviceId,
-          safeName: targetFilename,
-          originalName: originalName || targetFilename,
-          filePath: targetPath,
-          fileSize: sourceMetadata.file_size,
-          md5Hash: sourceMetadata.md5_hash,
-          partialMd5: sourceMetadata.partial_md5,
-          mimeType: sourceMetadata.mime_type,
-          videoParams: {
-            width: sourceMetadata.video_width,
-            height: sourceMetadata.video_height,
-            duration: sourceMetadata.video_duration,
-            codec: sourceMetadata.video_codec,
-            bitrate: sourceMetadata.video_bitrate
-          },
-          audioParams: {
-            codec: sourceMetadata.audio_codec,
-            bitrate: sourceMetadata.audio_bitrate,
-            channels: sourceMetadata.audio_channels
-          },
-          fileMtime: stats.mtimeMs
-        });
-        
-        logFile('info', '✅ Metadata copied successfully', {
-          targetDevice: targetDeviceId,
-          targetFile: targetFilename,
-          md5: sourceMetadata.md5_hash?.substring(0, 12)
-        });
-      } else {
-        logFile('warn', '⚠️ Source metadata not found', {
-          sourceDevice,
-          sourceFile
-        });
-      }
+      // МГНОВЕННОЕ КОПИРОВАНИЕ: создаем только запись в БД с reference на тот же физический файл
+      saveFileMetadata({
+        deviceId: targetDeviceId,
+        safeName: targetFilename,
+        originalName: originalName || targetFilename,
+        filePath: sourceMetadata.file_path,  // ТОТ ЖЕ путь к файлу!
+        fileSize: sourceMetadata.file_size,
+        md5Hash: sourceMetadata.md5_hash,
+        partialMd5: sourceMetadata.partial_md5,
+        mimeType: sourceMetadata.mime_type,
+        videoParams: {
+          width: sourceMetadata.video_width,
+          height: sourceMetadata.video_height,
+          duration: sourceMetadata.video_duration,
+          codec: sourceMetadata.video_codec,
+          bitrate: sourceMetadata.video_bitrate
+        },
+        audioParams: {
+          codec: sourceMetadata.audio_codec,
+          bitrate: sourceMetadata.audio_bitrate,
+          channels: sourceMetadata.audio_channels
+        },
+        fileMtime: stats.mtimeMs
+      });
+      
+      logFile('info', '✅ Instant copy completed (0 bytes transferred)', {
+        targetDevice: targetDeviceId,
+        targetFile: targetFilename,
+        md5: sourceMetadata.md5_hash?.substring(0, 12),
+        savedTrafficMB: (sourceMetadata.file_size / 1024 / 1024).toFixed(2)
+      });
       
       // Сохраняем маппинг оригинального имени
       if (originalName && originalName !== targetFilename) {
@@ -178,11 +168,11 @@ export function createDeduplicationRouter(deps) {
         saveFileNamesMap(fileNamesMap);
       }
       
-      // Обновляем список файлов устройства
-      const deviceFolder = path.join(DEVICES, targetDevice.folder);
-      const entries = fs.readdirSync(deviceFolder).filter(f => !f.startsWith('.'));
-      targetDevice.files = entries;
-      targetDevice.fileNames = entries.map(f => fileNamesMap[targetDeviceId]?.[f] || f);
+      // Обновляем список файлов устройства из БД
+      const { getDeviceFilesMetadata } = await import('../database/files-metadata.js');
+      const filesMetadata = getDeviceFilesMetadata(targetDeviceId);
+      targetDevice.files = filesMetadata.map(f => f.safe_name);
+      targetDevice.fileNames = filesMetadata.map(f => f.original_name);
       
       io.emit('devices/updated');
       

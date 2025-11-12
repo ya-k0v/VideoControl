@@ -9,6 +9,7 @@ import path from 'path';
 import { DEVICES } from '../config/constants.js';
 import { sanitizeDeviceId } from '../utils/sanitize.js';
 import { findDuplicateFile, saveFileMetadata, getFileMetadata } from '../database/files-metadata.js';
+import { getDatabase } from '../database/database.js';
 import { auditLog, AuditAction } from '../utils/audit-logger.js';
 import logger, { logFile } from '../utils/logger.js';
 
@@ -240,7 +241,3 @@ export function createDeduplicationRouter(deps) {
   
   return router;
 }
-
-// Для использования в других модулях
-import { getDatabase } from '../database/database.js';
-

@@ -3,12 +3,6 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import mime from 'mime';
-import multer from 'multer';
-import crypto from 'crypto';
-import util from "util";
-import { fromPath } from "pdf2pic";
-import { exec as execCallback, spawn } from "child_process";
-import { PDFDocument } from 'pdf-lib';
 
 // Импорты из модулей
 import { 
@@ -49,8 +43,6 @@ import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/expre
 import { setupSocketHandlers } from './src/socket/index.js';
 import logger, { httpLoggerMiddleware } from './src/utils/logger.js';
 import { cleanupResolutionCache, getResolutionCacheSize } from './src/video/resolution-cache.js';
-
-const execAsync = util.promisify(execCallback);
 
 const app = express();
 const server = http.createServer(app);

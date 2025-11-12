@@ -18,7 +18,6 @@ import logger, { logFile, logSecurity } from '../utils/logger.js';
 import { getCachedResolution, clearResolutionCache } from '../video/resolution-cache.js';
 import { processUploadedFilesAsync } from '../utils/file-metadata-processor.js';
 import { getFileMetadata, deleteFileMetadata } from '../database/files-metadata.js';
-import { checkAndDeduplicateUploadedFile } from '../utils/upload-deduplication.js';
 
 const router = express.Router();
 

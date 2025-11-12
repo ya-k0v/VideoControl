@@ -37,16 +37,28 @@ export function createDeduplicationRouter(deps) {
       return res.status(404).json({ error: 'device not found' });
     }
     
-    // Ищем дубликат на других устройствах
-    const duplicate = findDuplicateFile(md5, size, targetDeviceId);
+    const isBigFile = size > 100 * 1024 * 1024;
+    
+    logFile('info', 'Checking for duplicate', {
+      targetDevice: targetDeviceId,
+      filename,
+      md5: md5.substring(0, 12),
+      sizeMB: (size / 1024 / 1024).toFixed(2),
+      isBigFile,
+      searchType: isBigFile ? 'partial_md5' : 'full_md5'
+    });
+    
+    // Ищем дубликат на других устройствах (partial MD5 для больших файлов)
+    const duplicate = findDuplicateFile(md5, size, targetDeviceId, isBigFile);
     
     if (duplicate) {
-      logFile('info', 'Duplicate found during upload check', {
+      logFile('info', '✅ Duplicate found!', {
         targetDevice: targetDeviceId,
         filename,
         sourceDevice: duplicate.device_id,
         sourceFile: duplicate.safe_name,
-        md5: md5.substring(0, 12)
+        md5: md5.substring(0, 12),
+        sizeMB: (size / 1024 / 1024).toFixed(2)
       });
       
       res.json({
@@ -56,6 +68,12 @@ export function createDeduplicationRouter(deps) {
         sourcePath: duplicate.file_path
       });
     } else {
+      logFile('info', '❌ No duplicate found - will upload', {
+        targetDevice: targetDeviceId,
+        filename,
+        md5: md5.substring(0, 12)
+      });
+      
       res.json({ duplicate: false });
     }
   });
@@ -107,6 +125,15 @@ export function createDeduplicationRouter(deps) {
       if (sourceMetadata) {
         const stats = fs.statSync(targetPath);
         
+        logFile('info', '📋 Copying metadata from source', {
+          sourceDevice,
+          sourceFile,
+          targetDevice: targetDeviceId,
+          targetFile: targetFilename,
+          md5: sourceMetadata.md5_hash?.substring(0, 12),
+          partialMd5: sourceMetadata.partial_md5?.substring(0, 12)
+        });
+        
         saveFileMetadata({
           deviceId: targetDeviceId,
           safeName: targetFilename,
@@ -114,6 +141,7 @@ export function createDeduplicationRouter(deps) {
           filePath: targetPath,
           fileSize: sourceMetadata.file_size,
           md5Hash: sourceMetadata.md5_hash,
+          partialMd5: sourceMetadata.partial_md5,
           mimeType: sourceMetadata.mime_type,
           videoParams: {
             width: sourceMetadata.video_width,
@@ -130,10 +158,15 @@ export function createDeduplicationRouter(deps) {
           fileMtime: stats.mtimeMs
         });
         
-        logFile('info', 'File metadata copied', {
+        logFile('info', '✅ Metadata copied successfully', {
           targetDevice: targetDeviceId,
           targetFile: targetFilename,
-          md5: sourceMetadata.md5_hash.substring(0, 12)
+          md5: sourceMetadata.md5_hash?.substring(0, 12)
+        });
+      } else {
+        logFile('warn', '⚠️ Source metadata not found', {
+          sourceDevice,
+          sourceFile
         });
       }
       

@@ -1,5 +1,6 @@
 // upload-ui.js - ПОЛНЫЙ код setupUploadUI из admin.js
-import { setXhrAuth } from './auth.js';
+import { setXhrAuth, adminFetch } from './auth.js';
+import { calculateFileMD5 } from './md5-helper.js';
 
 export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, socket) {
   const dropZone = card.querySelector('.dropZone');
@@ -246,48 +247,149 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
 
   uploadBtn.onclick = async () => {
     if (!pending.length) return;
-    const form = new FormData();
     
-    // Если это папка, добавляем метаданные
-    if (folderName) {
-      form.append('folderName', folderName);
-      // Для файлов из папки добавляем относительные пути
-      pending.forEach(f => {
-        // Используем webkitRelativePath если доступен, иначе просто имя файла
-        const relativePath = f.webkitRelativePath || f.name;
-        // ОПТИМИЗАЦИЯ: не создаем Blob копию, используем File напрямую
-        // Это критично для больших файлов (1.5GB+)
-        form.append('files', f, relativePath);
-      });
-    } else {
-      pending.forEach(f => form.append('files', f));
-    }
-
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `/api/devices/${encodeURIComponent(deviceId)}/upload`);
-      setXhrAuth(xhr);
-      xhr.upload.onprogress = e => {
-        if (!e.lengthComputable) return;
-        const percent = Math.round((e.loaded / e.total) * 100);
-        if (folderName) {
-          const el = queue.querySelector(`#p_${deviceId}_folder`);
-          if (el) el.textContent = `${percent}%`;
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = 'Проверка...';
+    
+    try {
+      // STEP 1: Проверяем дубликаты ДО загрузки (экономим трафик!)
+      const filesToUpload = [];
+      const duplicates = [];
+      const fileIndexMap = new Map(); // Маппинг файл → индекс в pending
+      
+      for (let i = 0; i < pending.length; i++) {
+        const file = pending[i];
+        const progressEl = queue.querySelector(`#p_${deviceId}_${i}`);
+        fileIndexMap.set(file, i); // Запоминаем индекс
+        
+        console.log(`[Upload] Processing file ${i+1}/${pending.length}: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
+        
+        // Вычисляем MD5 (первые 10MB для больших файлов)
+        if (progressEl) progressEl.textContent = 'MD5...';
+        const startTime = Date.now();
+        const md5 = await calculateFileMD5(file, (progress) => {
+          if (progressEl) progressEl.textContent = `MD5: ${progress}%`;
+        });
+        const md5Time = Date.now() - startTime;
+        
+        console.log(`[Upload] MD5 calculated in ${md5Time}ms: ${md5} (file: ${file.name})`);
+        
+        // Проверяем дубликат на сервере
+        if (progressEl) progressEl.textContent = 'Проверка...';
+        console.log(`[Upload] Checking duplicate: md5=${md5}, size=${file.size}`);
+        
+        const checkRes = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/check-duplicate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            md5, 
+            size: file.size, 
+            filename: file.name 
+          })
+        });
+        
+        const checkData = await checkRes.json();
+        console.log(`[Upload] Server response:`, checkData);
+        
+        if (checkData.duplicate) {
+          // Дубликат найден! Копируем с другого устройства
+          if (progressEl) progressEl.textContent = 'Копирование...';
+          
+          const copyRes = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/copy-from-duplicate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sourceDevice: checkData.sourceDevice,
+              sourceFile: checkData.sourceFile,
+              targetFilename: file.name,
+              originalName: file.name,
+              md5,
+              size: file.size
+            })
+          });
+          
+          const copyData = await copyRes.json();
+          
+          if (copyData.ok) {
+            duplicates.push({
+              name: file.name,
+              from: checkData.sourceDevice,
+              savedMB: copyData.savedTrafficMB
+            });
+            if (progressEl) progressEl.textContent = '✅ Скопирован';
+          }
         } else {
-          queue.querySelectorAll(`[id^="p_${deviceId}_"]`).forEach(el => el.textContent = `${percent}%`);
+          // Уникальный файл - добавляем в очередь загрузки
+          filesToUpload.push(file);
+          if (progressEl) progressEl.textContent = '0%';
         }
-      };
-      xhr.onload = () => xhr.status<300 ? resolve() : reject(new Error(xhr.statusText));
-      xhr.onerror = () => reject(new Error('Network error'));
-      xhr.send(form);
-    });
+      }
+      
+      // STEP 2: Загружаем только уникальные файлы
+      if (filesToUpload.length > 0) {
+        uploadBtn.textContent = `Загрузка (${filesToUpload.length})...`;
+        
+        const form = new FormData();
+        
+        // Если это папка, добавляем метаданные
+        if (folderName) {
+          form.append('folderName', folderName);
+          filesToUpload.forEach(f => {
+            const relativePath = f.webkitRelativePath || f.name;
+            form.append('files', f, relativePath);
+          });
+        } else {
+          filesToUpload.forEach(f => form.append('files', f));
+        }
 
-    pending = [];
-    folderName = null;
-    renderQueue();
-    // После загрузки — обновить правую колонку файлов
-    await renderFilesPane(deviceId);
-    socket.emit('devices/updated');
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/devices/${encodeURIComponent(deviceId)}/upload`);
+          setXhrAuth(xhr);
+          xhr.upload.onprogress = e => {
+            if (!e.lengthComputable) return;
+            const percent = Math.round((e.loaded / e.total) * 100);
+            if (folderName) {
+              const el = queue.querySelector(`#p_${deviceId}_folder`);
+              if (el) el.textContent = `${percent}%`;
+            } else {
+              // Обновляем только для файлов которые грузятся
+              filesToUpload.forEach((f) => {
+                const origIdx = fileIndexMap.get(f);
+                const el = queue.querySelector(`#p_${deviceId}_${origIdx}`);
+                if (el) el.textContent = `${percent}%`;
+              });
+            }
+          };
+          xhr.onload = () => xhr.status<300 ? resolve() : reject(new Error(xhr.statusText));
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(form);
+        });
+      }
+      
+      // STEP 3: Показываем сводку дедупликации
+      if (duplicates.length > 0) {
+        const totalSavedMB = duplicates.reduce((sum, d) => sum + parseFloat(d.savedMB), 0);
+        const message = duplicates.map(d => 
+          `✅ ${d.name}\n   Скопирован с ${d.from} (${d.savedMB} MB)`
+        ).join('\n\n');
+      }
+      
+      pending = [];
+      folderName = null;
+      renderQueue();
+      
+      // После загрузки — обновить правую колонку файлов
+      await renderFilesPane(deviceId);
+      socket.emit('devices/updated');
+      
+    } catch (error) {
+      console.error('[Upload] Error:', error);
+      alert(`❌ Ошибка загрузки: ${error.message}`);
+    } finally {
+      uploadBtn.disabled = false;
+      uploadBtn.textContent = 'Загрузить';
+    }
   };
 }
 

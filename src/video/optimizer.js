@@ -47,6 +47,9 @@ export function needsOptimization(params) {
     params.bitrate > (thresholds.maxBitrate || 6000000) ||
     params.profile === 'High 10' ||
     params.profile === 'High 4:4:4 Predictive' ||
+    params.profile === 'High 4:2:2' ||
+    params.profile === 'High' ||  // RK3318 не поддерживает High Profile
+    params.level > 31 ||  // RK3318 поддерживает только до Level 3.1
     (params.codec !== 'h264' && params.codec !== 'H.264');
   
   return needsOpt;

@@ -33,12 +33,23 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
     logFile('debug', 'Processing file metadata', { deviceId, safeName, fileSize });
     
     // Вычисляем MD5 (в фоне, не блокируем upload response)
-    const md5Hash = await calculateMD5(filePath);
+    const isBigFile = fileSize > 100 * 1024 * 1024;
     
-    logFile('debug', 'MD5 calculated', { deviceId, safeName, md5Hash: md5Hash.substring(0, 12) });
+    // Для больших файлов вычисляем оба MD5: partial (10MB) и full
+    const partialMd5 = isBigFile ? await calculateMD5(filePath, true) : null;
+    const md5Hash = await calculateMD5(filePath, false);
     
-    // Проверяем есть ли дубликат на других устройствах
-    const duplicate = findDuplicateFile(md5Hash, fileSize, deviceId);
+    logFile('debug', 'MD5 calculated', { 
+      deviceId, 
+      safeName, 
+      md5: md5Hash.substring(0, 12),
+      partialMd5: partialMd5 ? partialMd5.substring(0, 12) : null,
+      isBigFile
+    });
+    
+    // Проверяем есть ли дубликат на других устройствах (используем partial для больших файлов)
+    const searchMd5 = partialMd5 || md5Hash;
+    const duplicate = findDuplicateFile(searchMd5, fileSize, deviceId, !!partialMd5);
     let deduplicationApplied = false;
     
     if (duplicate && fs.existsSync(duplicate.file_path)) {
@@ -163,6 +174,7 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
       filePath,
       fileSize,
       md5Hash,
+      partialMd5,
       mimeType,
       videoParams,
       audioParams,

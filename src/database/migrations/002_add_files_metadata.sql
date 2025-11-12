@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS files_metadata (
   file_path TEXT NOT NULL,
   file_size INTEGER NOT NULL,
   md5_hash TEXT NOT NULL,
+  partial_md5 TEXT,
   mime_type TEXT,
   
   -- Метаданные видео
@@ -50,8 +51,14 @@ CREATE INDEX IF NOT EXISTS idx_files_device ON files_metadata(device_id);
 -- Дедупликация по MD5
 CREATE INDEX IF NOT EXISTS idx_files_md5 ON files_metadata(md5_hash);
 
+-- Дедупликация по partial MD5 (первые 10MB) для больших файлов
+CREATE INDEX IF NOT EXISTS idx_files_partial_md5 ON files_metadata(partial_md5);
+
 -- Поиск дубликатов (одинаковый MD5 + размер)
 CREATE INDEX IF NOT EXISTS idx_files_dedup ON files_metadata(md5_hash, file_size);
+
+-- Поиск дубликатов по partial MD5 (быстрая предварительная проверка)
+CREATE INDEX IF NOT EXISTS idx_files_partial_dedup ON files_metadata(partial_md5, file_size);
 
 -- Поиск по имени файла
 CREATE INDEX IF NOT EXISTS idx_files_name ON files_metadata(safe_name);

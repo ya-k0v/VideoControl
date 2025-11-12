@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     // Кэш информации о заглушке (чтобы не запрашивать сервер каждый раз)
     private var cachedPlaceholderFile: String? = null
     private var cachedPlaceholderType: String? = null
+    private var placeholderTimestamp: Long = 0 // Для обхода кэша при смене заглушки
 
     private val TAG = "VCMediaPlayer"
     private var SERVER_URL = ""
@@ -408,10 +409,18 @@ class MainActivity : AppCompatActivity() {
 
             socket?.on("placeholder/refresh") {
                 runOnUiThread { 
+                    // КРИТИЧНО: Обновляем timestamp для обхода кэша ExoPlayer
+                    placeholderTimestamp = System.currentTimeMillis()
+                    
+                    // КРИТИЧНО: Полностью очищаем плеер для освобождения декодера
+                    player?.stop()
+                    player?.clearMediaItems()
+                    
                     // Очищаем кэш заглушки при обновлении
                     cachedPlaceholderFile = null
                     cachedPlaceholderType = null
-                    Log.i(TAG, "Placeholder cache cleared, reloading...")
+                    
+                    Log.i(TAG, "🔄 Placeholder changed (timestamp=$placeholderTimestamp), clearing decoder and reloading...")
                     loadPlaceholder()
                 }
             }
@@ -503,7 +512,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun playVideo(fileName: String, isPlaceholder: Boolean = false) {
         try {
-            val videoUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            // КРИТИЧНО: Для заглушки добавляем timestamp чтобы обойти кэш ExoPlayer
+            val videoUrl = if (isPlaceholder && placeholderTimestamp > 0) {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}?t=$placeholderTimestamp"
+            } else {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            }
             Log.i(TAG, "🎬 Playing video: $videoUrl (isPlaceholder=$isPlaceholder)")
 
             // КРИТИЧНО: Очищаем ImageView и останавливаем Glide загрузку
@@ -584,7 +598,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showImage(fileName: String, isPlaceholder: Boolean = false) {
         try {
-            val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            // КРИТИЧНО: Для заглушки добавляем timestamp чтобы обойти кэш
+            val imageUrl = if (isPlaceholder && placeholderTimestamp > 0) {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}?t=$placeholderTimestamp"
+            } else {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            }
             Log.i(TAG, "🖼️ Showing image: $imageUrl (isPlaceholder=$isPlaceholder)")
 
             // КРИТИЧНО: Полностью останавливаем видео для освобождения памяти
@@ -804,8 +823,12 @@ class MainActivity : AppCompatActivity() {
     private fun loadPlaceholder() {
         Log.i(TAG, "🔍 Loading placeholder...")
         
-        // Останавливаем текущее воспроизведение
+        // КРИТИЧНО: Останавливаем плеер (БЕЗ clearMediaItems - это ломает переход на заглушку!)
         player?.stop()
+        
+        // Сбрасываем currentVideoFile для корректной загрузки заглушки заново
+        currentVideoFile = null
+        savedPosition = 0
         
         // Очищаем ImageView если был показан
         Glide.with(this).clear(imageView)
@@ -827,6 +850,10 @@ class MainActivity : AppCompatActivity() {
         }
         
         // Кэша нет - запрашиваем заглушку с сервера (только первый раз)
+        loadPlaceholderFromServer()
+    }
+    
+    private fun loadPlaceholderFromServer() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = java.net.URL("$SERVER_URL/api/devices/$DEVICE_ID/placeholder")

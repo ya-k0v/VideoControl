@@ -9,17 +9,38 @@ import { getDatabase } from './database.js';
 import logger, { logFile } from '../utils/logger.js';
 
 /**
- * Вычислить MD5 хэш файла
+ * Вычислить MD5 хэш файла (полный или частичный)
  * @param {string} filePath - Путь к файлу
+ * @param {boolean} partial - Если true, хэшируем только первые 10MB (для больших файлов)
  * @returns {Promise<string>} - MD5 хэш
  */
-export async function calculateMD5(filePath) {
+export async function calculateMD5(filePath, partial = false) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('md5');
-    const stream = fs.createReadStream(filePath);
     
-    stream.on('data', data => hash.update(data));
-    stream.on('end', () => resolve(hash.digest('hex')));
+    // Определяем сколько байт читать
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+    const isBigFile = fileSize > 100 * 1024 * 1024; // >100MB
+    const maxBytes = (partial && isBigFile) ? (10 * 1024 * 1024) : fileSize; // 10MB или весь файл
+    
+    const stream = fs.createReadStream(filePath, { 
+      start: 0, 
+      end: maxBytes - 1 
+    });
+    
+    let bytesRead = 0;
+    
+    stream.on('data', data => {
+      hash.update(data);
+      bytesRead += data.length;
+    });
+    
+    stream.on('end', () => {
+      const md5 = hash.digest('hex');
+      resolve(md5);
+    });
+    
     stream.on('error', reject);
   });
 }
@@ -32,7 +53,8 @@ export async function calculateMD5(filePath) {
  * @param {string} params.originalName - Оригинальное имя файла
  * @param {string} params.filePath - Полный путь к файлу
  * @param {number} params.fileSize - Размер файла
- * @param {string} params.md5Hash - MD5 хэш
+ * @param {string} params.md5Hash - MD5 хэш (полный)
+ * @param {string} params.partialMd5 - MD5 первых 10MB (для быстрой проверки дубликатов)
  * @param {string} params.mimeType - MIME тип
  * @param {Object} params.videoParams - Параметры видео (width, height, duration, codec, bitrate)
  * @param {Object} params.audioParams - Параметры аудио (codec, bitrate, channels)
@@ -44,6 +66,7 @@ export function saveFileMetadata({
   filePath,
   fileSize,
   md5Hash,
+  partialMd5 = null,
   mimeType = null,
   videoParams = {},
   audioParams = {},
@@ -54,10 +77,10 @@ export function saveFileMetadata({
     
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO files_metadata (
-        device_id, safe_name, original_name, file_path, file_size, md5_hash, mime_type,
+        device_id, safe_name, original_name, file_path, file_size, md5_hash, partial_md5, mime_type,
         video_width, video_height, video_duration, video_codec, video_bitrate,
         audio_codec, audio_bitrate, audio_channels, file_mtime
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
@@ -67,6 +90,7 @@ export function saveFileMetadata({
       filePath,
       fileSize,
       md5Hash,
+      partialMd5,
       mimeType,
       videoParams.width || null,
       videoParams.height || null,
@@ -134,19 +158,24 @@ export function getDeviceFilesMetadata(deviceId) {
 
 /**
  * Найти файл с таким же MD5 на другом устройстве (дедупликация)
- * @param {string} md5Hash
+ * @param {string} md5Hash - MD5 хэш (может быть partial или full)
  * @param {number} fileSize
  * @param {string} excludeDeviceId - Исключить это устройство из поиска
+ * @param {boolean} isPartial - Является ли MD5 частичным (первые 10MB)
  * @returns {Object|null} - { device_id, safe_name, file_path }
  */
-export function findDuplicateFile(md5Hash, fileSize, excludeDeviceId = null) {
+export function findDuplicateFile(md5Hash, fileSize, excludeDeviceId = null, isPartial = false) {
   try {
     const db = getDatabase();
     
+    // Для больших файлов используем partial_md5, для маленьких - md5_hash
+    const isBigFile = fileSize > 100 * 1024 * 1024;
+    const md5Column = (isPartial || isBigFile) ? 'partial_md5' : 'md5_hash';
+    
     let query = `
-      SELECT device_id, safe_name, file_path, original_name
+      SELECT device_id, safe_name, file_path, original_name, md5_hash, partial_md5
       FROM files_metadata 
-      WHERE md5_hash = ? AND file_size = ?
+      WHERE ${md5Column} = ? AND file_size = ?
     `;
     
     const params = [md5Hash, fileSize];
@@ -159,10 +188,21 @@ export function findDuplicateFile(md5Hash, fileSize, excludeDeviceId = null) {
     query += ` LIMIT 1`;
     
     const stmt = db.prepare(query);
-    return stmt.get(...params);
+    const result = stmt.get(...params);
+    
+    if (result) {
+      logger.info('Duplicate found', { 
+        md5: md5Hash.substring(0, 12), 
+        isPartial,
+        sourceDevice: result.device_id,
+        sourceFile: result.safe_name
+      });
+    }
+    
+    return result;
     
   } catch (error) {
-    logger.error('Failed to find duplicate file', { error: error.message, md5Hash });
+    logger.error('Failed to find duplicate file', { error: error.message, md5Hash: md5Hash.substring(0, 12) });
     return null;
   }
 }

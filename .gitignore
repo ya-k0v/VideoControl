@@ -16,6 +16,12 @@ config/main.db-wal
 config/main.db-shm
 config/json-backup-*/
 
+# Deprecated JSON files (backup only)
+config/devices.json
+config/devices.json.backup
+config/file-names-map.json
+config/file-names-map.json.backup
+
 # Production
 public/content/*/
 !public/content/.gitkeep

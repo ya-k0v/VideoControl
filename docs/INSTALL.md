@@ -30,9 +30,8 @@ npm install
 # Создать структуру
 mkdir -p public/content config
 
-# Создать конфиги
-echo '{}' > config/devices.json
-echo '{}' > config/file-names-map.json
+# Инициализировать БД
+sqlite3 config/main.db < src/database/init.sql
 
 # Запустить
 npm start

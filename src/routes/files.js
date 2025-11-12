@@ -848,25 +848,32 @@ export function createFilesRouter(deps) {
       const fileStatus = getFileStatus(id, safeName) || { status: 'ready', progress: 100, canPlay: true };
       
       let resolution = null;
+      let isPlaceholder = false;
       
-      // Получаем разрешение для видео файлов (из БД, не FFmpeg!)
+      // Получаем метаданные из БД (разрешение + флаг заглушки)
       const ext = path.extname(safeName).toLowerCase();
-      if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
-        // Сначала пробуем из БД (быстро!)
-        const metadata = getFileMetadata(id, safeName);
-        if (metadata && metadata.video_width && metadata.video_height) {
-          resolution = {
-            width: metadata.video_width,
-            height: metadata.video_height
-          };
-        } else if (fileStatus.status !== 'processing' && fileStatus.status !== 'checking') {
-          // Fallback: если метаданных нет в БД - используем кэш с FFmpeg
-          // (для файлов загруженных до миграции БД)
-          try {
-            const filePath = metadata?.file_path || path.join(DEVICES, safeName);
-            resolution = await getCachedResolution(filePath, checkVideoParameters);
-          } catch (e) {
-            // Игнорируем ошибки
+      const metadata = getFileMetadata(id, safeName);
+      
+      if (metadata) {
+        // Флаг заглушки
+        isPlaceholder = !!metadata.is_placeholder;
+        
+        // Разрешение для видео файлов
+        if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+          if (metadata.video_width && metadata.video_height) {
+            resolution = {
+              width: metadata.video_width,
+              height: metadata.video_height
+            };
+          } else if (fileStatus.status !== 'processing' && fileStatus.status !== 'checking') {
+            // Fallback: если метаданных нет в БД - используем кэш с FFmpeg
+            // (для файлов загруженных до миграции БД)
+            try {
+              const filePath = metadata.file_path || path.join(DEVICES, safeName);
+              resolution = await getCachedResolution(filePath, checkVideoParameters);
+            } catch (e) {
+              // Игнорируем ошибки
+            }
           }
         }
       }
@@ -878,7 +885,8 @@ export function createFilesRouter(deps) {
         progress: fileStatus.progress || 100,
         canPlay: fileStatus.canPlay !== false,
         error: fileStatus.error || null,
-        resolution
+        resolution,
+        isPlaceholder  // НОВОЕ: Флаг заглушки
       });
     }
     

@@ -2,28 +2,23 @@ import express from 'express';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import mime from 'mime';
 
 // Импорты из модулей
 import { 
   ROOT, PUBLIC, DEVICES, CONVERTED_CACHE, MAX_FILE_SIZE, ALLOWED_EXT, PORT, HOST 
 } from './src/config/constants.js';
 import { createSocketServer } from './src/config/socket-config.js';
-import { sanitizeDeviceId, isSystemFile } from './src/utils/sanitize.js';
-import { fixEncoding } from './src/utils/encoding.js';
 import { initDatabase } from './src/database/database.js';
 import { 
   loadDevicesFromDB, 
   saveDevicesToDB, 
   loadFileNamesFromDB, 
-  saveFileNamesToDB,
-  scanAllDevices 
+  saveFileNamesToDB
 } from './src/storage/devices-storage-sqlite.js';
-import { getFileStatuses, getFileStatus, setFileStatus, deleteFileStatus } from './src/video/file-status.js';
+import { getFileStatus } from './src/video/file-status.js';
 import { checkVideoParameters } from './src/video/ffmpeg-wrapper.js';
-import { getVideoOptConfig, needsOptimization, autoOptimizeVideo } from './src/video/optimizer.js';
+import { autoOptimizeVideo } from './src/video/optimizer.js';
 import { 
-  getPdfPageCount, convertPdfToImages, convertPptxToImages, 
   findFileFolder, getPageSlideCount, autoConvertFile 
 } from './src/converters/document-converter.js';
 import { createDevicesRouter } from './src/routes/devices.js';
@@ -230,10 +225,6 @@ app.use('/api/duplicates', requireAuth, deduplicationRouter);
 // VIDEO OPTIMIZATION для Android TV
 // ========================================
 // (Модули: src/video/optimizer.js, src/video/ffmpeg-wrapper.js, src/video/file-status.js)
-
-// Получаем ссылки на модули
-const videoOptConfig = getVideoOptConfig();
-const fileStatuses = getFileStatuses();
 
 // Оберточные функции для совместимости с существующим кодом
 async function autoOptimizeVideoWrapper(deviceId, fileName) {

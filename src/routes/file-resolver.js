@@ -62,11 +62,20 @@ router.get('/resolve/:deviceId/:fileName(*)', (req, res) => {
   
   // Логируем Range запрос (если есть)
   if (req.headers.range) {
-    logger.debug('[Resolver] Range request', {
+    // Парсим Range заголовок для детальной диагностики
+    const rangeMatch = req.headers.range.match(/bytes=(\d+)-(\d*)/);
+    const requestedStart = rangeMatch ? parseInt(rangeMatch[1]) : 0;
+    const requestedEnd = rangeMatch && rangeMatch[2] ? parseInt(rangeMatch[2]) : metadata.file_size - 1;
+    
+    logger.info('[Resolver] Range request details', {
       deviceId,
       fileName,
       range: req.headers.range,
-      fileSize: metadata.file_size
+      requestedStart,
+      requestedEnd,
+      requestedSize: requestedEnd - requestedStart + 1,
+      fileSize: metadata.file_size,
+      isOutOfRange: requestedStart >= metadata.file_size || requestedEnd >= metadata.file_size
     });
   }
   

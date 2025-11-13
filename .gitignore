@@ -22,8 +22,8 @@ config/devices.json.backup
 config/file-names-map.json
 config/file-names-map.json.backup
 
-# Production
-public/content/*/
+# Production (контент файлы не коммитим)
+public/content/*
 !public/content/.gitkeep
 
 # Temporary directories

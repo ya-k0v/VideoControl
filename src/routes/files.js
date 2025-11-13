@@ -218,7 +218,7 @@ export function createFilesRouter(deps) {
         return ext === '.pdf' || ext === '.pptx' || ext === '.zip';
       }) : [];
       
-      // Перемещаем документы в папку устройства
+      // Перемещаем документы в папку устройства (НЕ в подпапку!)
       if (documentsToMove.length > 0) {
         const deviceFolder = path.join(DEVICES, devices[id].folder);
         if (!fs.existsSync(deviceFolder)) {
@@ -228,13 +228,24 @@ export function createFilesRouter(deps) {
         for (const file of documentsToMove) {
           try {
             const sourcePath = path.join(DEVICES, file.filename);  // Из /content/
-            const targetPath = path.join(deviceFolder, file.filename);  // В /content/{device}/
+            const targetPath = path.join(deviceFolder, file.filename);  // В /content/{device}/{file}
             
             fs.renameSync(sourcePath, targetPath);
             fs.chmodSync(targetPath, 0o644);
-            console.log(`[upload] 📄 Документ перемещен: ${file.filename} -> ${devices[id].folder}/`);
+            console.log(`[upload] 📄 Файл перемещен: ${file.filename} -> ${devices[id].folder}/`);
           } catch (e) {
-            console.warn(`[upload] ⚠️ Ошибка перемещения документа ${file.filename}:`, e);
+            console.warn(`[upload] ⚠️ Ошибка перемещения ${file.filename}:`, e);
+          }
+        }
+        
+        // КРИТИЧНО: Автоконвертация PDF/PPTX (autoConvertFile сама создаст папку)
+        for (const file of documentsToMove) {
+          const ext = path.extname(file.filename).toLowerCase();
+          if (ext === '.pdf' || ext === '.pptx') {
+            console.log(`[upload] 🔄 Запуск конвертации: ${file.filename}`);
+            autoConvertFileWrapper(id, file.filename).catch(err => {
+              console.error(`[upload] ❌ Ошибка конвертации ${file.filename}:`, err.message);
+            });
           }
         }
       }
@@ -412,9 +423,12 @@ export function createFilesRouter(deps) {
         fileNamesMap[id][safeFolderName] = folderName; // Оригинальное имя для отображения
         saveFileNamesMap(fileNamesMap);
       } else {
-        // КРИТИЧНО: Устанавливаем права 644 на все загруженные файлы
-        // Чтобы Nginx (www-data) мог их прочитать
+        // КРИТИЧНО: Устанавливаем права 644 на загруженные файлы (кроме PDF/PPTX/ZIP - они уже перемещены)
         for (const file of (req.files || [])) {
+          const ext = path.extname(file.filename).toLowerCase();
+          // Пропускаем PDF/PPTX/ZIP - для них права уже установлены при перемещении
+          if (ext === '.pdf' || ext === '.pptx' || ext === '.zip') continue;
+          
           try {
             const filePath = path.join(DEVICES, file.filename);  // В /content/
             fs.chmodSync(filePath, 0o644);
@@ -875,10 +889,8 @@ export function createFilesRouter(deps) {
     
     const deviceFolder = path.join(DEVICES, d.folder);
     
-    // ЗАЩИТА: Валидируем путь от path traversal
-    try {
-      validatePath(name, deviceFolder);
-    } catch (e) {
+    // ЗАЩИТА: Простая проверка path traversal
+    if (name.includes('..') || name.startsWith('/') || name.startsWith('\\')) {
       // Логируем подозрительную активность
       await auditLog({
         userId: req.user?.id || null,

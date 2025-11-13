@@ -60,16 +60,26 @@ export async function convertPptxToImages(pptxPath, outputDir) {
   const fileNameWithoutExt = path.basename(pptxPath, path.extname(pptxPath));
   const pdfPath = path.join(outputDir, `${fileNameWithoutExt}.pdf`);
   
-  // Конвертируем PPTX в PDF через LibreOffice
-  await execAsync(`soffice --headless --convert-to pdf --outdir "${outputDir}" "${pptxPath}"`);
-  
-  // Конвертируем PDF в изображения
-  const numPages = await convertPdfToImages(pdfPath, outputDir);
-  
-  // Удаляем временный PDF
-  fs.unlinkSync(pdfPath);
-  
-  return numPages;
+  try {
+    // Конвертируем PPTX в PDF через LibreOffice
+    await execAsync(`soffice --headless --convert-to pdf --outdir "${outputDir}" "${pptxPath}"`);
+    
+    // Проверяем что PDF создан
+    if (!fs.existsSync(pdfPath)) {
+      throw new Error(`PDF не создан: ${pdfPath}`);
+    }
+    
+    // Конвертируем PDF в изображения
+    const numPages = await convertPdfToImages(pdfPath, outputDir);
+    
+    // Удаляем временный PDF
+    fs.unlinkSync(pdfPath);
+    
+    return numPages;
+  } catch (error) {
+    console.error(`[Converter] ❌ PPTX конвертация failed:`, error.message);
+    throw error;
+  }
 }
 
 /**

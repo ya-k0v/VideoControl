@@ -60,16 +60,40 @@ router.get('/resolve/:deviceId/:fileName(*)', (req, res) => {
     size: metadata.file_size
   });
   
+  // Логируем Range запрос (если есть)
+  if (req.headers.range) {
+    logger.debug('[Resolver] Range request', {
+      deviceId,
+      fileName,
+      range: req.headers.range,
+      fileSize: metadata.file_size
+    });
+  }
+  
   // Отправляем файл (Express автоматически обрабатывает Range requests)
   res.sendFile(metadata.file_path, options, (err) => {
     if (err) {
-      logger.error('[Resolver] Error sending file', { 
-        error: err.message, 
-        deviceId, 
-        fileName 
-      });
-      if (!res.headersSent) {
-        res.status(500).send('Error sending file');
+      // ИСПРАВЛЕНО: Правильно обрабатываем ошибку Range Not Satisfiable
+      if (err.message === 'Range Not Satisfiable') {
+        logger.warn('[Resolver] Range not satisfiable', { 
+          deviceId, 
+          fileName,
+          range: req.headers.range,
+          fileSize: metadata.file_size
+        });
+        if (!res.headersSent) {
+          res.status(416).set('Content-Range', `bytes */${metadata.file_size}`).send('Range Not Satisfiable');
+        }
+      } else {
+        logger.error('[Resolver] Error sending file', { 
+          error: err.message, 
+          deviceId, 
+          fileName,
+          statusCode: err.statusCode || err.status
+        });
+        if (!res.headersSent) {
+          res.status(err.statusCode || err.status || 500).send('Error sending file');
+        }
       }
     }
   });

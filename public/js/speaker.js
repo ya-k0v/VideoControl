@@ -176,8 +176,16 @@ window.addEventListener('resize', () => {
   }, 250);
 });
 
-function showLivePreviewForTV(deviceId) {
-  // НОВОЕ: Не переключаем превью если показана сетка миниатюр
+function showLivePreviewForTV(deviceId, force = false) {
+  // ИСПРАВЛЕНО: Если force=true - принудительно очищаем превью
+  // Это используется при явном переключении устройства
+  if (force) {
+    console.log('[Speaker] 🔄 Принудительное обновление превью для устройства:', deviceId);
+    filePreview.innerHTML = `<iframe src="/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1" style="width:100%;height:100%;border:0"></iframe>`;
+    return;
+  }
+  
+  // Не переключаем превью если показана сетка миниатюр (только при НЕ принудительном вызове)
   const hasThumbnails = filePreview.querySelector('.thumbnail-preview');
   if (hasThumbnails) {
     console.log('[Speaker] ℹ️ Превью показывает миниатюры, не переключаем на заглушку');
@@ -230,8 +238,9 @@ async function selectDevice(id, resetPage = true) {
   await loadFiles();
   
   // ИСПРАВЛЕНО: ВСЕГДА показываем live preview выбранного устройства
+  // force=resetPage означает принудительное обновление при явном выборе
   // Это гарантирует что превью переключается при смене устройства
-  showLivePreviewForTV(currentDevice);
+  showLivePreviewForTV(currentDevice, resetPage);
 }
 
 /* Загрузка и рендер файлов для текущего ТВ */

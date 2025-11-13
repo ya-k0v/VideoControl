@@ -524,11 +524,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun playVideo(fileName: String, isPlaceholder: Boolean = false) {
         try {
-            // КРИТИЧНО: Для заглушки добавляем timestamp чтобы обойти кэш ExoPlayer
+            // НОВОЕ: Используем API resolver для поддержки shared storage (дедупликация)
+            // Вместо /content/{device}/{file} используем /api/files/resolve/{device}/{file}
             val videoUrl = if (isPlaceholder && placeholderTimestamp > 0) {
-                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}?t=$placeholderTimestamp"
+                "$SERVER_URL/api/files/resolve/$DEVICE_ID/${Uri.encode(fileName)}?t=$placeholderTimestamp"
             } else {
-                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+                "$SERVER_URL/api/files/resolve/$DEVICE_ID/${Uri.encode(fileName)}"
             }
             Log.i(TAG, "🎬 Playing video: $videoUrl (isPlaceholder=$isPlaceholder)")
 

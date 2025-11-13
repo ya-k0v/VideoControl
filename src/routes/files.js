@@ -12,7 +12,6 @@ import { sanitizeDeviceId, isSystemFile } from '../utils/sanitize.js';
 import { extractZipToFolder } from '../converters/folder-converter.js';
 import { makeSafeFolderName } from '../utils/transliterate.js';
 import { scanDeviceFiles } from '../utils/file-scanner.js';
-import { validatePath } from '../utils/path-validator.js';
 import { uploadLimiter, deleteLimiter } from '../middleware/rate-limit.js';
 import { auditLog, AuditAction } from '../utils/audit-logger.js';
 import logger, { logFile, logSecurity } from '../utils/logger.js';

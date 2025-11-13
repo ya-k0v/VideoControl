@@ -62,9 +62,11 @@ export function requireAuth(req, res, next) {
 
 /**
  * Middleware: Требует определенную роль
+ * ИСПРАВЛЕНО: Теперь это массив middleware [requireAuth, checkRole]
  */
 export function requireRole(...roles) {
-  return (req, res, next) => {
+  // Функция проверки роли
+  const checkRole = (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -75,6 +77,10 @@ export function requireRole(...roles) {
     
     next();
   };
+  
+  // ИСПРАВЛЕНО: Возвращаем массив middleware [requireAuth, checkRole]
+  // Это гарантирует что токен проверяется ДО проверки роли
+  return [requireAuth, checkRole];
 }
 
 // Aliases для удобства

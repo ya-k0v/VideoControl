@@ -154,9 +154,12 @@ if (!device_id || !device_id.trim()) {
             }
             
             if (!preview && isActuallyEnded && (currentFileState.type === null || currentFileState.type === 'video')) {
+              console.log('[Player] ✅ Видео закончилось, показываем заглушку');
               showPlaceholder();
             } else if (!isActuallyEnded) {
               console.log('[Player] ⚠️ Ложное ended событие (Android WebView bug), игнорируем');
+            } else {
+              console.log('[Player] ⚠️ Не показываем заглушку:', { preview, isActuallyEnded, currentFileStateType: currentFileState.type });
             }
           });
           
@@ -305,9 +308,13 @@ if (!device_id || !device_id.trim()) {
   
   // Плавный показ элемента с ОБЯЗАТЕЛЬНЫМ переходом через черный экран
   function show(el, skipTransition = false) {
-    if (!el) return;
+    if (!el) {
+      console.warn('[Player] ⚠️ show() вызван с null/undefined element!');
+      return;
+    }
     
-    console.log('[Player] 🎬 show() с плавным переходом для:', el.id || el.className);
+    console.log('[Player] 🎬 show() с плавным переходом для:', el.id || el.className, 'skipTransition:', skipTransition);
+    console.log('[Player] 🔍 Element visibility before:', el.classList.contains('visible'));
     
     // Убедимся что body черный
     document.body.style.background = '#000';
@@ -373,7 +380,8 @@ if (!device_id || !device_id.trim()) {
   }
 
   function content(file){ 
-    return `/content/${encodeURIComponent(device_id)}/${encodeURIComponent(file)}`; 
+    // НОВОЕ: Используем API resolver для поддержки shared storage (дедупликация)
+    return `/api/files/resolve/${encodeURIComponent(device_id)}/${encodeURIComponent(file)}`; 
   }
 
   function enableSound(){
@@ -460,6 +468,7 @@ if (!device_id || !device_id.trim()) {
   
   async function showPlaceholder(forceRefresh = false) {
     console.log('[Player] 🔍 showPlaceholder вызван, forceRefresh=', forceRefresh);
+    console.log('[Player] 🔍 currentFileState:', currentFileState);
     
     // При force refresh сбрасываем текущую заглушку для принудительной перезагрузки
     if (forceRefresh) {
@@ -469,6 +478,7 @@ if (!device_id || !device_id.trim()) {
     
     const src = await resolvePlaceholder(forceRefresh);
     console.log('[Player] 🔍 Заглушка найдена:', src);
+    console.log('[Player] 🔍 src type:', typeof src, 'length:', src?.length);
     
     if (!src) {
       console.warn('[Player] ⚠️ Заглушка не найдена!');
@@ -522,16 +532,71 @@ if (!device_id || !device_id.trim()) {
     }
     
     currentPlaceholderSrc = src;
+    currentFileState = { type: 'placeholder', file: src, page: 1 }; // КРИТИЧНО: Сбрасываем состояние
     
     const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(src);
-    console.log('[Player] 🔍 Тип заглушки:', isImage ? 'изображение' : 'видео');
+    console.log('[Player] 🔍 Тип заглушки:', isImage ? 'изображение' : 'видео', 'src:', src);
     
     if (isImage) {
       console.log('[Player] 🖼️ Загрузка изображения заглушки');
       if (vjsPlayer) vjsPlayer.pause();
       pdf.removeAttribute('src');
-      img.src = src;
-      show(img);
+      
+      // КРИТИЧНО: Дожидаемся загрузки изображения ПЕРЕД показом!
+      // Иначе показывается черный экран
+      const tempImg = new Image();
+      
+      const showImagePlaceholder = () => {
+        console.log('[Player] ✅ Заглушка-изображение загружена, показываем');
+        img.src = src;
+        show(img);
+      };
+      
+      tempImg.onload = () => {
+        showImagePlaceholder();
+      };
+      
+      tempImg.onerror = () => {
+        console.error('[Player] ❌ Ошибка загрузки заглушки-изображения');
+        // Показываем сообщение об ошибке
+        if (preview) {
+          pdf.srcdoc = `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  body { 
+                    margin:0; padding:2rem; 
+                    display:flex; align-items:center; justify-content:center; 
+                    min-height:100vh; 
+                    background:#1e293b; color:#fff; 
+                    font-family:sans-serif; text-align:center;
+                  }
+                  h2 { color: #fbbf24; margin-bottom: 1rem; }
+                  p { color: #cbd5e1; line-height: 1.5; }
+                </style>
+              </head>
+              <body>
+                <div>
+                  <h2>⚠️ Ошибка загрузки заглушки</h2>
+                  <p>Изображение не найдено или повреждено</p>
+                </div>
+              </body>
+            </html>
+          `;
+          show(pdf);
+        }
+      };
+      
+      tempImg.src = src;
+      
+      // КРИТИЧНО: Если изображение уже загружено (например из кэша),
+      // событие onload НЕ сработает! Проверяем и показываем сразу
+      if (tempImg.complete && tempImg.naturalWidth > 0) {
+        console.log('[Player] ⚡ Заглушка-изображение из кэша, показываем сразу');
+        showImagePlaceholder();
+      }
     } else {
       // Видео заглушка через Video.js
       console.log('[Player] 🎬 Загрузка видео заглушки через Video.js');

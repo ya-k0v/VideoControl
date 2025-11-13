@@ -326,3 +326,35 @@ export function countFileReferences(filePath) {
   }
 }
 
+/**
+ * Обновить отображаемое имя файла (original_name)
+ * Физический файл (safe_name) НЕ меняется
+ * @param {string} deviceId
+ * @param {string} safeName - Физическое имя файла (не меняется)
+ * @param {string} newOriginalName - Новое отображаемое имя
+ * @returns {boolean} - true если обновлено успешно
+ */
+export function updateFileOriginalName(deviceId, safeName, newOriginalName) {
+  try {
+    const db = getDatabase();
+    const stmt = db.prepare(`
+      UPDATE files_metadata
+      SET original_name = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE device_id = ? AND safe_name = ?
+    `);
+    
+    const result = stmt.run(newOriginalName, deviceId, safeName);
+    
+    if (result.changes > 0) {
+      logFile('info', 'File original_name updated', { deviceId, safeName, newOriginalName });
+      return true;
+    } else {
+      logger.warn('No file found to update original_name', { deviceId, safeName });
+      return false;
+    }
+  } catch (error) {
+    logger.error('Failed to update file original_name', { error: error.message, deviceId, safeName, newOriginalName });
+    throw error;
+  }
+}
+

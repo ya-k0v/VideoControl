@@ -18,7 +18,7 @@ import { auditLog, AuditAction } from '../utils/audit-logger.js';
 import logger, { logFile, logSecurity } from '../utils/logger.js';
 import { getCachedResolution, clearResolutionCache } from '../video/resolution-cache.js';
 import { processUploadedFilesAsync } from '../utils/file-metadata-processor.js';
-import { getFileMetadata, deleteFileMetadata, getDeviceFilesMetadata, saveFileMetadata, countFileReferences } from '../database/files-metadata.js';
+import { getFileMetadata, deleteFileMetadata, getDeviceFilesMetadata, saveFileMetadata, countFileReferences, updateFileOriginalName } from '../database/files-metadata.js';
 
 const router = express.Router();
 
@@ -571,6 +571,26 @@ export function createFilesRouter(deps) {
     }
     
     const deviceFolder = path.join(DEVICES, d.folder);
+    
+    // НОВОЕ: Проверяем, это медиафайл с metadata в БД?
+    const metadata = getFileMetadata(id, oldName);
+    if (metadata) {
+      // Медиафайл - обновляем только original_name в БД, физический файл НЕ трогаем
+      console.log(`[rename] 📝 Обновление originalName в БД: ${oldName} -> ${newName}`);
+      updateFileOriginalName(id, oldName, newName);
+      
+      // Обновляем fileNames в памяти
+      if (!d.fileNames) d.fileNames = [];
+      const index = d.files.indexOf(oldName);
+      if (index !== -1) {
+        d.fileNames[index] = newName;
+      }
+      
+      io.emit('devices/updated');
+      return res.json({ success: true, oldName, newName, message: 'File renamed successfully (display name only)' });
+    }
+    
+    // Старая логика для PDF/PPTX/папок - физическое переименование
     let oldPath = path.join(deviceFolder, oldName);
     let isFolder = false;
     let actualOldName = oldName;
@@ -649,10 +669,39 @@ export function createFilesRouter(deps) {
       
       saveFileNamesMap(fileNamesMap);
       
-      // Обновляем список файлов устройства используя общую утилиту
-      const scanned = scanDeviceFiles(id, deviceFolder, fileNamesMap);
-      d.files = scanned.files;
-      d.fileNames = scanned.fileNames;
+      // КРИТИЧНО: НЕ пересканируем всё устройство!
+      // scanDeviceFiles вернёт ТОЛЬКО файлы на диске (PDF/PPTX/папки)
+      // и ПОТЕРЯЕТ медиафайлы из БД!
+      
+      // Вместо этого обновляем только конкретные записи в d.files и d.fileNames
+      if (!d.files) d.files = [];
+      if (!d.fileNames) d.fileNames = [];
+      
+      // Удаляем старое имя из массивов
+      const oldIndex = d.files.indexOf(actualOldName);
+      if (oldIndex !== -1) {
+        d.files.splice(oldIndex, 1);
+        d.fileNames.splice(oldIndex, 1);
+      }
+      
+      // Для PDF/PPTX папки также удаляем запись файла с расширением (если была)
+      if (isFolder && oldName.match(/\.(pdf|pptx)$/i)) {
+        const oldFileIndex = d.files.indexOf(oldName);
+        if (oldFileIndex !== -1) {
+          d.files.splice(oldFileIndex, 1);
+          d.fileNames.splice(oldFileIndex, 1);
+        }
+      }
+      
+      // Добавляем новое имя
+      d.files.push(finalName);
+      d.fileNames.push(newName);
+      
+      // Для PDF/PPTX папки также добавляем запись файла с расширением
+      if (isFolder && oldName.match(/\.(pdf|pptx)$/i)) {
+        d.files.push(newName);
+        d.fileNames.push(newName);
+      }
       
       io.emit('devices/updated');
       res.json({ success: true, oldName: actualOldName, newName: finalName });
@@ -869,16 +918,23 @@ export function createFilesRouter(deps) {
     
     for (let i = 0; i < files.length; i++) {
       const safeName = files[i];
-      const originalName = fileNames[i] || safeName;
       
       const fileStatus = getFileStatus(id, safeName) || { status: 'ready', progress: 100, canPlay: true };
       
       let resolution = null;
       let isPlaceholder = false;
       
-      // Получаем метаданные из БД (разрешение + флаг заглушки)
+      // Получаем метаданные из БД (разрешение + флаг заглушки + originalName)
       const ext = path.extname(safeName).toLowerCase();
       const metadata = getFileMetadata(id, safeName);
+      
+      // КРИТИЧНО: originalName берем из metadata (если есть), иначе из fileNames в памяти
+      let originalName;
+      if (metadata && metadata.original_name) {
+        originalName = metadata.original_name;
+      } else {
+        originalName = fileNames[i] || safeName;
+      }
       
       if (metadata) {
         // Флаг заглушки

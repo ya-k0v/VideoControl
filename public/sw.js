@@ -1,7 +1,7 @@
 // Service Worker для VideoControl - Production Ready
 // Версия 7.0 - File permissions fix, cache invalidation
 
-const VERSION = 'v8';
+const VERSION = 'v10';
 const CACHE_NAME = `videocontrol-static-${VERSION}`;
 const PLACEHOLDER_CACHE_NAME = `videocontrol-placeholder-${VERSION}`;
 const CONTENT_CACHE_NAME = `videocontrol-content-${VERSION}`;

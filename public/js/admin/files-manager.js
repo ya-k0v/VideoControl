@@ -29,6 +29,13 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
     };
   }).filter(f => f.safeName); // Фильтруем пустые имена
   
+  // НОВОЕ: Сортируем - заглушка всегда первая
+  allFiles.sort((a, b) => {
+    if (a.isPlaceholder && !b.isPlaceholder) return -1;
+    if (!a.isPlaceholder && b.isPlaceholder) return 1;
+    return a.originalName.localeCompare(b.originalName, 'ru', { numeric: true });
+  });
+  
   if (!allFiles || allFiles.length === 0) {
     panelEl.innerHTML = `
       <div class="meta" style="text-align:center; padding:var(--space-xl)">
@@ -55,22 +62,30 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
         // placeholders allowed only for image/video (no pdf/pptx/folders)
         const isEligible = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i.test(safeName);
         
-        // Определяем расширение файла
-        const hasExtension = safeName.includes('.');
-        const ext = hasExtension ? safeName.split('.').pop().toLowerCase() : '';
+        // КРИТИЧНО: Два расширения для разных целей!
+        // 1. displayExt из originalName - для отображения лейбла (PDF, PPTX, VID)
+        const hasDisplayExt = originalName.includes('.');
+        const displayExt = hasDisplayExt ? originalName.split('.').pop().toLowerCase() : '';
         
-        // Определяем метку типа файла (включая папки)
+        // 2. safeExt из safeName - для проверок типа файла на диске
+        const hasSafeExt = safeName.includes('.');
+        const safeExt = hasSafeExt ? safeName.split('.').pop().toLowerCase() : '';
+        
+        // НОВОЕ: Убираем расширение из отображаемого имени (как на спикере)
+        const displayName = originalName.replace(/\.[^.]+$/, '');
+        
+        // Определяем метку типа файла из displayExt (что видит пользователь)
         let typeLabel = 'VID'; // По умолчанию
-        if (ext === 'pdf') typeLabel = 'PDF';
-        else if (ext === 'pptx') typeLabel = 'PPTX';
-        else if (['png','jpg','jpeg','gif','webp'].includes(ext)) typeLabel = 'IMG';
-        else if (ext === 'zip' || !hasExtension) {
+        if (displayExt === 'pdf') typeLabel = 'PDF';
+        else if (displayExt === 'pptx') typeLabel = 'PPTX';
+        else if (['png','jpg','jpeg','gif','webp'].includes(displayExt)) typeLabel = 'IMG';
+        else if (displayExt === 'zip' || !hasDisplayExt) {
           // ZIP или папка без расширения - это папка с изображениями
           typeLabel = 'FOLDER';
         }
         
-        // НОВОЕ: Определяем статус для видео
-        const isVideo = ['mp4','webm','ogg','mkv','mov','avi'].includes(ext);
+        // НОВОЕ: Определяем статус для видео из safeExt (фактический файл)
+        const isVideo = ['mp4','webm','ogg','mkv','mov','avi'].includes(safeExt);
         const fileStatus = status || 'ready';
         const isProcessing = fileStatus === 'processing' || fileStatus === 'checking';
         const hasError = fileStatus === 'error';
@@ -122,7 +137,8 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
               style="border:var(--border); background:${isPlaceholder ? 'rgba(59, 130, 246, 0.1)' : 'var(--panel-2)'}; ${isPlaceholder ? 'border-left: 3px solid rgba(59, 130, 246, 0.6);' : ''} ${isProcessing ? 'opacity:0.7;' : ''} ${canPlay ? 'cursor:move;' : ''}">
             <div class="file-item-header">
               <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
-                <span class="file-item-name fileName-editable" data-safe="${encodeURIComponent(safeName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">${originalName}</span>
+                ${isPlaceholder ? '<span style="background:rgba(59, 130, 246, 0.8); color:white; padding:2px 6px; border-radius:4px; font-size:0.7rem; font-weight:600; align-self:center; flex-shrink:0;">📌 ЗАГЛУШКА</span>' : ''}
+                <span class="file-item-name fileName-editable" data-safe="${encodeURIComponent(safeName)}" data-original-full="${encodeURIComponent(originalName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">${displayName}</span>
                 <button class="primary fileRenameSaveBtn" style="display:none; min-width:28px; width:28px; height:28px; padding:0; border-radius:var(--radius-sm); flex-shrink:0" title="Сохранить">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block">
                     <polyline points="20 6 9 17 4 12"></polyline>
@@ -322,15 +338,20 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   panelEl.querySelectorAll('.fileName-editable').forEach(nameEl => {
     const fileItem = nameEl.closest('.file-item');
     const saveBtn = fileItem.querySelector('.fileRenameSaveBtn');
-    let originalName = nameEl.textContent.trim();
+    const safeName = decodeURIComponent(nameEl.getAttribute('data-safe'));
+    const originalFullName = decodeURIComponent(nameEl.getAttribute('data-original-full'));
+    
+    // НОВОЕ: Извлекаем расширение из originalFullName для автодобавления
+    const fileExt = originalFullName.includes('.') ? originalFullName.substring(originalFullName.lastIndexOf('.')) : '';
+    
+    let originalDisplayName = nameEl.textContent.trim();
     let isEditing = false;
     let savingFromButton = false;
-    const safeName = decodeURIComponent(nameEl.getAttribute('data-safe'));
     
     nameEl.addEventListener('click', () => {
       if (!isEditing) {
         isEditing = true;
-        originalName = nameEl.textContent.trim();
+        originalDisplayName = nameEl.textContent.trim();
         nameEl.contentEditable = 'true';
         nameEl.style.background = 'var(--panel)';
         nameEl.style.border = 'var(--border)';
@@ -349,9 +370,9 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
     
     nameEl.addEventListener('blur', () => {
       if (isEditing && !savingFromButton) {
-        const newName = nameEl.textContent.trim();
-        if (newName && newName !== originalName) {
-          saveFileName(newName);
+        const newDisplayName = nameEl.textContent.trim();
+        if (newDisplayName && newDisplayName !== originalDisplayName) {
+          saveFileName(newDisplayName);
         } else {
           cancelEdit();
         }
@@ -362,9 +383,9 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
     nameEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        const newName = nameEl.textContent.trim();
-        if (newName && newName !== originalName) {
-          saveFileName(newName);
+        const newDisplayName = nameEl.textContent.trim();
+        if (newDisplayName && newDisplayName !== originalDisplayName) {
+          saveFileName(newDisplayName);
         } else {
           cancelEdit();
         }
@@ -374,8 +395,11 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
       }
     });
     
-    const saveFileName = async (newName) => {
+    const saveFileName = async (newDisplayName) => {
       try {
+        // КРИТИЧНО: Добавляем расширение обратно из safeName
+        const newName = newDisplayName + fileExt;
+        
         const response = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files/${encodeURIComponent(safeName)}/rename`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -411,7 +435,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
     const cancelEdit = () => {
       isEditing = false;
       nameEl.contentEditable = 'false';
-      nameEl.textContent = originalName;
+      nameEl.textContent = originalDisplayName;
       nameEl.style.background = 'transparent';
       nameEl.style.border = 'none';
       if (saveBtn) saveBtn.style.display = 'none';
@@ -422,9 +446,9 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
         e.preventDefault();
         e.stopPropagation();
         savingFromButton = true;
-        const newName = nameEl.textContent.trim();
-        if (newName && newName !== originalName) {
-          await saveFileName(newName);
+        const newDisplayName = nameEl.textContent.trim();
+        if (newDisplayName && newDisplayName !== originalDisplayName) {
+          await saveFileName(newDisplayName);
         } else {
           cancelEdit();
         }

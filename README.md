@@ -604,7 +604,6 @@ MIT License - см. LICENSE файл для деталей
 - **GitHub:** https://github.com/ya-k0v/VideoControl
 - **Releases:** https://github.com/ya-k0v/VideoControl/releases
 - **Issues:** https://github.com/ya-k0v/VideoControl/issues
-- **Wiki:** https://github.com/ya-k0v/VideoControl/wiki (в разработке)
 
 ---
 

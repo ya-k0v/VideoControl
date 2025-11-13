@@ -23,6 +23,7 @@ export const AuditAction = {
   USER_DELETE: 'user.delete',
   USER_DISABLE: 'user.disable',
   USER_ENABLE: 'user.enable',
+  PASSWORD_RESET: 'user.password_reset',
   
   // Управление устройствами
   DEVICE_CREATE: 'device.create',

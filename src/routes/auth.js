@@ -456,6 +456,78 @@ router.delete('/users/:id', requireAuth, requireAdmin, deleteLimiter, async (req
   }
 });
 
+/**
+ * POST /api/auth/users/:id/reset-password
+ * Сброс пароля пользователя администратором (без подтверждения старого)
+ */
+router.post('/users/:id/reset-password',
+  requireAuth,
+  requireAdmin,
+  body('new_password').isLength({ min: 8 }),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const userId = parseInt(req.params.id);
+    const { new_password } = req.body;
+    const db = getDatabase();
+
+    try {
+      // Получаем информацию о пользователе
+      const userToUpdate = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(userId);
+      
+      if (!userToUpdate) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Хешируем новый пароль
+      const passwordHash = await bcrypt.hash(new_password, 10);
+
+      // Обновляем пароль
+      db.prepare(`
+        UPDATE users 
+        SET password_hash = ?, updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `).run(passwordHash, userId);
+
+      // Инвалидируем все refresh tokens пользователя (принудительный выход со всех устройств)
+      db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(userId);
+
+      // Логируем сброс пароля
+      await auditLog({
+        userId: req.user.id,
+        action: AuditAction.PASSWORD_RESET,
+        resource: `user:${userId}`,
+        details: { 
+          targetUsername: userToUpdate.username,
+          targetRole: userToUpdate.role,
+          resetBy: req.user.username,
+          note: 'Password reset by admin (forced logout from all devices)'
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        status: 'success'
+      });
+      logAuth('warn', 'Password reset by admin', { 
+        targetUserId: userId, 
+        targetUsername: userToUpdate.username,
+        resetBy: req.user.username,
+        resetById: req.user.id
+      });
+
+      res.json({ 
+        success: true,
+        message: 'Password updated successfully. User has been logged out from all devices.'
+      });
+    } catch (err) {
+      logger.error('Reset password error', { error: err.message, stack: err.stack, userId });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 export function createAuthRouter() {
   return router;
 }

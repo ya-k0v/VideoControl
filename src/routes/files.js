@@ -101,11 +101,12 @@ function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
   
   // 1. Получаем файлы из БД (обычные файлы)
   const filesMetadata = getDeviceFilesMetadata(deviceId);
-  let files = filesMetadata.map(f => f.safe_name);
-  let fileNames = filesMetadata.map(f => f.original_name);
   
-  // 2. Сканируем папку устройства для PDF/PPTX/image папок (они остаются в /content/{device}/)
+  // 2. Сканируем папку устройства для PDF/PPTX/image папок
   const deviceFolder = path.join(DEVICES, device.folder);
+  const filesInFolders = new Set(); // Файлы которые находятся внутри папок
+  const folders = [];
+  
   if (fs.existsSync(deviceFolder)) {
     const folderEntries = fs.readdirSync(deviceFolder);
     for (const entry of folderEntries) {
@@ -116,9 +117,17 @@ function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
         const stat = fs.statSync(entryPath);
         
         if (stat.isDirectory()) {
-          // Это папка (PPTX/PDF или изображения) - добавляем
-          files.push(entry);
-          fileNames.push(fileNamesMap[deviceId]?.[entry] || entry);
+          // Это папка - добавляем её
+          folders.push(entry);
+          
+          // КРИТИЧНО: Сканируем файлы внутри папки
+          // Чтобы исключить их из списка БД (избежать дубликатов)
+          try {
+            const filesInThisFolder = fs.readdirSync(entryPath);
+            filesInThisFolder.forEach(f => filesInFolders.add(f));
+          } catch (e) {
+            // Игнорируем ошибки чтения папки
+          }
         }
       } catch (e) {
         // Игнорируем ошибки доступа к файлам
@@ -126,13 +135,27 @@ function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
     }
   }
   
+  // 3. Фильтруем файлы из БД: исключаем те что находятся в папках устройства
+  const filteredMetadata = filesMetadata.filter(f => !filesInFolders.has(f.safe_name));
+  
+  let files = filteredMetadata.map(f => f.safe_name);
+  let fileNames = filteredMetadata.map(f => f.original_name);
+  
+  // 4. Добавляем папки
+  folders.forEach(folder => {
+    files.push(folder);
+    fileNames.push(fileNamesMap[deviceId]?.[folder] || folder);
+  });
+  
   device.files = files;
   device.fileNames = fileNames;
   
   logFile('debug', 'Device files updated from DB + folders', {
     deviceId,
-    dbFiles: filesMetadata.length,
-    folders: files.length - filesMetadata.length,
+    dbFilesTotal: filesMetadata.length,
+    dbFilesShown: filteredMetadata.length,
+    dbFilesHidden: filesMetadata.length - filteredMetadata.length,
+    folders: folders.length,
     total: files.length
   });
 }
@@ -234,6 +257,9 @@ export function createFilesRouter(deps) {
         }
         
         // Перемещаем файлы из /content/ в /content/{device}/{folder}/
+        let movedCount = 0;
+        let errorCount = 0;
+        
         for (const file of req.files) {
           try {
             const sourcePath = path.join(DEVICES, file.filename);  // Из /content/
@@ -249,16 +275,138 @@ export function createFilesRouter(deps) {
             
             const targetPath = path.join(targetFolder, targetFileName);
             
+            // КРИТИЧНО: Если файл уже существует в целевой папке - удаляем старый
+            if (fs.existsSync(targetPath)) {
+              console.log(`[upload] 🔄 Файл уже существует, заменяем: ${targetFileName}`);
+              fs.unlinkSync(targetPath);
+            }
+            
+            // КРИТИЧНО: Проверяем существует ли исходный файл для перемещения
+            // Может не существовать если файл с таким именем уже был в shared storage
+            if (!fs.existsSync(sourcePath)) {
+              console.log(`[upload] ⚠️ Исходный файл не найден: ${file.filename}`);
+              
+              // Возможно файл с таким именем уже существует в shared storage (/content/)
+              // Для папок нужно СКОПИРОВАТЬ его, а не переместить
+              const sharedFile = path.join(DEVICES, targetFileName);
+              if (fs.existsSync(sharedFile)) {
+                console.log(`[upload] 🔄 Файл найден в shared storage, копируем: ${targetFileName}`);
+                
+                // Копируем из shared storage в папку
+                fs.copyFileSync(sharedFile, targetPath);
+                fs.chmodSync(targetPath, 0o644);
+                console.log(`[upload] ✅ Скопирован из shared: ${targetFileName} -> ${safeFolderName}/${targetFileName}`);
+                movedCount++;
+                continue;
+              }
+              
+              // Файл не найден нигде - ошибка
+              console.warn(`[upload] ❌ Файл не найден ни в uploads, ни в shared: ${targetFileName}`);
+              errorCount++;
+              continue;
+            }
+            
             // Перемещаем файл
             fs.renameSync(sourcePath, targetPath);
             fs.chmodSync(targetPath, 0o644);
             console.log(`[upload] ✅ Перемещен: ${file.filename} -> ${safeFolderName}/${targetFileName}`);
+            movedCount++;
           } catch (e) {
-            console.warn(`[upload] ⚠️ Ошибка перемещения ${file.filename}:`, e);
+            errorCount++;
+            logger.error('[upload] ❌ Ошибка перемещения файла в папку', { 
+              error: e.message, 
+              fileName: file.filename,
+              originalName: file.originalname,
+              deviceId: id,
+              folderName: safeFolderName
+            });
+            console.error(`[upload] ❌ Ошибка перемещения ${file.filename}:`, e.message);
+            
+            // КРИТИЧНО: Если не удалось переместить - НЕ оставляем файл в корне!
+            // Удаляем его чтобы не было "потерянных" файлов
+            try {
+              const sourcePath = path.join(DEVICES, file.filename);
+              if (fs.existsSync(sourcePath)) {
+                fs.unlinkSync(sourcePath);
+                console.log(`[upload] 🗑️ Удален файл который не удалось переместить: ${file.filename}`);
+              }
+            } catch (cleanupErr) {
+              logger.error('[upload] Failed to cleanup unmoved file', { 
+                error: cleanupErr.message,
+                fileName: file.filename
+              });
+            }
           }
         }
         
-        console.log(`[upload] 📁 Папка создана: ${safeFolderName} (${req.files.length} файлов)`);
+        console.log(`[upload] 📁 Папка создана: ${safeFolderName} (${movedCount}/${req.files.length} файлов перемещено${errorCount > 0 ? `, ${errorCount} ошибок` : ''})`);
+        
+        if (errorCount > 0) {
+          logger.warn('[upload] Some files failed to move to folder', { 
+            deviceId: id,
+            folderName: safeFolderName,
+            totalFiles: req.files.length,
+            movedFiles: movedCount,
+            errorCount
+          });
+        }
+        
+        // КРИТИЧНО: Frontend передает ПОЛНЫЙ список файлов которые должны быть в папке
+        // (включая те что Multer НЕ получил, потому что они уже существуют в shared)
+        let allExpectedFiles = [];
+        if (req.body.expectedFiles) {
+          try {
+            allExpectedFiles = JSON.parse(req.body.expectedFiles);
+            console.log(`[upload] 📋 Frontend передал список ожидаемых файлов: ${allExpectedFiles.length}`);
+          } catch (e) {
+            console.warn('[upload] ⚠️ Не удалось распарсить expectedFiles:', e.message);
+          }
+        }
+        
+        // Если frontend НЕ передал список (старая версия) - используем req.files
+        if (allExpectedFiles.length === 0) {
+          console.log('[upload] ⚠️ Frontend не передал expectedFiles, используем req.files');
+          allExpectedFiles = req.files.map(f => {
+            let fileName = f.originalname;
+            if (fileName.includes('/')) {
+              fileName = fileName.split('/').pop();
+            }
+            return fileName;
+          });
+        }
+        
+        // Проверяем какие файлы реально есть в папке
+        const filesInFolder = fs.readdirSync(targetFolder);
+        const missingFiles = allExpectedFiles.filter(f => !filesInFolder.includes(f));
+        
+        console.log(`[upload] 🔍 Проверка папки: ожидалось ${allExpectedFiles.length}, найдено ${filesInFolder.length}, не хватает ${missingFiles.length}`);
+        
+        // Копируем недостающие файлы из shared storage
+        let copiedFromShared = 0;
+        for (const missingFile of missingFiles) {
+          const sharedPath = path.join(DEVICES, missingFile);
+          if (fs.existsSync(sharedPath)) {
+            const targetPath = path.join(targetFolder, missingFile);
+            try {
+              fs.copyFileSync(sharedPath, targetPath);
+              fs.chmodSync(targetPath, 0o644);
+              console.log(`[upload] ✅ Скопирован из shared: ${missingFile}`);
+              copiedFromShared++;
+            } catch (e) {
+              logger.error('[upload] Failed to copy from shared', { 
+                error: e.message,
+                fileName: missingFile,
+                deviceId: id,
+                folderName: safeFolderName
+              });
+            }
+          } else {
+            console.warn(`[upload] ⚠️ Файл не найден в shared storage: ${missingFile}`);
+          }
+        }
+        
+        const finalCount = fs.readdirSync(targetFolder).length;
+        console.log(`[upload] 📁 Папка готова: ${safeFolderName} (${finalCount} файлов${copiedFromShared > 0 ? `, ${copiedFromShared} скопировано из shared` : ''})`);
         
         // Сохраняем маппинг оригинального имени папки
         if (!fileNamesMap[id]) fileNamesMap[id] = {};

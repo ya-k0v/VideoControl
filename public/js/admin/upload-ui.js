@@ -334,6 +334,17 @@ export function setupUploadUI(card, deviceId, filesPanelEl, renderFilesPane, soc
         // Если это папка, добавляем метаданные
         if (folderName) {
           form.append('folderName', folderName);
+          
+          // КРИТИЧНО: Передаем ПОЛНЫЙ список файлов которые должны быть в папке
+          // (не только те что загружаются, но и все из pending)
+          const allFileNamesInFolder = pending.map(f => {
+            const relativePath = f.webkitRelativePath || f.name;
+            // Берем только имя файла без пути
+            return relativePath.includes('/') ? relativePath.split('/').pop() : relativePath;
+          });
+          form.append('expectedFiles', JSON.stringify(allFileNamesInFolder));
+          console.log('[Upload] 📝 Ожидаемые файлы в папке:', allFileNamesInFolder);
+          
           filesToUpload.forEach(f => {
             const relativePath = f.webkitRelativePath || f.name;
             form.append('files', f, relativePath);

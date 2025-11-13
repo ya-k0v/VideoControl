@@ -173,6 +173,12 @@ export function handleDisconnect(socket, deps) {
   
   // disconnect - сокет полностью отключен
   socket.on('disconnect', () => {
+    // ИСПРАВЛЕНО: Очистка event listeners для предотвращения утечек памяти
+    if (socket.conn) {
+      socket.conn.removeAllListeners('upgrade');
+      socket.conn.removeAllListeners('close');
+    }
+    
     if (socket.data.inactivityTimeout) {
       clearInterval(socket.data.inactivityTimeout);
       socket.data.inactivityTimeout = null;

@@ -169,6 +169,18 @@ export function createFilesRouter(deps) {
     
     upload.array('files', 50)(req, res, async (err) => {
       if (err) {
+        // ИСПРАВЛЕНО: Специфичная обработка ошибок загрузки
+        if (err.code === 'ENOSPC') {
+          logger.error('[Upload] No space left on device', { error: err.message });
+          return res.status(507).json({ error: 'No space left on device' });
+        } else if (err.code === 'LIMIT_FILE_SIZE') {
+          logger.warn('[Upload] File size limit exceeded', { error: err.message });
+          return res.status(413).json({ error: 'File size limit exceeded' });
+        } else if (err.message === 'unsupported type') {
+          return res.status(415).json({ error: 'Unsupported file type' });
+        }
+        
+        logger.error('[Upload] Upload error', { error: err.message, code: err.code });
         return res.status(400).json({ error: err.message });
       }
       
@@ -873,12 +885,12 @@ export function createFilesRouter(deps) {
         isPlaceholder = !!metadata.is_placeholder;
         
         // Разрешение для видео файлов
-        if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
+      if (['.mp4', '.webm', '.ogg', '.mkv', '.mov', '.avi'].includes(ext)) {
           if (metadata.video_width && metadata.video_height) {
-            resolution = {
+                resolution = {
               width: metadata.video_width,
               height: metadata.video_height
-            };
+                };
           } else if (fileStatus.status !== 'processing' && fileStatus.status !== 'checking') {
             // Fallback: если метаданных нет в БД - используем кэш с FFmpeg
             // (для файлов загруженных до миграции БД)

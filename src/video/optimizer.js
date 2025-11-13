@@ -46,6 +46,7 @@ export function needsOptimization(params) {
     params.fps > (thresholds.maxFps || 30) ||
     params.bitrate > (thresholds.maxBitrate || 6000000) ||
     params.profile === 'High 10' ||
+    params.profile === 'High 4:2:2' ||  // ИСПРАВЛЕНО: Добавлена проверка High 4:2:2
     params.profile === 'High 4:4:4 Predictive' ||
     (params.codec !== 'h264' && params.codec !== 'H.264');
   
@@ -70,8 +71,19 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
     return { success: false, message: 'Video optimization disabled' };
   }
   
+  // ИСПРАВЛЕНО: Получаем путь из БД для новой архитектуры storage
+  const { getFileMetadata } = await import('../database/files-metadata.js');
+  const metadata = getFileMetadata(deviceId, fileName);
+  
+  let filePath;
+  if (metadata && metadata.file_path) {
+    // Медиафайл из БД (в /content/)
+    filePath = metadata.file_path;
+  } else {
+    // Fallback для PDF/PPTX/folders (в /content/{device}/)
   const deviceFolder = path.join(DEVICES, d.folder);
-  const filePath = path.join(deviceFolder, fileName);
+    filePath = path.join(deviceFolder, fileName);
+  }
   
   if (!fs.existsSync(filePath)) {
     return { success: false, message: 'File not found' };
@@ -87,14 +99,27 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
   // Устанавливаем статус "проверка"
   setFileStatus(deviceId, fileName, { status: 'checking', progress: 0, canPlay: false });
   
-  // Проверяем параметры видео
-  const params = await checkVideoParameters(filePath);
+  // НОВОЕ: Сначала проверяем метаданные из БД (быстрее чем FFmpeg!)
+  let params;
+  if (metadata && metadata.video_width && metadata.video_profile) {
+    params = {
+      codec: metadata.video_codec,
+      width: metadata.video_width,
+      height: metadata.video_height,
+      fps: 30,  // Приблизительно
+      bitrate: metadata.video_bitrate || 0,
+      profile: metadata.video_profile  // КРИТИЧНО!
+    };
+    console.log(`[VideoOpt] 📊 Параметры из БД: ${params.width}x${params.height}, ${params.codec}/${params.profile}`);
+  } else {
+    // Fallback: получаем через FFmpeg если нет в БД
+    params = await checkVideoParameters(filePath);
   if (!params) {
     deleteFileStatus(deviceId, fileName);
     return { success: false, message: 'Cannot read video parameters' };
   }
-  
-  console.log(`[VideoOpt] 📊 Параметры: ${params.width}x${params.height} @ ${params.fps}fps, ${Math.round(params.bitrate/1000)}kbps, ${params.codec}/${params.profile}`);
+    console.log(`[VideoOpt] 📊 Параметры через FFmpeg: ${params.width}x${params.height} @ ${params.fps}fps, ${Math.round(params.bitrate/1000)}kbps, ${params.codec}/${params.profile}`);
+  }
   
   // Проверяем нужна ли оптимизация
   if (!needsOptimization(params)) {
@@ -133,12 +158,15 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
   
   // КРИТИЧНО: Всегда конвертируем в MP4 (даже если оригинал WebM/MKV/AVI)
   const outputExt = '.mp4';
-  const tempPath = path.join(deviceFolder, `.optimizing_${Date.now()}${outputExt}`);
+  
+  // ИСПРАВЛЕНО: Временный файл сохраняем в той же папке что и оригинал
+  const fileDir = path.dirname(filePath);
+  const tempPath = path.join(fileDir, `.optimizing_${Date.now()}${outputExt}`);
   
   // Определяем финальное имя файла
   const baseFileName = path.basename(fileName, ext);
   const finalFileName = ext === '.mp4' ? fileName : `${baseFileName}.mp4`;
-  const finalPath = path.join(deviceFolder, finalFileName);
+  const finalPath = path.join(fileDir, finalFileName);
   
   console.log(`[VideoOpt] 🎬 Начало конвертации: ${fileName}`);
   if (ext !== '.mp4') {
@@ -177,6 +205,16 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       
       let duration = 0;
       let stderr = '';
+      let isResolved = false;
+      
+      // ИСПРАВЛЕНО: Timeout 30 минут для предотвращения зависания
+      const timeout = setTimeout(() => {
+        if (!isResolved) {
+          console.error(`[VideoOpt] ⏱️ FFmpeg timeout (30 мин)`);
+          ffmpegProcess.kill('SIGKILL');
+          reject(new Error('FFmpeg timeout'));
+        }
+      }, 30 * 60 * 1000);
       
       // Парсим вывод FFmpeg для прогресса
       ffmpegProcess.stderr.on('data', (data) => {
@@ -221,6 +259,9 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       });
       
       ffmpegProcess.on('close', (code) => {
+        clearTimeout(timeout); // ИСПРАВЛЕНО: Очищаем timeout
+        isResolved = true;
+        
         if (code === 0) {
           console.log(`[VideoOpt] ✅ FFmpeg завершен успешно`);
           resolve();
@@ -232,6 +273,9 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       });
       
       ffmpegProcess.on('error', (err) => {
+        clearTimeout(timeout); // ИСПРАВЛЕНО: Очищаем timeout
+        isResolved = true;
+        
         console.error(`[VideoOpt] ❌ Ошибка запуска FFmpeg: ${err}`);
         reject(err);
       });
@@ -269,6 +313,44 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       // Устанавливаем права
       fs.chmodSync(finalPath, 0o644);
       
+      // НОВОЕ: Обновляем метаданные в БД (удаляем старую запись, создаем новую)
+      if (metadata) {
+        const { deleteFileMetadata, saveFileMetadata } = await import('../database/files-metadata.js');
+        const newStats = fs.statSync(finalPath);
+        const newParams = await checkVideoParameters(finalPath);
+        
+        // Удаляем старую запись (.webm)
+        deleteFileMetadata(deviceId, fileName);
+        
+        // Создаем новую запись (.mp4)
+        saveFileMetadata({
+          deviceId,
+          safeName: finalFileName,
+          originalName: fileNamesMap[deviceId]?.[finalFileName] || finalFileName,
+          filePath: finalPath,
+          fileSize: newStats.size,
+          md5Hash: metadata.md5_hash,
+          partialMd5: metadata.partial_md5,
+          mimeType: 'video/mp4',
+          videoParams: {
+            width: newParams.width,
+            height: newParams.height,
+            duration: newParams.duration,
+            codec: newParams.codec,
+            profile: newParams.profile,  // КРИТИЧНО: Сохраняем новый profile!
+            bitrate: newParams.bitrate
+          },
+          audioParams: {
+            codec: metadata.audio_codec,
+            bitrate: metadata.audio_bitrate,
+            channels: metadata.audio_channels
+          },
+          fileMtime: newStats.mtimeMs
+        });
+        
+        console.log(`[VideoOpt] 📊 Метаданные обновлены в БД (${fileName} → ${finalFileName})`);
+      }
+      
       // Обновляем список файлов устройства
       const fileIndex = d.files.indexOf(fileName);
       if (fileIndex >= 0) {
@@ -296,6 +378,40 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       
       // Устанавливаем права
       fs.chmodSync(filePath, 0o644);
+      
+      // НОВОЕ: Обновляем метаданные в БД после оптимизации
+      if (metadata) {
+        const { saveFileMetadata } = await import('../database/files-metadata.js');
+        const newStats = fs.statSync(filePath);
+        const newParams = await checkVideoParameters(filePath);
+        
+        saveFileMetadata({
+          deviceId,
+          safeName: fileName,
+          originalName: metadata.original_name,
+          filePath,
+          fileSize: newStats.size,
+          md5Hash: metadata.md5_hash,  // MD5 сохраняем старый (т.к. для дедупликации)
+          partialMd5: metadata.partial_md5,
+          mimeType: 'video/mp4',
+          videoParams: {
+            width: newParams.width,
+            height: newParams.height,
+            duration: newParams.duration,
+            codec: newParams.codec,
+            profile: newParams.profile,  // КРИТИЧНО: Сохраняем новый profile!
+            bitrate: newParams.bitrate
+          },
+          audioParams: {
+            codec: metadata.audio_codec,
+            bitrate: metadata.audio_bitrate,
+            channels: metadata.audio_channels
+          },
+          fileMtime: newStats.mtimeMs
+        });
+        
+        console.log(`[VideoOpt] 📊 Метаданные обновлены в БД`);
+      }
       
       // Устанавливаем статус "готово"
       setFileStatus(deviceId, fileName, { status: 'ready', progress: 100, canPlay: true });

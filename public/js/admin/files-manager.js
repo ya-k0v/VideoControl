@@ -11,11 +11,11 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   const res = await adminFetch(`/api/devices/${encodeURIComponent(deviceId)}/files-with-status`);
   const filesData = await res.json();
   
-  // Файлы уже в формате { safeName, originalName, status, progress, canPlay, error, resolution }
+  // Файлы уже в формате { safeName, originalName, status, progress, canPlay, error, resolution, isPlaceholder }
   const allFiles = filesData.map(item => {
     if (typeof item === 'string') {
       // Старый формат (для обратной совместимости)
-      return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true, resolution: null };
+      return { safeName: item, originalName: item, status: 'ready', progress: 100, canPlay: true, resolution: null, isPlaceholder: false };
     }
     return { 
       safeName: item.safeName || item.name || '',
@@ -24,7 +24,8 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
       progress: item.progress || 100,
       canPlay: item.canPlay !== false,
       error: item.error || null,
-      resolution: item.resolution || null
+      resolution: item.resolution || null,
+      isPlaceholder: !!item.isPlaceholder  // НОВОЕ: Флаг заглушки
     };
   }).filter(f => f.safeName); // Фильтруем пустые имена
   
@@ -50,7 +51,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
   
   panelEl.innerHTML = `
     <ul class="list" style="display:grid; gap:var(--space-sm)">
-      ${files.map(({ safeName, originalName, status, progress, canPlay, error, resolution }) => {
+      ${files.map(({ safeName, originalName, status, progress, canPlay, error, resolution, isPlaceholder }) => {
         // placeholders allowed only for image/video (no pdf/pptx/folders)
         const isEligible = /\.(mp4|webm|ogg|mkv|mov|avi|mp3|wav|m4a|png|jpg|jpeg|gif|webp)$/i.test(safeName);
         
@@ -118,7 +119,7 @@ export async function refreshFilesPanel(deviceId, panelEl, adminFetch, getPageSi
               draggable="${canPlay ? 'true' : 'false'}" 
               data-device-id="${deviceId}"
               data-file-name="${encodeURIComponent(safeName)}"
-              style="border:var(--border); background:var(--panel-2); ${isProcessing ? 'opacity:0.7;' : ''} ${canPlay ? 'cursor:move;' : ''}">
+              style="border:var(--border); background:${isPlaceholder ? 'rgba(59, 130, 246, 0.1)' : 'var(--panel-2)'}; ${isPlaceholder ? 'border-left: 3px solid rgba(59, 130, 246, 0.6);' : ''} ${isProcessing ? 'opacity:0.7;' : ''} ${canPlay ? 'cursor:move;' : ''}">
             <div class="file-item-header">
               <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0;">
                 <span class="file-item-name fileName-editable" data-safe="${encodeURIComponent(safeName)}" style="cursor:pointer; padding:var(--space-xs) var(--space-sm); border-radius:var(--radius-sm); transition:all 0.2s; flex:1; min-width:0;" contenteditable="false">${originalName}</span>

@@ -8,9 +8,9 @@
 - `videocontrol.service` - systemd сервис
 
 ### Конфигурация
-- `devices.json` - список устройств
-- `file-names-map.json` - оригинальные имена файлов
+- `main.db` - единая SQLite база данных (устройства, файлы, пользователи)
 - `video-optimization.json` - профили оптимизации видео
+- `.env` - переменные окружения (JWT_SECRET и т.д.)
 
 ## Клиентские интерфейсы (public/)
 

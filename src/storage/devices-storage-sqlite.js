@@ -14,7 +14,7 @@ import {
   deleteDeviceFileNames
 } from '../database/database.js';
 import { DEVICES } from '../config/constants.js';
-import { isSystemFile } from '../utils/sanitize.js';
+import { scanDeviceFiles } from '../utils/file-scanner.js';
 
 /**
  * Загрузить устройства из БД
@@ -66,61 +66,8 @@ export function saveFileNamesToDB(fileNamesMap) {
 }
 
 /**
- * Сканировать файлы устройства
- * @param {string} deviceId 
- * @param {string} deviceFolder 
- * @param {Object} fileNamesMap 
- * @returns {Object} {files, fileNames}
- */
-export function scanDeviceFiles(deviceId, deviceFolder, fileNamesMap) {
-  const files = [];
-  const fileNames = [];
-  
-  if (!fs.existsSync(deviceFolder)) {
-    return { files, fileNames };
-  }
-  
-  const entries = fs.readdirSync(deviceFolder);
-  
-  for (const entry of entries) {
-    const entryPath = path.join(deviceFolder, entry);
-    const stat = fs.statSync(entryPath);
-    
-    if (stat.isFile()) {
-      if (!isSystemFile(entry)) {
-        files.push(entry);
-        const originalName = fileNamesMap[deviceId]?.[entry] || entry;
-        fileNames.push(originalName);
-      }
-    } else if (stat.isDirectory()) {
-      // Папки (PDF/PPTX конвертированные или папки с изображениями)
-      const folderContents = fs.readdirSync(entryPath);
-      const originalFile = folderContents.find(f => /\.(pdf|pptx)$/i.test(f));
-      
-      if (originalFile) {
-        // PDF/PPTX папка - добавляем с расширением
-        const fullName = entry + path.extname(originalFile);
-        files.push(fullName);
-        const originalName = fileNamesMap[deviceId]?.[entry] || fullName;
-        fileNames.push(originalName);
-      } else {
-        // Проверяем, есть ли изображения в папке (папка изображений)
-        const hasImages = folderContents.some(f => /\.(png|jpg|jpeg|gif|webp)$/i.test(f));
-        if (hasImages) {
-          // Это папка с изображениями - добавляем её как файл
-          files.push(entry); // Добавляем имя папки
-          const originalName = fileNamesMap[deviceId]?.[entry] || entry;
-          fileNames.push(originalName);
-        }
-      }
-    }
-  }
-  
-  return { files, fileNames };
-}
-
-/**
  * Сканировать все устройства
+ * ПРИМЕЧАНИЕ: Функция scanDeviceFiles импортируется из ../utils/file-scanner.js
  * @param {Object} devices 
  * @param {Object} fileNamesMap 
  */

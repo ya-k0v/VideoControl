@@ -140,7 +140,7 @@
           if (response.ok) {
             // Токен валидный - редирект по роли
             console.log('[Index] Token valid, redirecting to', user.role === 'speaker' ? 'speaker' : 'admin');
-            if (user.role === 'speaker') {
+      if (user.role === 'speaker') {
               window.location.replace('/speaker.html');
             } else {
               window.location.replace('/admin.html');

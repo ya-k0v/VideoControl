@@ -33,42 +33,54 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
     logFile('debug', 'Processing file metadata', { deviceId, safeName, fileSize });
     
     // Вычисляем MD5 (в фоне, не блокируем upload response)
-    const md5Hash = await calculateMD5(filePath);
+    const isBigFile = fileSize > 100 * 1024 * 1024;
     
-    logFile('debug', 'MD5 calculated', { deviceId, safeName, md5Hash: md5Hash.substring(0, 12) });
+    // Для больших файлов вычисляем оба MD5: partial (10MB) и full
+    const partialMd5 = isBigFile ? await calculateMD5(filePath, true) : null;
+    const md5Hash = await calculateMD5(filePath, false);
     
-    // Проверяем есть ли дубликат на других устройствах
-    const duplicate = findDuplicateFile(md5Hash, fileSize, deviceId);
+    logFile('debug', 'MD5 calculated', { 
+      deviceId, 
+      safeName, 
+      md5: md5Hash.substring(0, 12),
+      partialMd5: partialMd5 ? partialMd5.substring(0, 12) : null,
+      isBigFile
+    });
+    
+    // Проверяем есть ли дубликат на других устройствах (используем partial для больших файлов)
+    const searchMd5 = partialMd5 || md5Hash;
+    const duplicate = findDuplicateFile(searchMd5, fileSize, deviceId, !!partialMd5);
     let deduplicationApplied = false;
     
     if (duplicate && fs.existsSync(duplicate.file_path)) {
-      // Дубликат найден! Заменяем загруженный файл копией
-      logFile('info', '🔄 Duplicate detected - replacing with copy', {
+      // Дубликат найден! НОВАЯ АРХИТЕКТУРА: удаляем загруженный файл, используем существующий
+      logFile('info', '⚡ Duplicate detected - using existing file (instant deduplication)', {
         deviceId,
         safeName,
         duplicateDevice: duplicate.device_id,
         duplicateFile: duplicate.safe_name,
+        sharedPath: duplicate.file_path,
         md5: md5Hash.substring(0, 12),
         savedSpaceMB: (fileSize / 1024 / 1024).toFixed(2)
       });
       
       try {
-        // Удаляем только что загруженный файл
+        // Удаляем только что загруженный файл (не нужен, используем существующий)
         fs.unlinkSync(filePath);
         
-        // Копируем файл с другого устройства
-        fs.copyFileSync(duplicate.file_path, filePath);
-        fs.chmodSync(filePath, 0o644);
+        // НОВОЕ: Заменяем filePath на путь к существующему файлу (shared storage)
+        filePath = duplicate.file_path;
         
         deduplicationApplied = true;
         
-        logFile('info', '✅ File replaced with duplicate copy (saved upload time & space!)', {
+        logFile('info', '✅ Instant deduplication applied (0 bytes copied, saved disk space!)', {
           deviceId,
           safeName,
-          copiedFrom: `${duplicate.device_id}:${duplicate.safe_name}`
+          referencesTo: duplicate.file_path,
+          copiedMetadataFrom: `${duplicate.device_id}:${duplicate.safe_name}`
         });
       } catch (e) {
-        logFile('error', 'Failed to replace file with duplicate', {
+        logFile('error', 'Failed to deduplicate file', {
           error: e.message,
           deviceId,
           safeName
@@ -122,8 +134,9 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
             width: params.width,
             height: params.height,
             duration: params.duration,
-            codec: params.videoCodec,
-            bitrate: params.videoBitrate
+            codec: params.codec,
+            profile: params.profile,  // НОВОЕ: Сохраняем profile!
+            bitrate: params.bitrate
           };
           audioParams = {
             codec: params.audioCodec,
@@ -163,6 +176,7 @@ export async function processUploadedFile(deviceId, safeName, originalName, file
       filePath,
       fileSize,
       md5Hash,
+      partialMd5,
       mimeType,
       videoParams,
       audioParams,

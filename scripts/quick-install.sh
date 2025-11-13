@@ -152,16 +152,11 @@ fi
 # Инициализируем БД и применяем миграции
 echo "  Initializing SQLite database..."
 if [ ! -f config/main.db ]; then
-    sqlite3 config/main.db < src/database/schema.sql
-    sqlite3 config/main.db < src/database/migrations/001_add_users.sql
-    
-    # Создаем дефолтного admin (admin/admin123)
-    ADMIN_HASH='$2b$10$cHr4hJlG2h.Zqv2TNeNbru4MqpiqSs5Pc9hnN.qxvrNjTRpRpkqRO'
-    sqlite3 config/main.db "INSERT INTO users (id, username, full_name, password_hash, role, is_active) VALUES (1, 'admin', 'Администратор', '$ADMIN_HASH', 'admin', 1);"
-    
+    sqlite3 config/main.db < src/database/init.sql
     chown $CURRENT_USER:$CURRENT_USER config/main.db
-    echo -e "  ${GREEN}✅ Database initialized${NC}"
+    echo -e "  ${GREEN}✅ Database initialized with default schema and admin user${NC}"
     echo -e "  ${YELLOW}📝 Default admin: admin / admin123${NC}"
+    echo -e "  ${RED}⚠️  CHANGE PASSWORD AFTER FIRST LOGIN!${NC}"
 else
     echo -e "  ${YELLOW}⚠️  Database already exists${NC}"
 fi

@@ -39,12 +39,12 @@ export function initDatabase(dbPath) {
     console.log(`[DB] 📊 WAL mode enabled, cache_size=64MB`);
     
     // Загружаем схему
-    const schemaPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf-8');
+    const initPath = path.join(path.dirname(new URL(import.meta.url).pathname), 'init.sql');
+    const initSQL = fs.readFileSync(initPath, 'utf-8');
     
     // Выполняем схему
-    db.exec(schema);
-    console.log('[DB] ✅ Schema applied');
+    db.exec(initSQL);
+    console.log('[DB] ✅ Database schema initialized');
     
     return db;
   } catch (e) {
@@ -84,31 +84,36 @@ export function closeDatabase() {
  * @returns {Object} Объект {device_id: {...}}
  */
 export function getAllDevices() {
-  const stmt = db.prepare(`
-    SELECT device_id, name, folder, device_type, platform, capabilities, 
-           last_seen, current_state, created_at, updated_at
-    FROM devices
-    ORDER BY device_id
-  `);
-  
-  const rows = stmt.all();
-  const devices = {};
-  
-  for (const row of rows) {
-    devices[row.device_id] = {
-      name: row.name,
-      folder: row.folder,
-      deviceType: row.device_type,
-      platform: row.platform,
-      capabilities: row.capabilities ? JSON.parse(row.capabilities) : null,
-      lastSeen: row.last_seen,
-      current: row.current_state ? JSON.parse(row.current_state) : { type: 'idle', file: null, state: 'idle' },
-      files: [], // Заполняется при сканировании
-      fileNames: [] // Заполняется при сканировании
-    };
+  try {
+    const stmt = db.prepare(`
+      SELECT device_id, name, folder, device_type, platform, capabilities, 
+             last_seen, current_state, created_at, updated_at
+      FROM devices
+      ORDER BY device_id
+    `);
+    
+    const rows = stmt.all();
+    const devices = {};
+    
+    for (const row of rows) {
+      devices[row.device_id] = {
+        name: row.name,
+        folder: row.folder,
+        deviceType: row.device_type,
+        platform: row.platform,
+        capabilities: row.capabilities ? JSON.parse(row.capabilities) : null,
+        lastSeen: row.last_seen,
+        current: row.current_state ? JSON.parse(row.current_state) : { type: 'idle', file: null, state: 'idle' },
+        files: [], // Заполняется при сканировании
+        fileNames: [] // Заполняется при сканировании
+      };
+    }
+    
+    return devices;
+  } catch (e) {
+    console.error('[DB] ❌ Error getting devices:', e);
+    return {};
   }
-  
-  return devices;
 }
 
 /**
@@ -375,8 +380,13 @@ export function deletePlaceholder(deviceId) {
  * @returns {*} Результат функции
  */
 export function transaction(fn) {
-  const txn = db.transaction(fn);
-  return txn();
+  try {
+    const txn = db.transaction(fn);
+    return txn();
+  } catch (e) {
+    console.error('[DB] ❌ Transaction failed:', e);
+    throw e; // Re-throw для обработки на уровне выше
+  }
 }
 
 /**

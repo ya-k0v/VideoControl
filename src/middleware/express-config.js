@@ -44,9 +44,6 @@ export function setupStaticFiles(app) {
   // Статичные файлы интерфейса
   app.use(express.static(PUBLIC));
   
-  // devices.json доступен по прямой ссылке
-  app.use('/devices.json', express.static(path.join(ROOT, 'config', 'devices.json')));
-  
   // Контент устройств с настройками кэширования
   app.use('/content', express.static(DEVICES, {
     extensions: ['.mp4', '.webm', '.ogg', '.jpg', '.jpeg', '.png', '.gif', '.pdf'],

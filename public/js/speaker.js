@@ -204,9 +204,13 @@ function showLivePreviewForTV(deviceId) {
 }
 
 /* Выбор устройства: обновляем подсветку и список файлов, не сбрасывая выбранный файл, если он ещё существует */
-async function selectDevice(id) {
+async function selectDevice(id, resetPage = true) {
   currentDevice = id;
-  filePage = 0; // Сброс пагинации файлов при смене устройства
+  
+  // ИСПРАВЛЕНО: Сбрасываем страницу только при явном выборе устройства пользователем
+  if (resetPage) {
+    filePage = 0; // Сброс пагинации файлов при смене устройства
+  }
   
   // Обновляем URL при переключении устройства
   const url = new URL(location.href);
@@ -247,16 +251,25 @@ async function loadFiles() {
     const filesData = await res.json();
 
   // Поддержка старого формата (массив строк) и нового формата (массив объектов)
-  const allFiles = filesData.map(item => {
-    if (typeof item === 'string') {
-      return { safeName: item, originalName: item, resolution: null };
-    }
-    return { 
-      safeName: item.name || item.safeName || item.originalName, 
-      originalName: item.originalName || item.name || item.safeName,
-      resolution: item.resolution || null
-    };
-  });
+  // ВАЖНО: Фильтруем заглушки - спикеру они не нужны в списке файлов
+  const allFiles = filesData
+    .filter(item => {
+      // Убираем заглушки из списка
+      if (typeof item === 'object' && item.isPlaceholder) {
+        return false;
+      }
+      return true;
+    })
+    .map(item => {
+      if (typeof item === 'string') {
+        return { safeName: item, originalName: item, resolution: null };
+      }
+      return { 
+        safeName: item.name || item.safeName || item.originalName, 
+        originalName: item.originalName || item.name || item.safeName,
+        resolution: item.resolution || null
+      };
+    });
 
   if (!allFiles || allFiles.length === 0) {
     fileList.innerHTML = `
@@ -634,7 +647,8 @@ const onDevicesUpdated = debounce(async () => {
   const prevFile = currentFile;
   await loadDevices();
   if (prevDevice && devices.find(d => d.device_id === prevDevice)) {
-    await selectDevice(prevDevice);
+    // ИСПРАВЛЕНО: НЕ сбрасываем страницу при обновлении (false)
+    await selectDevice(prevDevice, false);
     if (prevFile) {
       const btn = fileList.querySelector(`.previewBtn[data-safe='${encodeURIComponent(prevFile)}']`);
       if (btn) {

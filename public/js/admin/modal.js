@@ -254,6 +254,7 @@ async function loadModalUsersList(adminFetch) {
           <div class="meta">${u.full_name}</div>
         </div>
         <div style="display:flex; gap:4px; flex-shrink:0;">
+          <button class="secondary" style="min-width:auto; padding:6px 10px;" onclick="resetUserPasswordInModal(${u.id}, '${u.username}')" title="Сбросить пароль">🔑</button>
           ${u.is_active 
             ? `<button class="secondary" style="min-width:auto; padding:6px 10px;" onclick="toggleUserInModal(${u.id}, false, ${adminFetch})" title="Отключить">🔒</button>`
             : `<button class="secondary" style="min-width:auto; padding:6px 10px;" onclick="toggleUserInModal(${u.id}, true, ${adminFetch})" title="Включить">🔓</button>`
@@ -294,6 +295,88 @@ async function loadModalUsersList(adminFetch) {
       } catch (err) {
         alert('Ошибка');
       }
+    };
+    
+    window.resetUserPasswordInModal = async (userId, username) => {
+      const passwordResetContent = `
+        <div style="display:flex; flex-direction:column; gap:var(--space-md);">
+          <div style="color:var(--text-secondary);">
+            Сброс пароля для пользователя: <strong>${username}</strong>
+          </div>
+          <input id="newPassword1" class="input" type="password" placeholder="Новый пароль (мин. 8 символов)" />
+          <input id="newPassword2" class="input" type="password" placeholder="Повторите новый пароль" />
+          <div id="passwordResetError" style="color:var(--danger); font-size:0.875rem; display:none;"></div>
+          <div style="display:flex; gap:var(--space-sm);">
+            <button id="resetPasswordBtn" class="primary" style="flex:1;">Сбросить пароль</button>
+            <button onclick="closeModal()" class="secondary" style="flex:1;">Отмена</button>
+          </div>
+        </div>
+      `;
+      
+      showModal('🔑 Сброс пароля', passwordResetContent);
+      
+      setTimeout(() => {
+        const password1Input = document.getElementById('newPassword1');
+        const password2Input = document.getElementById('newPassword2');
+        const resetBtn = document.getElementById('resetPasswordBtn');
+        const errorEl = document.getElementById('passwordResetError');
+        
+        if (!resetBtn) return;
+        
+        const doReset = async () => {
+          const newPassword = password1Input.value;
+          const confirmPassword = password2Input.value;
+          
+          if (!newPassword || newPassword.length < 8) {
+            errorEl.textContent = 'Пароль должен быть не менее 8 символов';
+            errorEl.style.display = 'block';
+            return;
+          }
+          
+          if (newPassword !== confirmPassword) {
+            errorEl.textContent = 'Пароли не совпадают';
+            errorEl.style.display = 'block';
+            return;
+          }
+          
+          resetBtn.disabled = true;
+          resetBtn.textContent = 'Сброс...';
+          errorEl.style.display = 'none';
+          
+          try {
+            const res = await adminFetch(`/api/auth/users/${userId}/reset-password`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ new_password: newPassword })
+            });
+            
+            if (res.ok) {
+              closeModal();
+              showModal('✅ Успешно', `
+                <div style="text-align:center; padding:var(--space-lg);">
+                  Пароль для <strong>${username}</strong> успешно изменен
+                </div>
+                <button onclick="closeModal(); showUsersModal(${adminFetch})" class="primary" style="width:100%;">OK</button>
+              `);
+            } else {
+              const error = await res.json();
+              errorEl.textContent = error.error || 'Ошибка сброса пароля';
+              errorEl.style.display = 'block';
+            }
+          } catch (err) {
+            errorEl.textContent = 'Ошибка подключения';
+            errorEl.style.display = 'block';
+          } finally {
+            resetBtn.disabled = false;
+            resetBtn.textContent = 'Сбросить пароль';
+          }
+        };
+        
+        resetBtn.onclick = doReset;
+        password1Input.addEventListener('keydown', (e) => { if (e.key === 'Enter') password2Input.focus(); });
+        password2Input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doReset(); });
+        password1Input.focus();
+      }, 100);
     };
     
   } catch (err) {

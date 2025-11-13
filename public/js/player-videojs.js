@@ -448,28 +448,11 @@ if (!device_id || !device_id.trim()) {
       console.warn('[Player] ⚠️ Ошибка запроса placeholder API:', e);
     }
     
-    // Fallback: пробуем найти default.* файлы напрямую
-    console.log('[Player] 🔍 Пробуем найти default.* файлы напрямую...');
-    const tryList = ['jpg','png','mp4','webm','ogg']; // КРИТИЧНО: сначала изображения
-    for (const ext of tryList) {
-      let url = `/content/${encodeURIComponent(device_id)}/default.${ext}`;
-      try {
-        // КРИТИЧНО: HEAD запрос с cache-busting при force=true и TIMEOUT
-        const checkUrl = url + cacheBuster;
-        const r = await fetchWithTimeout(checkUrl, { 
-          method: 'HEAD',
-          cache: force ? 'no-store' : 'default' // Обход HTTP кэша браузера
-        }, 3000);
-        
-        if (r.ok) {
-          console.log(`[Player] ✅ Найден файл: default.${ext} ${force ? '(с cache-busting)' : ''}`);
-          // Возвращаем URL с cache-busting если force=true
-          return url + cacheBuster;
-        }
-      } catch {}
-    }
-    
-    console.warn('[Player] ❌ Ни один default.* файл не найден');
+    // НОВОЕ: Fallback больше не используется с новой архитектурой
+    // Заглушки управляются через БД (is_placeholder flag)
+    // Если API не вернул заглушку - значит её нет, и не должно быть fallback поиска
+    console.warn('[Player] ❌ Заглушка не установлена для устройства');
+    console.log('[Player] 💡 Установите заглушку через админ панель: выберите файл → "Заглушка"');
     return null;
   }
 

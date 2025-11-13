@@ -95,13 +95,23 @@ export function getPageSize() {
   }
 }
 
-// Загрузка маппинга имен устройств
+// Загрузка маппинга имен устройств из API
 export async function loadNodeNames() {
   try {
-    const res = await fetch('/devices.json');
-    return await res.json();
+    const res = await fetch('/api/devices');
+    const devices = await res.json();
+    
+    // Преобразуем массив устройств в маппинг {device_id: name}
+    const nodeNames = {};
+    for (const device of devices) {
+      if (device.name) {
+        nodeNames[device.device_id] = device.name;
+      }
+    }
+    
+    return nodeNames;
   } catch (e) {
-    console.warn('Не удалось загрузить devices.json', e);
+    console.warn('Не удалось загрузить имена устройств из API', e);
     return {};
   }
 }

@@ -36,6 +36,7 @@ import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import java.net.URISyntaxException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -50,6 +51,9 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var simpleCache: SimpleCache? = null
     private val pingHandler = Handler(Looper.getMainLooper())
+    private val retryHandler = Handler(Looper.getMainLooper())
+    private var retryRunnable: Runnable? = null
+    private var placeholderJob: Job? = null
     private var isPlayingPlaceholder: Boolean = false
     
     // Новые компоненты
@@ -66,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     // Кэш информации о заглушке (чтобы не запрашивать сервер каждый раз)
     private var cachedPlaceholderFile: String? = null
     private var cachedPlaceholderType: String? = null
+    private var placeholderTimestamp: Long = 0 // Для обхода кэша при смене заглушки
 
     private val TAG = "VCMediaPlayer"
     private var SERVER_URL = ""
@@ -224,7 +229,7 @@ class MainActivity : AppCompatActivity() {
                             showStatus("Ошибка воспроизведения, попытка $errorRetryCount/$maxAttempts...")
                             
                             // Автоматический retry для стабильности 24/7
-                            Handler(Looper.getMainLooper()).postDelayed({
+                            retryRunnable = Runnable {
                                 if (errorRetryCount < maxAttempts) {
                                     errorRetryCount++
                                     Log.i(TAG, "Retrying playback (attempt $errorRetryCount/$maxAttempts) [content=${!isPlayingPlaceholder}]...")
@@ -243,7 +248,8 @@ class MainActivity : AppCompatActivity() {
                                     errorRetryCount = 0
                                     loadPlaceholder()
                                 }
-                            }, 5000) // 5 секунд для сетевых ошибок
+                            }
+                            retryHandler.postDelayed(retryRunnable!!, 5000) // 5 секунд для сетевых ошибок
                         }
 
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -324,6 +330,13 @@ class MainActivity : AppCompatActivity() {
             socket?.on("reconnect") { args ->
                 val attempt = if (args.isNotEmpty()) args[0].toString() else "?"
                 Log.i(TAG, "🔄 Socket reconnected (attempt $attempt)")
+                
+                // ИСПРАВЛЕНО: Регистрируемся заново при reconnect (в т.ч. после transport upgrade)
+                runOnUiThread {
+                    registerDevice()
+                    startPingTimer()
+                    Log.i(TAG, "📡 Re-registered device after reconnect")
+                }
             }
             
             socket?.on("reconnect_attempt") { args ->
@@ -408,10 +421,18 @@ class MainActivity : AppCompatActivity() {
 
             socket?.on("placeholder/refresh") {
                 runOnUiThread { 
+                    // КРИТИЧНО: Обновляем timestamp для обхода кэша ExoPlayer
+                    placeholderTimestamp = System.currentTimeMillis()
+                    
+                    // КРИТИЧНО: Полностью очищаем плеер для освобождения декодера
+                    player?.stop()
+                    player?.clearMediaItems()
+                    
                     // Очищаем кэш заглушки при обновлении
                     cachedPlaceholderFile = null
                     cachedPlaceholderType = null
-                    Log.i(TAG, "Placeholder cache cleared, reloading...")
+                    
+                    Log.i(TAG, "🔄 Placeholder changed (timestamp=$placeholderTimestamp), clearing decoder and reloading...")
                     loadPlaceholder()
                 }
             }
@@ -503,7 +524,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun playVideo(fileName: String, isPlaceholder: Boolean = false) {
         try {
-            val videoUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            // КРИТИЧНО: Для заглушки добавляем timestamp чтобы обойти кэш ExoPlayer
+            val videoUrl = if (isPlaceholder && placeholderTimestamp > 0) {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}?t=$placeholderTimestamp"
+            } else {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            }
             Log.i(TAG, "🎬 Playing video: $videoUrl (isPlaceholder=$isPlaceholder)")
 
             // КРИТИЧНО: Очищаем ImageView и останавливаем Glide загрузку
@@ -584,7 +610,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showImage(fileName: String, isPlaceholder: Boolean = false) {
         try {
-            val imageUrl = "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            // КРИТИЧНО: Для заглушки добавляем timestamp чтобы обойти кэш
+            val imageUrl = if (isPlaceholder && placeholderTimestamp > 0) {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}?t=$placeholderTimestamp"
+            } else {
+                "$SERVER_URL/content/$DEVICE_ID/${Uri.encode(fileName)}"
+            }
             Log.i(TAG, "🖼️ Showing image: $imageUrl (isPlaceholder=$isPlaceholder)")
 
             // КРИТИЧНО: Полностью останавливаем видео для освобождения памяти
@@ -804,8 +835,12 @@ class MainActivity : AppCompatActivity() {
     private fun loadPlaceholder() {
         Log.i(TAG, "🔍 Loading placeholder...")
         
-        // Останавливаем текущее воспроизведение
+        // КРИТИЧНО: Останавливаем плеер (БЕЗ clearMediaItems - это ломает переход на заглушку!)
         player?.stop()
+        
+        // Сбрасываем currentVideoFile для корректной загрузки заглушки заново
+        currentVideoFile = null
+        savedPosition = 0
         
         // Очищаем ImageView если был показан
         Glide.with(this).clear(imageView)
@@ -827,7 +862,12 @@ class MainActivity : AppCompatActivity() {
         }
         
         // Кэша нет - запрашиваем заглушку с сервера (только первый раз)
-        CoroutineScope(Dispatchers.IO).launch {
+        loadPlaceholderFromServer()
+    }
+    
+    private fun loadPlaceholderFromServer() {
+        placeholderJob?.cancel()  // Отменяем предыдущую загрузку если была
+        placeholderJob = CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = java.net.URL("$SERVER_URL/api/devices/$DEVICE_ID/placeholder")
                 val connection = url.openConnection() as java.net.HttpURLConnection
@@ -844,7 +884,7 @@ class MainActivity : AppCompatActivity() {
                         Log.i(TAG, "✅ Placeholder found: $placeholderFile")
                         
                         // Определяем тип заглушки (видео или изображение)
-                        val ext = placeholderFile.substringAfterLast('.', "").toLowerCase()
+                        val ext = placeholderFile.substringAfterLast('.', "").lowercase()
                         
                         // СОХРАНЯЕМ В КЭШ для быстрой загрузки в следующий раз!
                         cachedPlaceholderFile = placeholderFile
@@ -885,12 +925,13 @@ class MainActivity : AppCompatActivity() {
     
     private fun scheduleRetryPlaceholder() {
         // Retry через 10 секунд
-        Handler(Looper.getMainLooper()).postDelayed({
+        retryRunnable = Runnable {
             if (cachedPlaceholderFile == null && socket?.connected() == true) {
                 Log.i(TAG, "🔄 Retrying to load placeholder...")
                 loadPlaceholder()
             }
-        }, 10000)
+        }
+        retryHandler.postDelayed(retryRunnable!!, 10000)
     }
 
     private val statusHandler = Handler(Looper.getMainLooper())
@@ -950,13 +991,21 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         Log.i(TAG, "=== MainActivity onDestroy ===")
         
+        // Очищаем все Handler
         stopPingTimer()
+        statusHandler.removeCallbacks(hideStatusRunnable)
+        retryHandler.removeCallbacksAndMessages(null)
+        
+        // Отменяем корутины
+        placeholderJob?.cancel()
+        
+        // Освобождаем ресурсы
         player?.release()
         socket?.disconnect()
         wakeLock?.release()
         simpleCache?.release()
         
-        Log.i(TAG, "MainActivity destroyed")
+        Log.i(TAG, "MainActivity destroyed - all resources released")
     }
 
     override fun onPause() {

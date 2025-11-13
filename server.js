@@ -2,35 +2,23 @@ import express from 'express';
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import mime from 'mime';
-import multer from 'multer';
-import crypto from 'crypto';
-import util from "util";
-import { fromPath } from "pdf2pic";
-import { exec as execCallback, spawn } from "child_process";
-import { PDFDocument } from 'pdf-lib';
 
 // Импорты из модулей
 import { 
-  ROOT, PUBLIC, DEVICES, CONVERTED_CACHE, NAMES_PATH, 
-  FILE_NAMES_MAP_PATH, MAX_FILE_SIZE, ALLOWED_EXT, PORT, HOST 
+  ROOT, PUBLIC, DEVICES, CONVERTED_CACHE, MAX_FILE_SIZE, ALLOWED_EXT, PORT, HOST 
 } from './src/config/constants.js';
 import { createSocketServer } from './src/config/socket-config.js';
-import { sanitizeDeviceId, isSystemFile } from './src/utils/sanitize.js';
-import { fixEncoding } from './src/utils/encoding.js';
 import { initDatabase } from './src/database/database.js';
 import { 
   loadDevicesFromDB, 
   saveDevicesToDB, 
   loadFileNamesFromDB, 
-  saveFileNamesToDB,
-  scanAllDevices 
+  saveFileNamesToDB
 } from './src/storage/devices-storage-sqlite.js';
-import { getFileStatuses, getFileStatus, setFileStatus, deleteFileStatus } from './src/video/file-status.js';
+import { getFileStatus } from './src/video/file-status.js';
 import { checkVideoParameters } from './src/video/ffmpeg-wrapper.js';
-import { getVideoOptConfig, needsOptimization, autoOptimizeVideo } from './src/video/optimizer.js';
+import { autoOptimizeVideo } from './src/video/optimizer.js';
 import { 
-  getPdfPageCount, convertPdfToImages, convertPptxToImages, 
   findFileFolder, getPageSlideCount, autoConvertFile 
 } from './src/converters/document-converter.js';
 import { createDevicesRouter } from './src/routes/devices.js';
@@ -42,6 +30,7 @@ import { createSystemInfoRouter } from './src/routes/system-info.js';
 import { createFoldersRouter } from './src/routes/folders.js';
 import { createAuthRouter } from './src/routes/auth.js';
 import { createDeduplicationRouter } from './src/routes/deduplication.js';
+import fileResolverRouter from './src/routes/file-resolver.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
 import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth.js';
 import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
@@ -49,8 +38,6 @@ import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/expre
 import { setupSocketHandlers } from './src/socket/index.js';
 import logger, { httpLoggerMiddleware } from './src/utils/logger.js';
 import { cleanupResolutionCache, getResolutionCacheSize } from './src/video/resolution-cache.js';
-
-const execAsync = util.promisify(execCallback);
 
 const app = express();
 const server = http.createServer(app);
@@ -89,8 +76,41 @@ let fileNamesMap = {};
 devices = loadDevicesFromDB();
 fileNamesMap = loadFileNamesFromDB();
 
-// Сканируем файлы в папках устройств
-scanAllDevices(devices, fileNamesMap);
+// НОВОЕ: Гибридная загрузка - файлы из БД + сканирование папок (PPTX/изображения)
+const { getDeviceFilesMetadata } = await import('./src/database/files-metadata.js');
+
+for (const deviceId in devices) {
+  // 1. Загружаем файлы из БД (обычные файлы)
+  const filesMetadata = getDeviceFilesMetadata(deviceId);
+  let files = filesMetadata.map(f => f.safe_name);
+  let fileNames = filesMetadata.map(f => f.original_name);
+  
+  // 2. Сканируем папку устройства для PDF/PPTX/image папок (они не в БД)
+  const deviceFolder = path.join(DEVICES, devices[deviceId].folder);
+  if (fs.existsSync(deviceFolder)) {
+    const folderEntries = fs.readdirSync(deviceFolder);
+    for (const entry of folderEntries) {
+      const entryPath = path.join(deviceFolder, entry);
+      const stat = fs.statSync(entryPath);
+      
+      if (stat.isDirectory()) {
+        // Это папка - добавляем (PPTX/PDF или изображения)
+        files.push(entry);
+        fileNames.push(fileNamesMap[deviceId]?.[entry] || entry);
+      }
+    }
+  }
+  
+  devices[deviceId].files = files;
+  devices[deviceId].fileNames = fileNames;
+  
+  logger.info('Device files loaded (DB + folders)', { 
+    deviceId, 
+    dbFiles: filesMetadata.length,
+    folders: files.length - filesMetadata.length,
+    total: files.length
+  });
+}
 
 // Сохраняем обновленное состояние в БД
 saveDevicesToDB(devices);
@@ -104,6 +124,9 @@ const upload = createUploadMiddleware(devices);
 // ========================================
 // API ROUTES (Модульные роутеры)
 // ========================================
+
+// File resolver (БЕЗ защиты - для плееров)
+app.use('/api/files', fileResolverRouter);
 
 // Auth router (БЕЗ защиты - для login)
 const authRouter = createAuthRouter();
@@ -203,10 +226,6 @@ app.use('/api/duplicates', requireAuth, deduplicationRouter);
 // ========================================
 // (Модули: src/video/optimizer.js, src/video/ffmpeg-wrapper.js, src/video/file-status.js)
 
-// Получаем ссылки на модули
-const videoOptConfig = getVideoOptConfig();
-const fileStatuses = getFileStatuses();
-
 // Оберточные функции для совместимости с существующим кодом
 async function autoOptimizeVideoWrapper(deviceId, fileName) {
   return await autoOptimizeVideo(deviceId, fileName, devices, io, fileNamesMap, (map) => saveFileNamesToDB(map));
@@ -240,7 +259,7 @@ server.listen(PORT, HOST, () => {
 
 // Очистка кэша разрешений видео (каждые 30 минут)
 // Удаляет записи для несуществующих файлов
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   const removed = cleanupResolutionCache();
   if (removed > 0) {
     logger.info('Resolution cache cleanup completed', { 
@@ -249,3 +268,61 @@ setInterval(() => {
     });
   }
 }, 30 * 60 * 1000); // 30 минут
+
+// ========================================
+// GRACEFUL SHUTDOWN
+// ========================================
+
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  logger.info(`🛑 Received ${signal}, starting graceful shutdown...`);
+  
+  try {
+    // 1. Останавливаем прием новых запросов
+    httpServer.close(() => {
+      logger.info('✅ HTTP server closed');
+    });
+    
+    // 2. Закрываем WebSocket соединения
+    if (io) {
+      io.close(() => {
+        logger.info('✅ WebSocket connections closed');
+      });
+    }
+    
+    // 3. Очищаем интервалы
+    clearInterval(cleanupInterval);
+    logger.info('✅ Cleanup intervals stopped');
+    
+    // 4. Закрываем базу данных
+    closeDatabase();
+    
+    // 5. Ждем завершения активных запросов (макс 10 сек)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    logger.info('✅ Graceful shutdown completed');
+    process.exit(0);
+  } catch (e) {
+    logger.error('❌ Error during shutdown:', e);
+    process.exit(1);
+  }
+}
+
+// Обработка сигналов завершения
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Обработка необработанных ошибок
+process.on('uncaughtException', (err) => {
+  logger.error('💥 Uncaught Exception:', err);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  // Не выходим при unhandledRejection, только логируем
+});

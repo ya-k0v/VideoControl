@@ -259,7 +259,7 @@ server.listen(PORT, HOST, () => {
 
 // Очистка кэша разрешений видео (каждые 30 минут)
 // Удаляет записи для несуществующих файлов
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   const removed = cleanupResolutionCache();
   if (removed > 0) {
     logger.info('Resolution cache cleanup completed', { 
@@ -268,3 +268,61 @@ setInterval(() => {
     });
   }
 }, 30 * 60 * 1000); // 30 минут
+
+// ========================================
+// GRACEFUL SHUTDOWN
+// ========================================
+
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  
+  logger.info(`🛑 Received ${signal}, starting graceful shutdown...`);
+  
+  try {
+    // 1. Останавливаем прием новых запросов
+    httpServer.close(() => {
+      logger.info('✅ HTTP server closed');
+    });
+    
+    // 2. Закрываем WebSocket соединения
+    if (io) {
+      io.close(() => {
+        logger.info('✅ WebSocket connections closed');
+      });
+    }
+    
+    // 3. Очищаем интервалы
+    clearInterval(cleanupInterval);
+    logger.info('✅ Cleanup intervals stopped');
+    
+    // 4. Закрываем базу данных
+    closeDatabase();
+    
+    // 5. Ждем завершения активных запросов (макс 10 сек)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    logger.info('✅ Graceful shutdown completed');
+    process.exit(0);
+  } catch (e) {
+    logger.error('❌ Error during shutdown:', e);
+    process.exit(1);
+  }
+}
+
+// Обработка сигналов завершения
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Обработка необработанных ошибок
+process.on('uncaughtException', (err) => {
+  logger.error('💥 Uncaught Exception:', err);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  // Не выходим при unhandledRejection, только логируем
+});

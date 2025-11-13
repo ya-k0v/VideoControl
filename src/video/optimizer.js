@@ -81,7 +81,7 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
     filePath = metadata.file_path;
   } else {
     // Fallback для PDF/PPTX/folders (в /content/{device}/)
-    const deviceFolder = path.join(DEVICES, d.folder);
+  const deviceFolder = path.join(DEVICES, d.folder);
     filePath = path.join(deviceFolder, fileName);
   }
   
@@ -114,10 +114,10 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
   } else {
     // Fallback: получаем через FFmpeg если нет в БД
     params = await checkVideoParameters(filePath);
-    if (!params) {
-      deleteFileStatus(deviceId, fileName);
-      return { success: false, message: 'Cannot read video parameters' };
-    }
+  if (!params) {
+    deleteFileStatus(deviceId, fileName);
+    return { success: false, message: 'Cannot read video parameters' };
+  }
     console.log(`[VideoOpt] 📊 Параметры через FFmpeg: ${params.width}x${params.height} @ ${params.fps}fps, ${Math.round(params.bitrate/1000)}kbps, ${params.codec}/${params.profile}`);
   }
   
@@ -205,6 +205,16 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       
       let duration = 0;
       let stderr = '';
+      let isResolved = false;
+      
+      // ИСПРАВЛЕНО: Timeout 30 минут для предотвращения зависания
+      const timeout = setTimeout(() => {
+        if (!isResolved) {
+          console.error(`[VideoOpt] ⏱️ FFmpeg timeout (30 мин)`);
+          ffmpegProcess.kill('SIGKILL');
+          reject(new Error('FFmpeg timeout'));
+        }
+      }, 30 * 60 * 1000);
       
       // Парсим вывод FFmpeg для прогресса
       ffmpegProcess.stderr.on('data', (data) => {
@@ -249,6 +259,9 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       });
       
       ffmpegProcess.on('close', (code) => {
+        clearTimeout(timeout); // ИСПРАВЛЕНО: Очищаем timeout
+        isResolved = true;
+        
         if (code === 0) {
           console.log(`[VideoOpt] ✅ FFmpeg завершен успешно`);
           resolve();
@@ -260,6 +273,9 @@ export async function autoOptimizeVideo(deviceId, fileName, devices, io, fileNam
       });
       
       ffmpegProcess.on('error', (err) => {
+        clearTimeout(timeout); // ИСПРАВЛЕНО: Очищаем timeout
+        isResolved = true;
+        
         console.error(`[VideoOpt] ❌ Ошибка запуска FFmpeg: ${err}`);
         reject(err);
       });

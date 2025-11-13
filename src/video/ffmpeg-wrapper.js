@@ -15,8 +15,10 @@ const execAsync = util.promisify(exec);
  */
 export async function checkVideoParameters(filePath) {
   try {
+    // ИСПРАВЛЕНО: Добавлен timeout 30 секунд для предотвращения зависания
     const { stdout } = await execAsync(
-      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,r_frame_rate,bit_rate,profile,level -of json "${filePath}"`
+      `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height,r_frame_rate,bit_rate,profile,level -of json "${filePath}"`,
+      { timeout: 30000, maxBuffer: 1024 * 1024 } // 30s timeout, 1MB buffer
     );
     
     const data = JSON.parse(stdout);
@@ -41,7 +43,12 @@ export async function checkVideoParameters(filePath) {
       level: stream.level || 0
     };
   } catch (error) {
-    console.error(`[VideoOpt] ❌ Ошибка ffprobe: ${error.message}`);
+    // Проверяем timeout ошибку
+    if (error.killed && error.signal === 'SIGTERM') {
+      console.error(`[VideoOpt] ⏱️ FFprobe timeout для файла: ${filePath}`);
+    } else {
+      console.error(`[VideoOpt] ❌ Ошибка ffprobe: ${error.message}`);
+    }
     return null;
   }
 }

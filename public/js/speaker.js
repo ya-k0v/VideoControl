@@ -207,9 +207,10 @@ function showLivePreviewForTV(deviceId) {
 async function selectDevice(id, resetPage = true) {
   currentDevice = id;
   
-  // ИСПРАВЛЕНО: Сбрасываем страницу только при явном выборе устройства пользователем
+  // ИСПРАВЛЕНО: При явном выборе устройства сбрасываем выбранный файл
   if (resetPage) {
     filePage = 0; // Сброс пагинации файлов при смене устройства
+    currentFile = null; // Сброс выбранного файла
   }
   
   // Обновляем URL при переключении устройства
@@ -220,9 +221,17 @@ async function selectDevice(id, resetPage = true) {
   tvList.querySelectorAll('.tvTile').forEach(li => li.classList.remove('active'));
   const item = tvList.querySelector(`.tvTile[data-id="${id}"]`);
   if (item) item.classList.add('active');
+  
+  // ИСПРАВЛЕНО: При явном выборе устройства снимаем подсветку файлов
+  if (resetPage) {
+    fileList.querySelectorAll('.file-item').forEach(item => item.classList.remove('active'));
+  }
+  
   await loadFiles();
-  // Если конкретный файл не выбран – показываем живое превью ТВ
-  if (!currentFile) showLivePreviewForTV(currentDevice);
+  
+  // ИСПРАВЛЕНО: ВСЕГДА показываем live preview выбранного устройства
+  // Это гарантирует что превью переключается при смене устройства
+  showLivePreviewForTV(currentDevice);
 }
 
 /* Загрузка и рендер файлов для текущего ТВ */

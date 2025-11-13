@@ -11,7 +11,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}  VideoControl v2.5.0 - Quick Install${NC}"
+echo -e "${BLUE}  VideoControl v2.6.2 - Quick Install${NC}"
 echo -e "${BLUE}============================================${NC}"
 echo ""
 

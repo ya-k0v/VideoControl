@@ -235,19 +235,47 @@ fi
 echo ""
 echo -e "${BLUE}[7/7] Creating systemd service...${NC}"
 
+# Создаем группу vcgroup для управления правами
+if ! getent group vcgroup > /dev/null 2>&1; then
+    groupadd vcgroup
+    echo -e "  ${GREEN}✅ Group vcgroup created${NC}"
+else
+    echo -e "  ${GREEN}✅ Group vcgroup already exists${NC}"
+fi
+
+# Добавляем текущего пользователя в vcgroup
+usermod -a -G vcgroup $CURRENT_USER
+echo -e "  ${GREEN}✅ User $CURRENT_USER added to vcgroup${NC}"
+
+# Создаем домашнюю директорию с .cache для LibreOffice
+mkdir -p /home/$CURRENT_USER/.cache /home/$CURRENT_USER/.config
+chown -R $CURRENT_USER:vcgroup /home/$CURRENT_USER/.cache /home/$CURRENT_USER/.config
+chmod 755 /home/$CURRENT_USER/.cache /home/$CURRENT_USER/.config
+echo -e "  ${GREEN}✅ LibreOffice cache directories created${NC}"
+
 cat > /etc/systemd/system/videocontrol.service << EOF
 [Unit]
 Description=VCServer
-After=network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
 User=$CURRENT_USER
+Group=vcgroup
 WorkingDirectory=$INSTALL_DIR
 ExecStart=/usr/bin/node $INSTALL_DIR/server.js
-Restart=on-failure
+Restart=always
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=$INSTALL_DIR/public/content $INSTALL_DIR/config $INSTALL_DIR/logs $INSTALL_DIR/temp $INSTALL_DIR/.converted /home/$CURRENT_USER/.cache /home/$CURRENT_USER/.config
+
+# Environment
 Environment=NODE_ENV=production
 
 [Install]

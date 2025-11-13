@@ -6,9 +6,10 @@
 export async function ensureAuth() {
   const token = localStorage.getItem('accessToken');
   
+  // ИСПРАВЛЕНО: Редирект на login page
   if (!token) {
     localStorage.clear(); // Очищаем возможный мусор
-    window.location.href = '/';
+    window.location.href = '/index.html';
     return false;
   }
   
@@ -17,12 +18,12 @@ export async function ensureAuth() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     if (!user.role || (user.role !== 'admin' && user.role !== 'speaker')) {
       localStorage.clear(); // Очищаем невалидные данные
-      window.location.href = '/';
+      window.location.href = '/index.html';
       return false;
     }
   } catch (e) {
     localStorage.clear(); // Битые данные
-    window.location.href = '/';
+    window.location.href = '/index.html';
     return false;
   }
   
@@ -79,8 +80,9 @@ export async function speakerFetch(url, opts = {}) {
     if (refreshed) {
       return speakerFetch(url, opts);
     } else {
+      // ИСПРАВЛЕНО: Редирект на login page
       localStorage.clear();
-      window.location.href = '/';
+      window.location.href = '/index.html';
       throw new Error('Session expired');
     }
   }
@@ -102,6 +104,7 @@ export async function logout() {
   }
   
   localStorage.clear();
-  window.location.href = '/';
+  // ИСПРАВЛЕНО: Редирект на login page
+  window.location.href = '/index.html';
 }
 

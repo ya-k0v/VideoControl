@@ -12,11 +12,11 @@ export async function ensureAuth() {
   
   console.log('[Admin Auth] Checking auth - token:', !!token, 'user:', !!userStr);
   
-  // Если нет токена - редирект на login
+  // ИСПРАВЛЕНО: Если нет токена - редирект на login
   if (!token || !userStr) {
-    console.log('[Admin Auth] No token or user - redirecting to /');
+    console.log('[Admin Auth] No token or user - redirecting to /index.html');
     localStorage.clear();
-    window.location.href = '/';
+    window.location.href = '/index.html';
     return false;
   }
   
@@ -29,21 +29,21 @@ export async function ensureAuth() {
       console.log('[Admin Auth] Speaker trying to access admin - redirecting to /speaker.html');
       window.location.href = '/speaker.html';
       return false;
-  }
+    }
   
     if (user.role !== 'admin') {
       console.log('[Admin Auth] Invalid role - clearing and redirecting');
       localStorage.clear();
-      window.location.href = '/';
-  return false;
-}
+      window.location.href = '/index.html';
+      return false;
+    }
 
     console.log('[Admin Auth] Access granted');
     return true;
   } catch (e) {
     console.error('[Admin Auth] Error parsing user data:', e);
     localStorage.clear();
-    window.location.href = '/';
+    window.location.href = '/index.html';
     return false;
   }
 }
@@ -84,7 +84,7 @@ export async function adminFetch(url, opts = {}) {
   const token = localStorage.getItem('accessToken');
   
   if (!token) {
-    window.location.href = '/login.html';
+    window.location.href = '/index.html';
     throw new Error('No token');
   }
   
@@ -106,9 +106,9 @@ export async function adminFetch(url, opts = {}) {
       // Повторяем запрос с новым токеном
       return adminFetch(url, opts);
     } else {
-      // Не удалось обновить - logout
+      // ИСПРАВЛЕНО: Не удалось обновить - редирект на login
       localStorage.clear();
-      window.location.href = '/';
+      window.location.href = '/index.html';
       throw new Error('Session expired');
     }
   }
@@ -143,7 +143,8 @@ export async function logout() {
   }
   
   localStorage.clear();
-  window.location.href = '/';
+  // ИСПРАВЛЕНО: Редирект на login page
+  window.location.href = '/index.html';
 }
 
 

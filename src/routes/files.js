@@ -94,7 +94,7 @@ async function copyFolderPhysically(sourceId, targetId, folderName, move, device
  * @param {Object} devices - Объект devices
  * @param {Object} fileNamesMap - Маппинг имен
  */
-function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
+export function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
   const device = devices[deviceId];
   if (!device) return;
   
@@ -149,14 +149,13 @@ function updateDeviceFilesFromDB(deviceId, devices, fileNamesMap) {
   device.files = files;
   device.fileNames = fileNames;
   
-  logFile('debug', 'Device files updated from DB + folders', {
-    deviceId,
-    dbFilesTotal: filesMetadata.length,
-    dbFilesShown: filteredMetadata.length,
-    dbFilesHidden: filesMetadata.length - filteredMetadata.length,
-    folders: folders.length,
-    total: files.length
-  });
+  console.log(`[updateDeviceFilesFromDB] ${deviceId}: БД=${filteredMetadata.length}, Папки=${folders.length}, Всего=${files.length}`);
+  if (folders.length > 0) {
+    console.log(`[updateDeviceFilesFromDB] Папки: ${folders.join(', ')}`);
+  }
+  if (filesMetadata.length !== filteredMetadata.length) {
+    console.log(`[updateDeviceFilesFromDB] Скрыто ${filesMetadata.length - filteredMetadata.length} файлов (в папках)`);
+  }
 }
 
 /**
@@ -422,6 +421,10 @@ export function createFilesRouter(deps) {
         if (!fileNamesMap[id]) fileNamesMap[id] = {};
         fileNamesMap[id][safeFolderName] = folderName; // Оригинальное имя для отображения
         saveFileNamesMap(fileNamesMap);
+        
+        // КРИТИЧНО: Обновляем список файлов после создания папки
+        updateDeviceFilesFromDB(id, devices, fileNamesMap);
+        io.emit('devices/updated');
       } else {
         // КРИТИЧНО: Устанавливаем права 644 на загруженные файлы (кроме PDF/PPTX/ZIP - они уже перемещены)
         for (const file of (req.files || [])) {
@@ -471,6 +474,7 @@ export function createFilesRouter(deps) {
               }
               
               // Обновляем список файлов после распаковки
+              updateDeviceFilesFromDB(id, devices, fileNamesMap);
               io.emit('devices/updated');
             } else {
               console.error(`[upload] ❌ Ошибка распаковки ZIP ${fileName}:`, result.error);
@@ -740,13 +744,8 @@ export function createFilesRouter(deps) {
       console.log(`[rename] 📝 Обновление originalName в БД: ${oldName} -> ${newName}`);
       updateFileOriginalName(id, oldName, newName);
       
-      // Обновляем fileNames в памяти
-      if (!d.fileNames) d.fileNames = [];
-      const index = d.files.indexOf(oldName);
-      if (index !== -1) {
-        d.fileNames[index] = newName;
-      }
-      
+      // Обновляем список файлов из БД
+      updateDeviceFilesFromDB(id, devices, fileNamesMap);
       io.emit('devices/updated');
       return res.json({ success: true, oldName, newName, message: 'File renamed successfully (display name only)' });
     }
@@ -835,35 +834,8 @@ export function createFilesRouter(deps) {
       // и ПОТЕРЯЕТ медиафайлы из БД!
       
       // Вместо этого обновляем только конкретные записи в d.files и d.fileNames
-      if (!d.files) d.files = [];
-      if (!d.fileNames) d.fileNames = [];
-      
-      // Удаляем старое имя из массивов
-      const oldIndex = d.files.indexOf(actualOldName);
-      if (oldIndex !== -1) {
-        d.files.splice(oldIndex, 1);
-        d.fileNames.splice(oldIndex, 1);
-      }
-      
-      // Для PDF/PPTX папки также удаляем запись файла с расширением (если была)
-      if (isFolder && oldName.match(/\.(pdf|pptx)$/i)) {
-        const oldFileIndex = d.files.indexOf(oldName);
-        if (oldFileIndex !== -1) {
-          d.files.splice(oldFileIndex, 1);
-          d.fileNames.splice(oldFileIndex, 1);
-        }
-      }
-      
-      // Добавляем новое имя
-      d.files.push(finalName);
-      d.fileNames.push(newName);
-      
-      // Для PDF/PPTX папки также добавляем запись файла с расширением
-      if (isFolder && oldName.match(/\.(pdf|pptx)$/i)) {
-        d.files.push(newName);
-        d.fileNames.push(newName);
-      }
-      
+      // Обновляем список файлов из БД + файловой системы (это перезагрузит весь список)
+      updateDeviceFilesFromDB(id, devices, fileNamesMap);
       io.emit('devices/updated');
       res.json({ success: true, oldName: actualOldName, newName: finalName });
     } catch (e) {

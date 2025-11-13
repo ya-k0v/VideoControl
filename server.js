@@ -23,7 +23,7 @@ import {
 } from './src/converters/document-converter.js';
 import { createDevicesRouter } from './src/routes/devices.js';
 import { createPlaceholderRouter } from './src/routes/placeholder.js';
-import { createFilesRouter } from './src/routes/files.js';
+import { createFilesRouter, updateDeviceFilesFromDB } from './src/routes/files.js';
 import { createVideoInfoRouter } from './src/routes/video-info.js';
 import { createConversionRouter } from './src/routes/conversion.js';
 import { createSystemInfoRouter } from './src/routes/system-info.js';
@@ -184,7 +184,8 @@ const deduplicationRouter = createDeduplicationRouter({
   devices,
   io,
   fileNamesMap,
-  saveFileNamesMap: saveFileNamesToDB
+  saveFileNamesMap: saveFileNamesToDB,
+  updateDeviceFilesFromDB
 });
 
 // Роутеры с избирательной защитой (применяют requireAuth внутри себя)

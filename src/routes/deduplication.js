@@ -20,7 +20,7 @@ const router = express.Router();
  * @param {Object} deps - Зависимости
  */
 export function createDeduplicationRouter(deps) {
-  const { devices, io, fileNamesMap, saveFileNamesMap } = deps;
+  const { devices, io, fileNamesMap, saveFileNamesMap, updateDeviceFilesFromDB } = deps;
   
   /**
    * POST /api/devices/:id/check-duplicate
@@ -168,12 +168,8 @@ export function createDeduplicationRouter(deps) {
         saveFileNamesMap(fileNamesMap);
       }
       
-      // Обновляем список файлов устройства из БД
-      const { getDeviceFilesMetadata } = await import('../database/files-metadata.js');
-      const filesMetadata = getDeviceFilesMetadata(targetDeviceId);
-      targetDevice.files = filesMetadata.map(f => f.safe_name);
-      targetDevice.fileNames = filesMetadata.map(f => f.original_name);
-      
+      // Обновляем список файлов устройства из БД + папки
+      updateDeviceFilesFromDB(targetDeviceId, devices, fileNamesMap);
       io.emit('devices/updated');
       
       // Audit log

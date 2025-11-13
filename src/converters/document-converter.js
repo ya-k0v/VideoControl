@@ -212,6 +212,9 @@ export async function autoConvertFile(deviceId, fileName, devices, fileNamesMap,
     if (io && count > 0) {
       io.emit('file/ready', { device_id: deviceId, file: fileName, pages: count });
       console.log(`[Converter] ✅ Конвертировано: ${fileName} (${count} страниц)`);
+      
+      // КРИТИЧНО: Обновляем список файлов (PPTX превратился в папку)
+      io.emit('devices/updated');
     }
     
     return count;

@@ -243,13 +243,11 @@ function showBioForm(bio = null) {
         console.log('[Biographies] Form submit triggered');
         
         const data = Object.fromEntries(new FormData(formElement));
-        data.media = pendingMedia
-          .filter(item => !item.existing)
-          .map(item => ({
-            type: item.type,
-            media_base64: item.media_base64,
-            caption: item.caption || ''
-          }));
+        data.media = pendingMedia.map(item => ({
+          type: item.type,
+          media_base64: item.media_base64,
+          caption: item.caption || ''
+        }));
         
         try {
           let response;

@@ -76,9 +76,8 @@ function renderBioCard(bio) {
  * Показать форму добавления/редактирования
  */
 function showBioForm(bio = null) {
-  const form = document.createElement('form');
-  form.id = 'biographyForm';
-  form.innerHTML = `
+  const formHTML = `
+  <form id="biographyForm" onsubmit="return false;">`;
     <h2 style="margin:0 0 20px;">${bio ? 'Редактировать' : 'Добавить'} биографию</h2>
     
     <label style="display:block;margin-bottom:8px;font-weight:500;">ФИО *</label>
@@ -119,9 +118,9 @@ function showBioForm(bio = null) {
       <button type="submit" class="primary">Сохранить</button>
       <button type="button" class="secondary" onclick="closeModal()">Отмена</button>
     </div>
-  `;
+  </form>`;
   
-  showModalRaw(form.outerHTML);
+  showModalRaw(formHTML);
   
   // Обработчики после вставки в DOM
   setTimeout(() => {

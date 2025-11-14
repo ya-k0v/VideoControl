@@ -2,7 +2,7 @@
 
 **Система управления медиаконтентом для цифровых дисплеев**
 
-![Version](https://img.shields.io/badge/version-2.6.2-blue)
+![Version](https://img.shields.io/badge/version-2.6.3-blue)
 ![Node](https://img.shields.io/badge/node-20.x-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
@@ -35,7 +35,7 @@ node server.js
 
 **По умолчанию:**
 - Сервер: `http://localhost:3000`
-- Админ: `admin / Admin123!`
+- Админ: `admin / admin123`
 
 ### Systemd (для production)
 

@@ -78,45 +78,110 @@ function renderBioCard(bio) {
 function showBioForm(bio = null) {
   const formHTML = `
   <form id="biographyForm" onsubmit="return false;">
-    <h2 style="margin:0 0 20px;">${bio ? 'Редактировать' : 'Добавить'} биографию</h2>
+    <h2 style="margin:0 0 24px;font-size:1.5rem;">${bio ? 'Редактировать' : 'Добавить'} биографию</h2>
     
-    <label style="display:block;margin-bottom:8px;font-weight:500;">ФИО *</label>
-    <input name="full_name" value="${bio?.full_name || ''}" required 
-           style="width:100%;margin-bottom:16px;"/>
-    
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+    <!-- Фото и основная информация -->
+    <div style="display:grid;grid-template-columns:200px 1fr;gap:24px;margin-bottom:24px;">
+      
+      <!-- Левая часть: фото -->
       <div>
-        <label style="display:block;margin-bottom:8px;font-weight:500;">Год рождения</label>
-        <input name="birth_year" type="number" value="${bio?.birth_year || ''}" 
-               min="1800" max="2100" style="width:100%;"/>
+        <div id="photoPreview" style="
+          width:200px;
+          height:260px;
+          border:2px dashed var(--border);
+          border-radius:var(--radius-md);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          cursor:pointer;
+          overflow:hidden;
+          background:var(--panel-2);
+          position:relative;
+          transition:border-color 0.2s;
+        " onclick="document.getElementById('photoInput').click()">
+          ${bio?.photo_base64 ? `
+            <img src="${bio.photo_base64}" style="width:100%;height:100%;object-fit:cover;"/>
+            <div style="position:absolute;bottom:8px;right:8px;background:var(--brand);color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">✏️</div>
+          ` : `
+            <div style="text-align:center;color:var(--muted);">
+              <div style="font-size:3rem;margin-bottom:8px;">+</div>
+              <div style="font-size:0.875rem;">Добавить фото</div>
+              <div style="font-size:0.75rem;margin-top:4px;">до 1GB</div>
+            </div>
+          `}
+        </div>
+        <input type="file" id="photoInput" accept="image/*" style="display:none;"/>
+        <input type="hidden" name="photo_base64" value="${bio?.photo_base64 || ''}"/>
       </div>
-      <div>
-        <label style="display:block;margin-bottom:8px;font-weight:500;">Год смерти</label>
-        <input name="death_year" type="number" value="${bio?.death_year || ''}" 
-               min="1800" max="2100" style="width:100%;"/>
+      
+      <!-- Правая часть: поля -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="display:block;margin-bottom:6px;font-weight:500;font-size:0.875rem;color:var(--muted);">ФИО *</label>
+          <input name="full_name" value="${bio?.full_name || ''}" required 
+                 placeholder="Иванов Иван Иванович"
+                 style="width:100%;padding:10px 12px;font-size:1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);"/>
+        </div>
+        
+        <div>
+          <label style="display:block;margin-bottom:6px;font-weight:500;font-size:0.875rem;color:var(--muted);">Звание</label>
+          <input name="rank" value="${bio?.rank || ''}" 
+                 placeholder="Гвардии старший лейтенант"
+                 style="width:100%;padding:10px 12px;font-size:1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);"/>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end;">
+          <div>
+            <label style="display:block;margin-bottom:6px;font-weight:500;font-size:0.875rem;color:var(--muted);">Год рождения</label>
+            <input name="birth_year" type="number" value="${bio?.birth_year || ''}" 
+                   placeholder="1920"
+                   min="1800" max="2100" 
+                   style="width:100%;padding:10px 12px;font-size:1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);"/>
+          </div>
+          <div style="padding:10px 0;color:var(--muted);font-size:1.25rem;">—</div>
+          <div>
+            <label style="display:block;margin-bottom:6px;font-weight:500;font-size:0.875rem;color:var(--muted);">Год смерти <span style="color:var(--muted);font-weight:400;">(н.в. если пусто)</span></label>
+            <input name="death_year" type="number" value="${bio?.death_year || ''}" 
+                   placeholder="н.в."
+                   min="1800" max="2100" 
+                   style="width:100%;padding:10px 12px;font-size:1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);"/>
+          </div>
+        </div>
       </div>
     </div>
     
-    <label style="display:block;margin-bottom:8px;font-weight:500;">Звание</label>
-    <input name="rank" value="${bio?.rank || ''}" 
-           style="width:100%;margin-bottom:16px;"/>
+    <!-- Биография -->
+    <div style="margin-bottom:24px;">
+      <label style="display:block;margin-bottom:6px;font-weight:500;font-size:0.875rem;color:var(--muted);">Биография</label>
+      <textarea name="biography" rows="8" 
+                placeholder="Родился в... Участвовал в..."
+                style="width:100%;padding:12px;font-size:1rem;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel);color:var(--text);font-family:inherit;resize:vertical;line-height:1.6;">${bio?.biography || ''}</textarea>
+    </div>
     
-    <label style="display:block;margin-bottom:8px;font-weight:500;">Фото</label>
-    <input type="file" id="photoInput" accept="image/*" style="margin-bottom:8px;"/>
-    <input type="hidden" name="photo_base64" value="${bio?.photo_base64 || ''}"/>
-    ${bio?.photo_base64 ? `
-      <div style="margin-bottom:16px;">
-        <img src="${bio.photo_base64}" style="width:200px;height:auto;border-radius:var(--radius-sm);"/>
+    <!-- Дополнительные материалы -->
+    <div style="border-top:1px solid var(--border);padding-top:24px;margin-bottom:24px;">
+      <h3 style="margin:0 0 16px;font-size:1.125rem;">Дополнительные материалы</h3>
+      <div id="mediaUploadArea" style="
+        border:2px dashed var(--border);
+        border-radius:var(--radius-md);
+        padding:24px;
+        text-align:center;
+        background:var(--panel-2);
+        cursor:pointer;
+        transition:border-color 0.2s;
+      " onclick="document.getElementById('mediaInput').click()">
+        <div style="font-size:2rem;margin-bottom:8px;">📷 🎬</div>
+        <div style="color:var(--text);margin-bottom:4px;">Добавить фото или видео</div>
+        <div style="font-size:0.875rem;color:var(--muted);">Нажмите для выбора файлов (до 1GB каждый)</div>
+        <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display:none;"/>
       </div>
-    ` : ''}
+      <div id="mediaList" style="margin-top:16px;display:grid;gap:12px;"></div>
+    </div>
     
-    <label style="display:block;margin-bottom:8px;font-weight:500;">Биография</label>
-    <textarea name="biography" rows="10" 
-              style="width:100%;margin-bottom:16px;font-family:inherit;resize:vertical;">${bio?.biography || ''}</textarea>
-    
-    <div style="display:flex;gap:12px;margin-top:16px;">
-      <button type="submit" class="primary">Сохранить</button>
+    <!-- Кнопки -->
+    <div style="display:flex;gap:12px;justify-content:flex-end;">
       <button type="button" class="secondary" onclick="closeModal()">Отмена</button>
+      <button type="submit" class="primary">💾 Сохранить</button>
     </div>
   </form>`;
   

@@ -28,7 +28,7 @@ export async function showBiographiesModal() {
       </div>
     `;
     
-    showModal(modalContent.innerHTML);
+    showModalRaw(modalContent.innerHTML);
     
     // Обработчики после вставки в DOM
     document.getElementById('addBioBtn').onclick = () => showBioForm();
@@ -120,43 +120,47 @@ function showBioForm(bio = null) {
     </div>
   `;
   
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(form));
-    
-    try {
-      let response;
-      if (bio) {
-        response = await adminFetch(`/api/biographies/${bio.id}`, { 
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data) 
-        });
-      } else {
-        response = await adminFetch('/api/biographies', { 
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data) 
-        });
-      }
-      
-      const result = await response.json();
-      console.log('[Biographies] Saved:', result);
-      
-      // Обновить список
-      showBiographiesModal();
-      
-    } catch (err) {
-      console.error('[Biographies] Save error:', err);
-      alert('Ошибка сохранения: ' + err.message);
-    }
-  };
+  showModalRaw(form.outerHTML);
   
-  showModal(form.outerHTML);
-  
-  // Обработчик загрузки фото после вставки в DOM
+  // Обработчики после вставки в DOM
   setTimeout(() => {
+    const formElement = document.querySelector('#modalContent form');
     const photoInput = document.getElementById('photoInput');
+    
+    if (formElement) {
+      formElement.onsubmit = async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(formElement));
+        
+        try {
+          let response;
+          if (bio) {
+            response = await adminFetch(`/api/biographies/${bio.id}`, { 
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data) 
+            });
+          } else {
+            response = await adminFetch('/api/biographies', { 
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data) 
+            });
+          }
+          
+          const result = await response.json();
+          console.log('[Biographies] Saved:', result);
+          
+          // Обновить список
+          showBiographiesModal();
+          
+        } catch (err) {
+          console.error('[Biographies] Save error:', err);
+          alert('Ошибка сохранения: ' + err.message);
+        }
+      };
+    }
+    
     if (photoInput) {
       photoInput.onchange = async (e) => {
         const file = e.target.files[0];
@@ -209,9 +213,9 @@ function fileToBase64(file) {
 }
 
 /**
- * Показать модальное окно
+ * Показать модальное окно (без заголовка)
  */
-function showModal(content) {
+function showModalRaw(content) {
   const overlay = document.getElementById('modalOverlay');
   const modalContent = document.getElementById('modalContent');
   
@@ -222,12 +226,19 @@ function showModal(content) {
   
   modalContent.innerHTML = content;
   overlay.style.display = 'flex';
+  
+  // Закрытие по клику на overlay
+  overlay.onclick = (e) => {
+    if (e.target === overlay) {
+      closeModalLocal();
+    }
+  };
 }
 
 /**
  * Закрыть модальное окно
  */
-function closeModal() {
+function closeModalLocal() {
   const overlay = document.getElementById('modalOverlay');
   if (overlay) {
     overlay.style.display = 'none';
@@ -235,7 +246,7 @@ function closeModal() {
 }
 
 // Глобальный доступ для кнопок
-window.closeModal = closeModal;
+window.closeModal = closeModalLocal;
 
 console.log('[Biographies] ✅ Admin module loaded');
 

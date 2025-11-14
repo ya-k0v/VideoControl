@@ -10,7 +10,10 @@ import { adminFetch } from './auth.js';
  */
 export async function showBiographiesModal() {
   try {
-    const biographies = await adminFetch('/api/biographies');
+    const response = await adminFetch('/api/biographies');
+    const biographies = await response.json();
+    
+    console.log('[Biographies] Loaded:', biographies);
     
     const modalContent = document.createElement('div');
     modalContent.innerHTML = `
@@ -19,7 +22,7 @@ export async function showBiographiesModal() {
         <button class="primary" id="addBioBtn">+ Добавить</button>
       </div>
       <div id="bioList" style="display:grid;gap:16px;max-height:60vh;overflow-y:auto;">
-        ${biographies.length > 0 
+        ${Array.isArray(biographies) && biographies.length > 0 
           ? biographies.map(renderBioCard).join('') 
           : '<p style="color:var(--muted);text-align:center;padding:32px;">Биографий пока нет</p>'}
       </div>
@@ -30,14 +33,18 @@ export async function showBiographiesModal() {
     // Обработчики после вставки в DOM
     document.getElementById('addBioBtn').onclick = () => showBioForm();
     
-    biographies.forEach(bio => {
-      document.getElementById(`edit-${bio.id}`).onclick = () => showBioForm(bio);
-      document.getElementById(`delete-${bio.id}`).onclick = () => deleteBio(bio.id);
-    });
+    if (Array.isArray(biographies)) {
+      biographies.forEach(bio => {
+        const editBtn = document.getElementById(`edit-${bio.id}`);
+        const deleteBtn = document.getElementById(`delete-${bio.id}`);
+        if (editBtn) editBtn.onclick = () => showBioForm(bio);
+        if (deleteBtn) deleteBtn.onclick = () => deleteBio(bio.id);
+      });
+    }
     
   } catch (error) {
     console.error('[Biographies] Error loading list:', error);
-    alert('Ошибка загрузки биографий');
+    alert('Ошибка загрузки биографий: ' + error.message);
   }
 }
 
@@ -118,17 +125,23 @@ function showBioForm(bio = null) {
     const data = Object.fromEntries(new FormData(form));
     
     try {
+      let response;
       if (bio) {
-        await adminFetch(`/api/biographies/${bio.id}`, { 
-          method: 'PUT', 
+        response = await adminFetch(`/api/biographies/${bio.id}`, { 
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data) 
         });
       } else {
-        await adminFetch('/api/biographies', { 
-          method: 'POST', 
+        response = await adminFetch('/api/biographies', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data) 
         });
       }
+      
+      const result = await response.json();
+      console.log('[Biographies] Saved:', result);
       
       // Обновить список
       showBiographiesModal();
@@ -173,7 +186,9 @@ async function deleteBio(id) {
   if (!confirm('Удалить биографию? Это действие необратимо.')) return;
   
   try {
-    await adminFetch(`/api/biographies/${id}`, { method: 'DELETE' });
+    const response = await adminFetch(`/api/biographies/${id}`, { method: 'DELETE' });
+    const result = await response.json();
+    console.log('[Biographies] Deleted:', result);
     showBiographiesModal();
   } catch (error) {
     console.error('[Biographies] Delete error:', error);

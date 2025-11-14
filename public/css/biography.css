@@ -79,7 +79,7 @@
 
 .biography-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 32px;
   align-items: flex-start;
   margin-bottom: 32px;
@@ -103,8 +103,6 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 420px;
-  min-height: 420px;
   border-radius: var(--radius-md);
   border: 1px solid rgba(255,255,255,0.05);
   padding: 20px 24px;
@@ -143,23 +141,9 @@
   font-size: 1.0625rem;
   line-height: 1.7;
   white-space: pre-wrap;
-  overflow: auto;
+  overflow: visible;
   min-height: 0;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
-}
-
-.biography-scroll::-webkit-scrollbar {
-  width: 8px;
-}
-
-.biography-scroll::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.05);
-  border-radius: 4px;
-}
-
-.biography-scroll::-webkit-scrollbar-thumb {
-  background: var(--brand);
-  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
 }
 
 /* ========================================

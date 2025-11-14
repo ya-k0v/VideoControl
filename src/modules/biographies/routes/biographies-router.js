@@ -23,7 +23,7 @@ function validateMediaSize(base64String) {
       throw new Error('File too large (max 1GB)');
     }
   } catch (err) {
-    if (err.message === 'File too large (max 5GB)') {
+    if (err.message === 'File too large (max 1GB)') {
       throw err;
     }
     // Если ошибка парсинга - игнорируем (может быть пустая строка)

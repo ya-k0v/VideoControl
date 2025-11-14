@@ -77,20 +77,33 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.biography-header {
+.biography-layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 24px;
+  grid-template-columns: 320px 1fr;
+  gap: 32px;
+  align-items: flex-start;
   margin-bottom: 32px;
 }
 
+.biography-card-left {
+  width: 100%;
+}
+
 .biography-photo {
-  width: 300px;
-  height: 400px;
+  width: 100%;
+  height: 420px;
   object-fit: cover;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--panel-2);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.biography-card-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 420px;
 }
 
 .biography-info {
@@ -100,7 +113,7 @@
 }
 
 .biography-info h1 {
-  font-size: 2rem;
+  font-size: 2.25rem;
   margin: 0;
   line-height: 1.2;
 }
@@ -116,11 +129,32 @@
   font-weight: 500;
 }
 
-.biography-text {
-  line-height: 1.8;
-  margin: 24px 0;
-  white-space: pre-wrap;
+.biography-scroll {
+  flex: 1;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
   font-size: 1.0625rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 420px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+.biography-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.biography-scroll::-webkit-scrollbar-track {
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+}
+
+.biography-scroll::-webkit-scrollbar-thumb {
+  background: var(--brand);
+  border-radius: 4px;
 }
 
 /* ========================================
@@ -276,18 +310,17 @@
    ======================================== */
 
 @media (max-width: 768px) {
-  .biography-header {
+  .biography-layout {
     grid-template-columns: 1fr;
   }
   
   .biography-photo {
-    width: 100%;
     height: auto;
-    max-height: 400px;
+    max-height: 420px;
   }
   
-  .biography-info h1 {
-    font-size: 1.5rem;
+  .biography-scroll {
+    max-height: none;
   }
   
   .media-gallery {

@@ -7,7 +7,7 @@
 let currentBiography = null;
 let currentMediaIndex = 0;
 let inactivityTimer = null;
-const INACTIVITY_TIMEOUT_MS = 1 * 1000;
+const INACTIVITY_TIMEOUT_MS = 10 * 1000; // TODO: заменить на 10 * 60 * 1000 после тестирования
 
 // DOM элементы
 const searchInput = document.getElementById('searchInput');
@@ -129,28 +129,31 @@ async function loadBiography(id) {
 
 function renderBiography(bio) {
   content.innerHTML = `
-    <div class="biography-header">
-      <img src="${bio.photo_base64 || '/icon.svg'}" 
-           class="biography-photo" 
-           alt="${bio.full_name}"
-           onerror="this.src='/icon.svg'"/>
-      <div class="biography-info">
-        <h1>${bio.full_name}</h1>
-        <div class="biography-info-item">
-          <strong>Годы жизни:</strong> 
-          <span>${bio.birth_year || '?'} - ${bio.death_year || 'н.в.'}</span>
-        </div>
-        ${bio.rank ? `
-          <div class="biography-info-item">
-            <strong>Звание:</strong> 
-            <span>${bio.rank}</span>
-          </div>
-        ` : ''}
+    <div class="biography-layout">
+      <div class="biography-card-left">
+        <img src="${bio.photo_base64 || '/icon.svg'}"
+             class="biography-photo"
+             alt="${bio.full_name}"
+             onerror="this.src='/icon.svg'"/>
       </div>
-    </div>
-    
-    <div class="biography-text">
-      ${bio.biography || '<em style="color:var(--muted);">Биография отсутствует</em>'}
+      <div class="biography-card-right">
+        <div class="biography-info">
+          <h1>${bio.full_name}</h1>
+          <div class="biography-info-item">
+            <strong>Годы жизни:</strong>
+            <span>${bio.birth_year || '?'} – ${bio.death_year || 'н.в.'}</span>
+          </div>
+          ${bio.rank ? `
+            <div class="biography-info-item">
+              <strong>Звание:</strong>
+              <span>${bio.rank}</span>
+            </div>
+          ` : ''}
+        </div>
+        <div class="biography-scroll">
+          ${bio.biography || '<em style="color:var(--muted);">Биография отсутствует</em>'}
+        </div>
+      </div>
     </div>
     
     ${bio.media && bio.media.length > 0 ? `

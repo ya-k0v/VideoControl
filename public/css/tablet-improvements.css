@@ -4,15 +4,24 @@
  * Только критичные изменения для touch devices
  */
 
-/* ===== 0. СПИКЕР: Горизонтальное расположение элементов файла ===== */
+/* ===== 0. СПИКЕР: Карточка файла с кнопкой Play справа (25%) ===== */
 /* Переопределяем вертикальный layout из app.css для панели спикера */
 body:has(#filePreview) .file-item,
 .speaker-layout .file-item {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: 12px !important;
-  padding: 12px !important;
+  display: grid !important;
+  grid-template-columns: 3fr 1fr !important; /* 75% информация + 25% кнопка Play */
+  padding: 0 !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body:has(#filePreview) .file-item.active,
+.speaker-layout .file-item.active {
+  border-color: var(--brand) !important;
 }
 
 /* Убираем старые стили для file-item-actions */

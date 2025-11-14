@@ -163,15 +163,15 @@ function renderTVList() {
   
   // Показываем пагинацию только если больше 1 страницы
   if (totalPages > 1) {
-    pager.innerHTML = `
-      <button class="secondary" id="tvPrev" ${tvPage<=0?'disabled':''} style="min-width:80px">Назад</button>
-      <span style="white-space:nowrap">Стр. ${tvPage+1} из ${totalPages}</span>
-      <button class="secondary" id="tvNext" ${tvPage>=totalPages-1?'disabled':''} style="min-width:80px">Вперёд</button>
-    `;
-    const prev = document.getElementById('tvPrev');
-    const next = document.getElementById('tvNext');
-    if (prev) prev.onclick = () => { if (tvPage>0) { tvPage--; renderTVList(); } };
-    if (next) next.onclick = () => { if (tvPage<totalPages-1) { tvPage++; renderTVList(); } };
+  pager.innerHTML = `
+    <button class="secondary" id="tvPrev" ${tvPage<=0?'disabled':''} style="min-width:80px">Назад</button>
+    <span style="white-space:nowrap">Стр. ${tvPage+1} из ${totalPages}</span>
+    <button class="secondary" id="tvNext" ${tvPage>=totalPages-1?'disabled':''} style="min-width:80px">Вперёд</button>
+  `;
+  const prev = document.getElementById('tvPrev');
+  const next = document.getElementById('tvNext');
+  if (prev) prev.onclick = () => { if (tvPage>0) { tvPage--; renderTVList(); } };
+  if (next) next.onclick = () => { if (tvPage<totalPages-1) { tvPage++; renderTVList(); } };
   } else {
     // Если только 1 страница - скрываем пагинацию
     pager.innerHTML = '';
@@ -377,11 +377,30 @@ async function loadFiles() {
       <li class="file-item ${active ? 'active' : ''}" 
           data-safe="${encodeURIComponent(safeName)}" 
           data-original="${encodeURIComponent(originalName)}"
-          style="display:flex; align-items:center; gap:12px; cursor:pointer; padding:12px; border-radius:var(--radius-md);">
+          style="
+            display:grid; 
+            grid-template-columns:3fr 1fr; 
+            cursor:pointer; 
+            padding:0; 
+            border-radius:var(--radius-md);
+            border:1px solid var(--border);
+            overflow:hidden;
+            background:transparent;
+            transition:all 0.2s;
+            min-height:72px;
+          ">
         
-        <div class="file-info" style="flex:1; min-width:0;">
+        <!-- Левая часть: информация о файле (75%) -->
+        <div class="file-info" style="
+          padding:8px 12px; 
+          min-width:0; 
+          display:flex; 
+          flex-direction:column; 
+          justify-content:center;
+          background:var(--panel);
+        ">
           <div class="file-item-name" title="${displayName}" 
-               style="font-size:1.0625rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:4px;">
+               style="font-size:1rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:3px; line-height:1.3;">
             ${displayName}
           </div>
           <div class="file-meta" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
@@ -414,13 +433,28 @@ async function loadFiles() {
           </div>
         </div>
         
-        <button class="primary playBtn" 
-                data-safe="${encodeURIComponent(safeName)}" 
-                data-original="${encodeURIComponent(originalName)}"
-                style="min-width:56px; min-height:56px; width:56px; height:56px; padding:0; display:flex; align-items:center; justify-content:center; font-size:1.5rem; flex-shrink:0;"
-                aria-label="Воспроизвести ${displayName}">
+        <!-- Правая часть: Play зона (25%) - часть карточки -->
+        <div class="playBtn" 
+             data-safe="${encodeURIComponent(safeName)}" 
+             data-original="${encodeURIComponent(originalName)}"
+             style="
+               background:var(--brand);
+               color:white;
+               display:flex;
+               align-items:center;
+               justify-content:center;
+               font-size:2rem;
+               cursor:pointer;
+               transition:background 0.2s;
+               user-select:none;
+             "
+             onmouseover="this.style.background='var(--brand-hover)'"
+             onmouseout="this.style.background='var(--brand)'"
+             role="button"
+             tabindex="0"
+             aria-label="Воспроизвести ${displayName}">
           ▶
-        </button>
+        </div>
       </li>
     `;
   }).join('');
@@ -647,7 +681,7 @@ async function loadFiles() {
           }, 50);
         }
       } else {
-        // Для видео и обычных изображений - показываем заглушку
+      // Для видео и обычных изображений - показываем заглушку
         // Чтобы не было двойной загрузки (preview + основной плеер)
         setTimeout(() => {
           const placeholderUrl = `/player-videojs.html?device_id=${encodeURIComponent(currentDevice)}&preview=1&muted=1`;

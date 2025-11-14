@@ -7,7 +7,7 @@
 let currentBiography = null;
 let currentMediaIndex = 0;
 let inactivityTimer = null;
-const INACTIVITY_TIMEOUT_MS = 10 * 1000; // TODO: заменить на 10 * 60 * 1000 после тестирования
+const INACTIVITY_TIMEOUT_MS = 1 * 1000;
 
 // DOM элементы
 const searchInput = document.getElementById('searchInput');
@@ -261,7 +261,7 @@ document.addEventListener('keydown', (e) => {
 function startInactivityTimer() {
   clearInactivityTimer();
   inactivityTimer = setTimeout(() => {
-    window.location.href = '/';
+    window.location.href = '/biography.html';
   }, INACTIVITY_TIMEOUT_MS);
 }
 

@@ -3,14 +3,9 @@
  * Поиск и просмотр биографий
  */
 
-import { initThemeToggle } from './theme.js';
-
 // Глобальное состояние
 let currentBiography = null;
 let currentMediaIndex = 0;
-
-// Инициализация
-initThemeToggle();
 
 // DOM элементы
 const searchInput = document.getElementById('searchInput');

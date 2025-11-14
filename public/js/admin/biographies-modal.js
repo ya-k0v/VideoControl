@@ -5,6 +5,8 @@
 
 import { adminFetch } from './auth.js';
 
+let biographiesCache = [];
+
 /**
  * Показать модальное окно со списком биографий
  */
@@ -15,37 +17,61 @@ export async function showBiographiesModal() {
     
     console.log('[Biographies] Loaded:', biographies);
     
+    biographiesCache = Array.isArray(biographies) ? biographies : [];
+    
     const modalContent = document.createElement('div');
     modalContent.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <h2 style="margin:0;">Управление биографиями</h2>
         <button class="primary" id="addBioBtn">+ Добавить</button>
       </div>
-      <div id="bioList" style="display:grid;gap:16px;max-height:60vh;overflow-y:auto;">
-        ${Array.isArray(biographies) && biographies.length > 0 
-          ? biographies.map(renderBioCard).join('') 
-          : '<p style="color:var(--muted);text-align:center;padding:32px;">Биографий пока нет</p>'}
+      <div style="margin-bottom:16px;">
+        <input id="bioSearch" class="input" placeholder="Поиск по ФИО..." style="width:100%;padding:10px 12px;font-size:1rem;"/>
       </div>
+      <div id="bioList" style="display:grid;gap:16px;max-height:60vh;overflow-y:auto;"></div>
     `;
     
     showModalRaw(modalContent.innerHTML);
     
-    // Обработчики после вставки в DOM
-    document.getElementById('addBioBtn').onclick = () => showBioForm();
+    renderBiographiesList(biographiesCache);
     
-    if (Array.isArray(biographies)) {
-      biographies.forEach(bio => {
-        const editBtn = document.getElementById(`edit-${bio.id}`);
-        const deleteBtn = document.getElementById(`delete-${bio.id}`);
-        if (editBtn) editBtn.onclick = () => showBioForm(bio);
-        if (deleteBtn) deleteBtn.onclick = () => deleteBio(bio.id);
+    const searchInput = document.getElementById('bioSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const term = e.target.value.trim().toLowerCase();
+        const filtered = !term
+          ? biographiesCache
+          : biographiesCache.filter(bio => (bio.full_name || '').toLowerCase().includes(term));
+        renderBiographiesList(filtered);
       });
     }
+    
+    // Обработчики после вставки в DOM
+    document.getElementById('addBioBtn').onclick = () => showBioForm();
     
   } catch (error) {
     console.error('[Biographies] Error loading list:', error);
     alert('Ошибка загрузки биографий: ' + error.message);
   }
+}
+
+function renderBiographiesList(list) {
+  const container = document.getElementById('bioList');
+  if (!container) return;
+  
+  if (!list.length) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:32px;">Ничего не найдено</p>';
+    return;
+  }
+  
+  container.innerHTML = list.map(renderBioCard).join('');
+  
+  list.forEach(bio => {
+    const editBtn = document.getElementById(`edit-${bio.id}`);
+    const deleteBtn = document.getElementById(`delete-${bio.id}`);
+    if (editBtn) editBtn.onclick = () => showBioForm(bio);
+    if (deleteBtn) deleteBtn.onclick = () => deleteBio(bio.id);
+  });
 }
 
 /**

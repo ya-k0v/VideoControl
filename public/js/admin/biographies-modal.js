@@ -77,7 +77,7 @@ function renderBioCard(bio) {
  */
 function showBioForm(bio = null) {
   const formHTML = `
-  <form id="biographyForm" onsubmit="return false;">`;
+  <form id="biographyForm" onsubmit="return false;">
     <h2 style="margin:0 0 20px;">${bio ? 'Редактировать' : 'Добавить'} биографию</h2>
     
     <label style="display:block;margin-bottom:8px;font-weight:500;">ФИО *</label>

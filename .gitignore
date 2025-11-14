@@ -79,3 +79,4 @@ backups/
 backups/
 *.log
 .DS_Store
+.git-remotes-cheatsheet

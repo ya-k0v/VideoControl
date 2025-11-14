@@ -198,7 +198,7 @@ function showBioForm(bio = null) {
       " onclick="document.getElementById('mediaInput').click()">
         <div style="font-size:2rem;margin-bottom:8px;">📷 🎬</div>
         <div style="color:var(--text);margin-bottom:4px;">Добавить фото или видео</div>
-        <div style="font-size:0.875rem;color:var(--muted);">Нажмите для выбора файлов (до 1GB каждый)</div>
+        <div style="font-size:0.875rem;color:var(--muted);">Фото до 10MB, видео до 200MB</div>
         <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display:none;"/>
       </div>
       <div id="mediaList" style="margin-top:16px;display:grid;gap:12px;"></div>
@@ -284,8 +284,8 @@ function showBioForm(bio = null) {
       photoInput.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        if (file.size > 1024 * 1024 * 1024) {
-          alert('Файл слишком большой (максимум 1GB)');
+        if (file.size > 10 * 1024 * 1024) {
+          alert('Фото слишком большое (максимум 10MB)');
           e.target.value = '';
           return;
         }
@@ -300,14 +300,16 @@ function showBioForm(bio = null) {
       mediaInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
         for (const file of files) {
-          if (file.size > 1024 * 1024 * 1024) {
-            alert(`Файл ${file.name} слишком большой (максимум 1GB)`);
+          const isVideo = file.type.startsWith('video');
+          const limit = isVideo ? 200 * 1024 * 1024 : 10 * 1024 * 1024;
+          if (file.size > limit) {
+            alert(`Файл ${file.name} слишком большой (максимум ${isVideo ? '200MB' : '10MB'})`);
             continue;
           }
           const base64 = await fileToBase64(file);
           pendingMedia.push({
             id: `tmp-${Date.now()}-${Math.random()}`,
-            type: file.type.startsWith('video') ? 'video' : 'photo',
+            type: isVideo ? 'video' : 'photo',
             media_base64: base64,
             caption: file.name.replace(/\.[^.]+$/, ''),
             existing: false
@@ -330,7 +332,7 @@ function showBioForm(bio = null) {
           <div style="text-align:center;color:var(--muted);">
             <div style="font-size:3rem;margin-bottom:8px;">+</div>
             <div style="font-size:0.875rem;">Добавить фото</div>
-            <div style="font-size:0.75rem;margin-top:4px;">до 1GB</div>
+            <div style="font-size:0.75rem;margin-top:4px;">до 10MB</div>
           </div>
         `;
       }

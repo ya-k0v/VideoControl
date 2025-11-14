@@ -9,7 +9,7 @@ import { biographyQueries } from '../database/queries.js';
 /**
  * Валидация размера base64 медиа (макс 5GB)
  */
-function validateMediaSize(base64String) {
+function validateMediaSize(base64String, limitBytes = 10 * 1024 * 1024) {
   if (!base64String) return;
   
   // Убираем data:image/...;base64, prefix если есть
@@ -17,13 +17,11 @@ function validateMediaSize(base64String) {
   
   try {
     const sizeInBytes = Buffer.from(base64Data, 'base64').length;
-    const maxSize = 1024 * 1024 * 1024; // 1GB
-    
-    if (sizeInBytes > maxSize) {
-      throw new Error('File too large (max 1GB)');
+    if (sizeInBytes > limitBytes) {
+      throw new Error(`File too large (max ${Math.round(limitBytes / (1024 * 1024))}MB)`);
     }
   } catch (err) {
-    if (err.message === 'File too large (max 1GB)') {
+    if (err.message?.startsWith('File too large')) {
       throw err;
     }
     // Если ошибка парсинга - игнорируем (может быть пустая строка)
@@ -96,15 +94,16 @@ export function createBiographiesRouter({ requireAdmin }) {
    */
   router.post('/', requireAdmin, (req, res) => {
     try {
-      // Валидация размера фото
-      validateMediaSize(req.body.photo_base64);
+      // Валидация размера фото (10MB)
+      validateMediaSize(req.body.photo_base64, 10 * 1024 * 1024);
       
       // Создание биографии
       const id = biographyQueries.create(req.body);
 
       if (Array.isArray(req.body.media)) {
         req.body.media.forEach(item => {
-          validateMediaSize(item.media_base64);
+          const limit = (item.type === 'video' ? 200 : 10) * 1024 * 1024;
+          validateMediaSize(item.media_base64, limit);
           biographyQueries.addMedia(id, {
             type: item.type || 'photo',
             media_base64: item.media_base64,
@@ -128,8 +127,8 @@ export function createBiographiesRouter({ requireAdmin }) {
    */
   router.put('/:id', requireAdmin, (req, res) => {
     try {
-      // Валидация размера фото
-      validateMediaSize(req.body.photo_base64);
+      // Валидация размера фото (10MB)
+      validateMediaSize(req.body.photo_base64, 10 * 1024 * 1024);
       
       // Обновление биографии
       biographyQueries.update(req.params.id, req.body);
@@ -137,7 +136,8 @@ export function createBiographiesRouter({ requireAdmin }) {
       if (Array.isArray(req.body.media)) {
         biographyQueries.deleteMediaByBiography(req.params.id);
         req.body.media.forEach(item => {
-          validateMediaSize(item.media_base64);
+          const limit = (item.type === 'video' ? 200 : 10) * 1024 * 1024;
+          validateMediaSize(item.media_base64, limit);
           biographyQueries.addMedia(req.params.id, {
             type: item.type || 'photo',
             media_base64: item.media_base64,

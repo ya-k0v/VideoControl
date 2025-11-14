@@ -6,6 +6,8 @@
 // Глобальное состояние
 let currentBiography = null;
 let currentMediaIndex = 0;
+let inactivityTimer = null;
+const INACTIVITY_TIMEOUT_MS = 10 * 1000; // TODO: заменить на 10 * 60 * 1000 после тестирования
 
 // DOM элементы
 const searchInput = document.getElementById('searchInput');
@@ -13,6 +15,14 @@ const suggestions = document.getElementById('suggestions');
 const content = document.getElementById('biographyContent');
 const emptyState = document.getElementById('emptyState');
 const lightbox = document.getElementById('lightbox');
+
+['mousemove', 'keydown', 'touchstart'].forEach(evt => {
+  document.addEventListener(evt, () => {
+    if (currentBiography) {
+      resetInactivityTimer();
+    }
+  });
+});
 
 // ========================================
 // Debounce Helper
@@ -104,6 +114,8 @@ async function loadBiography(id) {
     // Скрыть empty state
     if (emptyState) emptyState.style.display = 'none';
     content.style.display = 'block';
+    
+    startInactivityTimer();
     
   } catch (error) {
     console.error('[Biography] Load error:', error);
@@ -245,6 +257,25 @@ document.addEventListener('keydown', (e) => {
     window.nextMedia();
   }
 });
+
+function startInactivityTimer() {
+  clearInactivityTimer();
+  inactivityTimer = setTimeout(() => {
+    window.location.href = '/';
+  }, INACTIVITY_TIMEOUT_MS);
+}
+
+function resetInactivityTimer() {
+  if (!currentBiography) return;
+  startInactivityTimer();
+}
+
+function clearInactivityTimer() {
+  if (inactivityTimer) {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = null;
+  }
+}
 
 console.log('[Biography] ✅ Module loaded');
 

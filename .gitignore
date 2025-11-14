@@ -75,3 +75,7 @@ clients/android-mediaplayer/*.aab
 !clients/android-mediaplayer/settings.gradle
 *.apk
 logs/
+backups/
+backups/
+*.log
+.DS_Store

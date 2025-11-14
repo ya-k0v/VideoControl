@@ -69,9 +69,20 @@ function renderBiographiesList(list) {
   list.forEach(bio => {
     const editBtn = document.getElementById(`edit-${bio.id}`);
     const deleteBtn = document.getElementById(`delete-${bio.id}`);
-    if (editBtn) editBtn.onclick = () => showBioForm(bio);
+    if (editBtn) editBtn.onclick = () => openBiographyEditor(bio.id);
     if (deleteBtn) deleteBtn.onclick = () => deleteBio(bio.id);
   });
+}
+
+async function openBiographyEditor(id) {
+  try {
+    const response = await adminFetch(`/api/biographies/${id}`);
+    const data = await response.json();
+    showBioForm(data);
+  } catch (error) {
+    console.error('[Biographies] Error loading biography:', error);
+    alert('Не удалось загрузить биографию');
+  }
 }
 
 /**
@@ -124,18 +135,7 @@ function showBioForm(bio = null) {
           background:var(--panel-2);
           position:relative;
           transition:border-color 0.2s;
-        " onclick="document.getElementById('photoInput').click()">
-          ${bio?.photo_base64 ? `
-            <img src="${bio.photo_base64}" style="width:100%;height:100%;object-fit:cover;"/>
-            <div style="position:absolute;bottom:8px;right:8px;background:var(--brand);color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">✏️</div>
-          ` : `
-            <div style="text-align:center;color:var(--muted);">
-              <div style="font-size:3rem;margin-bottom:8px;">+</div>
-              <div style="font-size:0.875rem;">Добавить фото</div>
-              <div style="font-size:0.75rem;margin-top:4px;">до 1GB</div>
-            </div>
-          `}
-        </div>
+        " onclick="document.getElementById('photoInput').click()"></div>
         <input type="file" id="photoInput" accept="image/*" style="display:none;"/>
         <input type="hidden" name="photo_base64" value="${bio?.photo_base64 || ''}"/>
       </div>
@@ -217,8 +217,23 @@ function showBioForm(bio = null) {
   setTimeout(() => {
     const formElement = document.getElementById('biographyForm');
     const photoInput = document.getElementById('photoInput');
+    const photoPreview = document.getElementById('photoPreview');
+    const hiddenPhotoInput = document.querySelector('[name="photo_base64"]');
+    const mediaInput = document.getElementById('mediaInput');
+    const mediaList = document.getElementById('mediaList');
     
-    console.log('[Biographies] Form element:', formElement);
+    let pendingMedia = Array.isArray(bio?.media)
+      ? bio.media.map(item => ({
+          id: item.id,
+          type: item.type,
+          media_base64: item.media_base64,
+          caption: item.caption || '',
+          existing: true
+        }))
+      : [];
+    
+    renderPhotoPreview(bio?.photo_base64 || null);
+    renderMediaList();
     
     if (formElement) {
       formElement.onsubmit = async (e) => {
@@ -228,6 +243,13 @@ function showBioForm(bio = null) {
         console.log('[Biographies] Form submit triggered');
         
         const data = Object.fromEntries(new FormData(formElement));
+        data.media = pendingMedia
+          .filter(item => !item.existing)
+          .map(item => ({
+            type: item.type,
+            media_base64: item.media_base64,
+            caption: item.caption || ''
+          }));
         
         try {
           let response;
@@ -261,21 +283,95 @@ function showBioForm(bio = null) {
     if (photoInput) {
       photoInput.onchange = async (e) => {
         const file = e.target.files[0];
-        if (file) {
-          // Проверка размера (1GB)
-          if (file.size > 1024 * 1024 * 1024) {
-            alert('Файл слишком большой (максимум 1GB)');
-            e.target.value = '';
-            return;
-          }
-          
-          const base64 = await fileToBase64(file);
-          const hiddenInput = document.querySelector('[name="photo_base64"]');
-          if (hiddenInput) {
-            hiddenInput.value = base64;
-          }
+        if (!file) return;
+        if (file.size > 1024 * 1024 * 1024) {
+          alert('Файл слишком большой (максимум 1GB)');
+          e.target.value = '';
+          return;
         }
+        const base64 = await fileToBase64(file);
+        if (hiddenPhotoInput) hiddenPhotoInput.value = base64;
+        renderPhotoPreview(base64);
+        e.target.value = '';
       };
+    }
+    
+    if (mediaInput) {
+      mediaInput.onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        for (const file of files) {
+          if (file.size > 1024 * 1024 * 1024) {
+            alert(`Файл ${file.name} слишком большой (максимум 1GB)`);
+            continue;
+          }
+          const base64 = await fileToBase64(file);
+          pendingMedia.push({
+            id: `tmp-${Date.now()}-${Math.random()}`,
+            type: file.type.startsWith('video') ? 'video' : 'photo',
+            media_base64: base64,
+            caption: file.name.replace(/\.[^.]+$/, ''),
+            existing: false
+          });
+        }
+        renderMediaList();
+        e.target.value = '';
+      };
+    }
+    
+    function renderPhotoPreview(base64) {
+      if (!photoPreview) return;
+      if (base64) {
+        photoPreview.innerHTML = `
+          <img src="${base64}" style="width:100%;height:100%;object-fit:cover;"/>
+          <div style="position:absolute;bottom:8px;right:8px;background:var(--brand);color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">✏️</div>
+        `;
+      } else {
+        photoPreview.innerHTML = `
+          <div style="text-align:center;color:var(--muted);">
+            <div style="font-size:3rem;margin-bottom:8px;">+</div>
+            <div style="font-size:0.875rem;">Добавить фото</div>
+            <div style="font-size:0.75rem;margin-top:4px;">до 1GB</div>
+          </div>
+        `;
+      }
+    }
+
+    function renderMediaList() {
+      if (!mediaList) return;
+      if (!pendingMedia.length) {
+        mediaList.innerHTML = '<p style="color:var(--muted);text-align:center;">Материалы не добавлены</p>';
+        return;
+      }
+      mediaList.innerHTML = pendingMedia.map((item, index) => `
+        <div class="media-card" data-index="${index}" style="display:flex;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--panel);align-items:center;">
+          <div style="width:80px;height:60px;border-radius:var(--radius-sm);overflow:hidden;background:var(--panel-2);display:flex;align-items:center;justify-content:center;">
+            ${item.type === 'photo'
+              ? `<img src="${item.media_base64}" style="width:100%;height:100%;object-fit:cover;"/>`
+              : `<video src="${item.media_base64}" style="width:100%;height:100%;object-fit:cover;" muted></video>`}
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+            <input type="text" data-caption="${index}" value="${item.caption || ''}" placeholder="Описание"
+                   style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--panel-2);color:var(--text);" ${item.existing ? 'readonly' : ''}/>
+            <div style="font-size:0.75rem;color:var(--muted);">${item.type === 'photo' ? 'Фото' : 'Видео'} ${item.existing ? '(существующее)' : ''}</div>
+          </div>
+          ${item.existing ? '' : `<button class="secondary" data-remove="${index}" title="Удалить" style="min-width:auto;padding:8px;">🗑️</button>`}
+        </div>
+      `).join('');
+
+      mediaList.querySelectorAll('input[data-caption]').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = Number(e.target.dataset.caption);
+          pendingMedia[idx].caption = e.target.value;
+        });
+      });
+
+      mediaList.querySelectorAll('button[data-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.remove);
+          pendingMedia.splice(idx, 1);
+          renderMediaList();
+        });
+      });
     }
   }, 100);
 }

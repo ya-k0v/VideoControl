@@ -101,6 +101,18 @@ export function createBiographiesRouter({ requireAdmin }) {
       
       // Создание биографии
       const id = biographyQueries.create(req.body);
+
+      if (Array.isArray(req.body.media)) {
+        req.body.media.forEach(item => {
+          validateMediaSize(item.media_base64);
+          biographyQueries.addMedia(id, {
+            type: item.type || 'photo',
+            media_base64: item.media_base64,
+            caption: item.caption || '',
+            order_index: item.order_index || 0
+          });
+        });
+      }
       
       console.log('[Biographies] ✅ Created biography:', id, req.body.full_name);
       res.json({ id, success: true });
@@ -121,6 +133,19 @@ export function createBiographiesRouter({ requireAdmin }) {
       
       // Обновление биографии
       biographyQueries.update(req.params.id, req.body);
+
+      if (Array.isArray(req.body.media)) {
+        biographyQueries.deleteMediaByBiography(req.params.id);
+        req.body.media.forEach(item => {
+          validateMediaSize(item.media_base64);
+          biographyQueries.addMedia(req.params.id, {
+            type: item.type || 'photo',
+            media_base64: item.media_base64,
+            caption: item.caption || '',
+            order_index: item.order_index || 0
+          });
+        });
+      }
       
       console.log('[Biographies] ✅ Updated biography:', req.params.id, req.body.full_name);
       res.json({ success: true });

@@ -109,6 +109,13 @@ export const biographyQueries = {
    */
   deleteMedia(mediaId) {
     return biographiesDb.prepare('DELETE FROM biography_media WHERE id = ?').run(mediaId);
+  },
+
+  /**
+   * Удалить все медиа материала биографии
+   */
+  deleteMediaByBiography(biographyId) {
+    return biographiesDb.prepare('DELETE FROM biography_media WHERE biography_id = ?').run(biographyId);
   }
 };
 

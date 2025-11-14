@@ -1,12 +1,18 @@
 import { initThemeToggle } from './theme.js';
-import { sortDevices, debounce, getPageSize, loadNodeNames } from './utils.js';
+import { sortDevices, debounce, loadNodeNames } from './utils.js';
 import { ensureAuth, speakerFetch, logout } from './speaker/auth.js';
 
 const socket = io();
 
+// Фиксированное количество элементов на странице для спикера
+const SPEAKER_PAGE_SIZE = 10;
+
 const tvList = document.getElementById('tvList');
 const fileList = document.getElementById('fileList');
 const filePreview = document.getElementById('filePreview');
+
+// Флаг что пользователь явно закрыл превью (не автооткрывать)
+let previewManuallyClosed = false;
 
 let readyDevices = new Set();
 let devices = [];
@@ -96,7 +102,7 @@ async function loadDevices() {
     devices = newDevices;
     // Сортируем устройства по алфавиту: А-Я, A-Z, 0-9
     devices = sortDevices(devices, nodeNames);
-    const pageSize = getPageSize();
+    const pageSize = SPEAKER_PAGE_SIZE; // Фиксированное значение 10
     const totalPages = Math.max(1, Math.ceil(devices.length / pageSize));
     if (tvPage >= totalPages) tvPage = totalPages - 1;
     renderTVList();
@@ -109,7 +115,7 @@ async function loadDevices() {
 function renderTVList() {
   // Сортируем устройства перед отображением (на случай если список обновился)
   const sortedDevices = sortDevices(devices);
-  const pageSize = getPageSize();
+  const pageSize = SPEAKER_PAGE_SIZE; // Фиксированное значение 10
   const totalPages = Math.max(1, Math.ceil(sortedDevices.length / pageSize));
   if (tvPage >= totalPages) tvPage = totalPages - 1;
   const start = tvPage * pageSize;
@@ -154,15 +160,22 @@ function renderTVList() {
     pager.style.gap = '8px';
     tvList.parentElement && tvList.parentElement.appendChild(pager);
   }
-  pager.innerHTML = `
-    <button class="secondary" id="tvPrev" ${tvPage<=0?'disabled':''} style="min-width:80px">Назад</button>
-    <span style="white-space:nowrap">Стр. ${tvPage+1} из ${totalPages}</span>
-    <button class="secondary" id="tvNext" ${tvPage>=totalPages-1?'disabled':''} style="min-width:80px">Вперёд</button>
-  `;
-  const prev = document.getElementById('tvPrev');
-  const next = document.getElementById('tvNext');
-  if (prev) prev.onclick = () => { if (tvPage>0) { tvPage--; renderTVList(); } };
-  if (next) next.onclick = () => { if (tvPage<totalPages-1) { tvPage++; renderTVList(); } };
+  
+  // Показываем пагинацию только если больше 1 страницы
+  if (totalPages > 1) {
+    pager.innerHTML = `
+      <button class="secondary" id="tvPrev" ${tvPage<=0?'disabled':''} style="min-width:80px">Назад</button>
+      <span style="white-space:nowrap">Стр. ${tvPage+1} из ${totalPages}</span>
+      <button class="secondary" id="tvNext" ${tvPage>=totalPages-1?'disabled':''} style="min-width:80px">Вперёд</button>
+    `;
+    const prev = document.getElementById('tvPrev');
+    const next = document.getElementById('tvNext');
+    if (prev) prev.onclick = () => { if (tvPage>0) { tvPage--; renderTVList(); } };
+    if (next) next.onclick = () => { if (tvPage<totalPages-1) { tvPage++; renderTVList(); } };
+  } else {
+    // Если только 1 страница - скрываем пагинацию
+    pager.innerHTML = '';
+  }
 }
 
 // Update TV list on resize for responsive grid
@@ -181,7 +194,7 @@ function showLivePreviewForTV(deviceId, force = false) {
   // Это используется при явном переключении устройства
   if (force) {
     console.log('[Speaker] 🔄 Принудительное обновление превью для устройства:', deviceId);
-    filePreview.innerHTML = `<iframe src="/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1" style="width:100%;height:100%;border:0"></iframe>`;
+    filePreview.innerHTML = `<iframe src="/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1" style="width:100%;height:100%;border:0" allow="autoplay; fullscreen"></iframe>`;
     return;
   }
   
@@ -195,7 +208,7 @@ function showLivePreviewForTV(deviceId, force = false) {
   // Показываем превью с живым состоянием устройства (всегда без звука)
   const device = devices.find(d => d.device_id === deviceId);
   if (!device) {
-    filePreview.innerHTML = `<iframe src="/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1" style="width:100%;height:100%;border:0"></iframe>`;
+    filePreview.innerHTML = `<iframe src="/player-videojs.html?device_id=${encodeURIComponent(deviceId)}&preview=1&muted=1" style="width:100%;height:100%;border:0" allow="autoplay; fullscreen"></iframe>`;
     return;
   }
   
@@ -207,7 +220,7 @@ function showLivePreviewForTV(deviceId, force = false) {
   if (frame && !frame.src.includes(placeholderUrl)) {
     frame.src = placeholderUrl;
   } else if (!frame) {
-    filePreview.innerHTML = `<iframe src="${placeholderUrl}" style="width:100%;height:100%;border:0"></iframe>`;
+    filePreview.innerHTML = `<iframe src="${placeholderUrl}" style="width:100%;height:100%;border:0" allow="autoplay; fullscreen"></iframe>`;
   }
 }
 
@@ -307,7 +320,7 @@ async function loadFiles() {
   if (meta) meta.textContent = `${totalFilesCount} файл${totalFilesCount === 1 ? '' : totalFilesCount > 1 && totalFilesCount < 5 ? 'а' : 'ов'}`;
 
   // Пагинация файлов
-  const pageSize = getPageSize();
+  const pageSize = SPEAKER_PAGE_SIZE; // Фиксированное значение 10
   const totalPages = Math.max(1, Math.ceil(allFiles.length / pageSize));
   if (filePage >= totalPages) filePage = totalPages - 1;
   const start = filePage * pageSize;
@@ -321,12 +334,21 @@ async function loadFiles() {
     
     // Определяем тип файла (включая папки)
     let type = 'VID'; // По умолчанию
-    if (ext === 'pdf') type = 'PDF';
-    else if (ext === 'pptx') type = 'PPTX';
-    else if (['png','jpg','jpeg','gif','webp'].includes(ext)) type = 'IMG';
-    else if (ext === 'zip' || !hasExtension) {
+    let typeLabel = 'Видео'; // Русское название
+    
+    if (ext === 'pdf') {
+      type = 'PDF';
+      typeLabel = 'PDF';
+    } else if (ext === 'pptx') {
+      type = 'PPTX';
+      typeLabel = 'Презентация';
+    } else if (['png','jpg','jpeg','gif','webp'].includes(ext)) {
+      type = 'IMG';
+      typeLabel = 'Изображение';
+    } else if (ext === 'zip' || !hasExtension) {
       // ZIP или папка без расширения - это папка с изображениями
       type = 'FOLDER';
+      typeLabel = 'Папка';
     }
     
     // НОВОЕ: Определяем разрешение для видео
@@ -352,20 +374,53 @@ async function loadFiles() {
     const displayName = originalName.replace(/\.[^.]+$/, '');
     
     return `
-      <li class="file-item ${active ? 'active' : ''}" style="max-width:100%;">
-        <div class="file-item-header" style="max-width:100%;">
-          <div style="flex:1; display:flex; align-items:stretch; gap:var(--space-xs); min-width:0; max-width:calc(100% - 80px);">
-            <span class="file-item-name" title="${displayName}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; display:block;">${displayName}</span>
+      <li class="file-item ${active ? 'active' : ''}" 
+          data-safe="${encodeURIComponent(safeName)}" 
+          data-original="${encodeURIComponent(originalName)}"
+          style="display:flex; align-items:center; gap:12px; cursor:pointer; padding:12px; border-radius:var(--radius-md);">
+        
+        <div class="file-info" style="flex:1; min-width:0;">
+          <div class="file-item-name" title="${displayName}" 
+               style="font-size:1.0625rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:4px;">
+            ${displayName}
           </div>
-          <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
-            ${resolutionLabel ? `<span style="font-size:10px; opacity:0.7; white-space:nowrap;">${resolutionLabel}</span>` : ''}
-            <span class="file-item-type" style="white-space:nowrap;">${type}</span>
+          <div class="file-meta" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span class="file-type-badge" style="
+              display:inline-block;
+              padding:2px 6px;
+              border:1px solid rgba(255,255,255,0.15);
+              border-radius:3px;
+              font-size:0.75rem;
+              font-weight:500;
+              color:var(--text);
+              background:rgba(255,255,255,0.05);
+              white-space:nowrap;
+              line-height:1.2;
+            ">${typeLabel}</span>
+            ${resolutionLabel ? `
+              <span class="resolution-badge" style="
+                display:inline-block;
+                padding:2px 6px;
+                border:1px solid var(--brand);
+                border-radius:3px;
+                font-size:0.75rem;
+                font-weight:500;
+                color:var(--brand);
+                background:var(--brand-light);
+                white-space:nowrap;
+                line-height:1.2;
+              ">${resolutionLabel}</span>
+            ` : ''}
           </div>
         </div>
-        <div class="file-item-actions">
-          <button class="secondary previewBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}">Превью</button>
-          <button class="primary playBtn" data-safe="${encodeURIComponent(safeName)}" data-original="${encodeURIComponent(originalName)}">▶ Воспроизвести</button>
-        </div>
+        
+        <button class="primary playBtn" 
+                data-safe="${encodeURIComponent(safeName)}" 
+                data-original="${encodeURIComponent(originalName)}"
+                style="min-width:56px; min-height:56px; width:56px; height:56px; padding:0; display:flex; align-items:center; justify-content:center; font-size:1.5rem; flex-shrink:0;"
+                aria-label="Воспроизвести ${displayName}">
+          ▶
+        </button>
       </li>
     `;
   }).join('');
@@ -407,13 +462,20 @@ async function loadFiles() {
     filePager.innerHTML = '';
   }
 
-  fileList.querySelectorAll('.previewBtn').forEach(btn => {
-    btn.onclick = async () => {
-      const safeName = decodeURIComponent(btn.getAttribute('data-safe'));
-      const originalName = decodeURIComponent(btn.getAttribute('data-original'));
-      const itemEl = btn.closest('.file-item');
+  // Клик по карточке файла (кроме кнопки) - показать превью
+  fileList.querySelectorAll('.file-item').forEach(item => {
+    item.onclick = async (e) => {
+      // Если кликнули по кнопке "Воспроизвести" - не обрабатываем (у кнопки свой обработчик)
+      if (e.target.closest('.playBtn')) return;
+      
+      const safeName = decodeURIComponent(item.getAttribute('data-safe'));
+      const originalName = decodeURIComponent(item.getAttribute('data-original'));
+      
+      // Сбрасываем флаг закрытия при ручном открытии превью
+      previewManuallyClosed = false;
+      
       // Сохраняем safeName для операций
-      setCurrentFileSelection(safeName, itemEl);
+      setCurrentFileSelection(safeName, item);
       
       // Определяем тип файла
       const hasExtension = safeName.includes('.');
@@ -495,13 +557,8 @@ async function loadFiles() {
                 page: page
               });
               
-              // Визуальная обратная связь - подсветка выбранной миниатюры
-              filePreview.querySelectorAll('.thumbnail-preview').forEach(t => {
-                t.style.border = '';
-                t.style.outline = '';
-              });
-              thumb.style.border = '3px solid var(--brand)';
-              thumb.style.outline = '2px solid rgba(59, 130, 246, 0.3)';
+              // Визуальная обратная связь - используем общую функцию выделения
+              highlightCurrentThumbnail(page);
               
               // НЕ переключаем превью на плеер - оставляем сетку миниатюр!
               // Превью остается как есть, пользователь может выбрать другую миниатюру
@@ -534,16 +591,22 @@ async function loadFiles() {
         if (frame) {
           frame.src = src;
         } else {
-          filePreview.innerHTML = `<iframe src="${src}" style="width:100%;height:100%;border:0"></iframe>`;
+          filePreview.innerHTML = `<iframe src="${src}" style="width:100%;height:100%;border:0" allow="autoplay; fullscreen"></iframe>`;
         }
       }
     };
   });
 
   fileList.querySelectorAll('.playBtn').forEach(btn => {
-    btn.onclick = () => {
+    btn.onclick = async (e) => {
+      e.stopPropagation(); // Останавливаем всплытие, чтобы не вызвался клик по карточке
+      
       const safeName = decodeURIComponent(btn.getAttribute('data-safe'));
+      const originalName = decodeURIComponent(btn.getAttribute('data-original'));
       setCurrentFileSelection(safeName, btn.closest('.file-item'));
+      
+      // Сбрасываем флаг закрытия при новом воспроизведении
+      previewManuallyClosed = false;
       
       // КРИТИЧНО: Обновляем локальное состояние устройства
       const device = devices.find(d => d.device_id === currentDevice);
@@ -561,10 +624,30 @@ async function loadFiles() {
       const ext = hasExtension ? safeName.split('.').pop().toLowerCase() : '';
       const isStaticContent = !hasExtension || ext === 'pdf' || ext === 'pptx';
       
-      // Для видео и обычных изображений - показываем заглушку
-      // Для папок и презентаций - оставляем превью как есть (сетка миниатюр)
-      if (!isStaticContent) {
-        // КРИТИЧНО: После запуска воспроизведения показываем заглушку в preview
+      // Для PDF/PPTX/FOLDER - открываем превью автоматически
+      if (isStaticContent) {
+        console.log('[Speaker] 📊 Открываем превью для статичного контента:', safeName);
+        
+        // КРИТИЧНО: Сначала очищаем превью чтобы избежать вложенности
+        filePreview.innerHTML = '';
+        
+        // Кликаем по карточке чтобы открыть превью
+        const item = btn.closest('.file-item');
+        if (item) {
+          setTimeout(() => {
+            // Симулируем клик по карточке для открытия превью
+            const clickEvent = new MouseEvent('click', { bubbles: false });
+            Object.defineProperty(clickEvent, 'target', { value: item, enumerable: true });
+            item.onclick(clickEvent);
+            
+            // Выделяем первый слайд через 300ms
+            setTimeout(() => {
+              highlightCurrentThumbnail(1);
+            }, 300);
+          }, 50);
+        }
+      } else {
+        // Для видео и обычных изображений - показываем заглушку
         // Чтобы не было двойной загрузки (preview + основной плеер)
         setTimeout(() => {
           const placeholderUrl = `/player-videojs.html?device_id=${encodeURIComponent(currentDevice)}&preview=1&muted=1`;
@@ -572,11 +655,10 @@ async function loadFiles() {
           if (frame) {
             frame.src = placeholderUrl;
           } else {
-            filePreview.innerHTML = `<iframe src="${placeholderUrl}" style="width:100%;height:100%;border:0"></iframe>`;
+            filePreview.innerHTML = `<iframe src="${placeholderUrl}" style="width:100%;height:100%;border:0" allow="autoplay; fullscreen"></iframe>`;
           }
         }, 300);
       }
-      // Для папок и презентаций превью остается на сетке миниатюр
     };
   });
   
@@ -656,7 +738,25 @@ document.getElementById('pdfNextBtn').onclick = () => {
 };
 document.getElementById('pdfCloseBtn').onclick = () => {
   if (!currentDevice) return;
+  
+  // Устанавливаем флаг что пользователь ЯВНО закрыл превью
+  previewManuallyClosed = true;
+  
+  // Останавливаем воспроизведение
   socket.emit('control/stop', { device_id: currentDevice });
+  
+  // Сбрасываем выбранный файл
+  currentFile = null;
+  
+  // Убираем active класс со всех файлов
+  fileList.querySelectorAll('.file-item').forEach(item => {
+    item.classList.remove('active');
+  });
+  
+  // Возвращаем preview в исходное состояние (показываем live preview устройства)
+  showLivePreviewForTV(currentDevice, true);
+  
+  console.log('[Speaker] ✕ Закрыть: preview возвращён в исходное состояние, автооткрытие отключено');
 };
 
 /* Реакция на обновления с сервера — дебаунс + сохранение выбора */
@@ -750,6 +850,132 @@ const onPreviewRefresh = debounce(async ({ device_id }) => {
 
 socket.on('preview/refresh', onPreviewRefresh);
 
+// Автоматически открываем превью при воспроизведении PDF/PPTX/FOLDER
+socket.on('preview/refresh', async ({ device_id }) => {
+  if (device_id !== currentDevice) return;
+  
+  const device = devices.find(d => d.device_id === device_id);
+  if (!device || !device.current) return;
+  
+  const { type, file, page } = device.current;
+  
+  // КРИТИЧНО: Не автооткрываем если пользователь явно закрыл превью
+  if (previewManuallyClosed) {
+    console.log('[Speaker] ℹ️ Превью закрыто пользователем, не автооткрываем');
+    return;
+  }
+  
+  // Если воспроизводится PDF/PPTX/FOLDER - открываем превью с выделением текущего слайда
+  if (type === 'pdf' || type === 'pptx' || type === 'folder') {
+    console.log('[Speaker] 🖼️ Автооткрытие превью для:', type, file, 'страница:', page);
+    
+    // Проверяем какой файл сейчас отображается в превью
+    const currentPreviewFile = filePreview.querySelector('.thumbnail-preview')?.getAttribute('data-file');
+    const needToReopen = currentPreviewFile !== file;
+    
+    // Находим файл в списке
+    const fileItem = fileList.querySelector(`.file-item[data-safe="${encodeURIComponent(file)}"]`);
+    
+    if (fileItem && (!filePreview.querySelector('.thumbnail-preview') || needToReopen)) {
+      // КРИТИЧНО: Сначала полностью очищаем превью
+      filePreview.innerHTML = '';
+      
+      // Открываем новую сетку превью (файл изменился или превью закрыто)
+      console.log('[Speaker] 🔄 Открываем превью для нового файла:', file);
+      
+      // Используем setTimeout чтобы избежать конфликтов
+      setTimeout(() => {
+        fileItem.click();
+        
+        // Ждём рендеринга сетки и выделяем текущий слайд
+        setTimeout(() => {
+          highlightCurrentThumbnail(page || 1);
+        }, 250);
+      }, 50);
+    } else if (filePreview.querySelector('.thumbnail-preview')) {
+      // Сетка уже открыта для ЭТОГО файла - просто выделяем нужный слайд
+      highlightCurrentThumbnail(page || 1);
+    }
+  }
+});
+
+// Функция для выделения текущей миниатюры
+function highlightCurrentThumbnail(pageNumber) {
+  const thumbnails = filePreview.querySelectorAll('.thumbnail-preview');
+  if (!thumbnails.length) return;
+  
+  thumbnails.forEach((thumb) => {
+    const thumbPage = parseInt(thumb.getAttribute('data-page'), 10);
+    
+    // Сбрасываем inline стили onmouseover/onmouseout
+    thumb.onmouseover = null;
+    thumb.onmouseout = null;
+    
+    if (thumbPage === pageNumber) {
+      // Выделяем активную миниатюру - яркая синяя рамка
+      thumb.style.cssText = `
+        aspect-ratio: 16/9;
+        background: var(--panel-2);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 4px solid var(--brand);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3), 0 4px 12px rgba(59, 130, 246, 0.5);
+        transform: scale(1.08);
+      `;
+      
+      // Прокручиваем к ней
+      thumb.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      console.log('[Speaker] 🎯 Выделена миниатюра:', thumbPage);
+    } else {
+      // Неактивные миниатюры - обычные с hover эффектом
+      thumb.style.cssText = `
+        aspect-ratio: 16/9;
+        background: var(--panel-2);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      `;
+      
+      // Добавляем hover эффект
+      thumb.onmouseover = function() {
+        if (parseInt(this.getAttribute('data-page')) !== pageNumber) {
+          this.style.transform = 'scale(1.03)';
+          this.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+        }
+      };
+      thumb.onmouseout = function() {
+        if (parseInt(this.getAttribute('data-page')) !== pageNumber) {
+          this.style.transform = '';
+          this.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+        }
+      };
+    }
+  });
+}
+
+// Слушаем события смены страниц для выделения активной миниатюры
+socket.on('player/pdfPage', (pageNumber) => {
+  console.log('[Speaker] 📄 PDF страница изменена:', pageNumber);
+  highlightCurrentThumbnail(pageNumber);
+});
+
+socket.on('player/pptxPage', (pageNumber) => {
+  console.log('[Speaker] 📊 PPTX слайд изменён:', pageNumber);
+  highlightCurrentThumbnail(pageNumber);
+});
+
+socket.on('player/folderPage', (pageNumber) => {
+  console.log('[Speaker] 🖼️ Изображение в папке изменено:', pageNumber);
+  highlightCurrentThumbnail(pageNumber);
+});
+
 /* ===== Жесты для тач: свайп по превью PDF (Prev/Next) ===== */
 function attachTouchGestures() {
   const area = document.getElementById('filePreview');
@@ -773,3 +999,4 @@ function attachTouchGestures() {
     }
   }, { passive: true });
 }
+

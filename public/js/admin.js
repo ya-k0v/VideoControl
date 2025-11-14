@@ -71,7 +71,7 @@ setupSocketListeners(socket, {
     }
   },
   onPreviewRefresh: async () => {
-    if (currentDeviceId) await renderFilesPane(currentDeviceId);
+
   },
   onPlayerOnline: (device_id) => {
     readyDevices.add(device_id);

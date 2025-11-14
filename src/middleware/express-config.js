@@ -14,8 +14,8 @@ import { PUBLIC, ROOT, DEVICES } from '../config/constants.js';
  */
 export function setupExpressMiddleware(app) {
   // JSON парсинг (увеличен лимит для base64 медиа в биографиях)
-  app.use(express.json({ limit: '6gb' }));  // 5GB файл + 33% base64 overhead
-  app.use(express.urlencoded({ extended: true, limit: '6gb' }));
+  app.use(express.json({ limit: '1.5gb' }));  // 1GB файл + 33% base64 overhead
+  app.use(express.urlencoded({ extended: true, limit: '1.5gb' }));
   
   // Middleware для корректной кодировки JSON ответов
   app.use((req, res, next) => {

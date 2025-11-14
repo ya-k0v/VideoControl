@@ -17,10 +17,10 @@ function validateMediaSize(base64String) {
   
   try {
     const sizeInBytes = Buffer.from(base64Data, 'base64').length;
-    const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
+    const maxSize = 1024 * 1024 * 1024; // 1GB
     
     if (sizeInBytes > maxSize) {
-      throw new Error('File too large (max 5GB)');
+      throw new Error('File too large (max 1GB)');
     }
   } catch (err) {
     if (err.message === 'File too large (max 5GB)') {

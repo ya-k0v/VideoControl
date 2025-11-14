@@ -171,9 +171,9 @@ function showBioForm(bio = null) {
       photoInput.onchange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-          // Проверка размера (5GB)
-          if (file.size > 5 * 1024 * 1024 * 1024) {
-            alert('Файл слишком большой (максимум 5GB)');
+          // Проверка размера (1GB)
+          if (file.size > 1024 * 1024 * 1024) {
+            alert('Файл слишком большой (максимум 1GB)');
             e.target.value = '';
             return;
           }

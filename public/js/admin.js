@@ -13,6 +13,7 @@ import { renderDeviceCard as renderDeviceCardModule } from './admin/device-card.
 import { setupUploadUI as setupUploadUIModule } from './admin/upload-ui.js';
 import { initSystemMonitor } from './admin/system-monitor.js';
 import { showDevicesModal, showUsersModal } from './admin/modal.js';
+import { showBiographiesModal } from './admin/biographies-modal.js';
 
 const socket = io();
 const grid = document.getElementById('grid');
@@ -128,6 +129,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (usersBtn && user.role === 'admin') {
     usersBtn.onclick = () => {
       showUsersModal(adminFetch);
+    };
+  }
+  
+  // Обработчик кнопки Биографии (только для admin)
+  const biographiesBtn = document.getElementById('biographiesBtn');
+  if (biographiesBtn && user.role === 'admin') {
+    biographiesBtn.onclick = () => {
+      showBiographiesModal();
     };
   } else if (usersBtn) {
     usersBtn.style.display = 'none';

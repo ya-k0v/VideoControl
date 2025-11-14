@@ -80,3 +80,8 @@ backups/
 *.log
 .DS_Store
 .git-remotes-cheatsheet
+
+# Biography module database
+config/biographies.db
+config/biographies.db-shm
+config/biographies.db-wal

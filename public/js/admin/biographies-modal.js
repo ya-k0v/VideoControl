@@ -77,6 +77,7 @@ function renderBioCard(bio) {
  */
 function showBioForm(bio = null) {
   const form = document.createElement('form');
+  form.id = 'biographyForm';
   form.innerHTML = `
     <h2 style="margin:0 0 20px;">${bio ? 'Редактировать' : 'Добавить'} биографию</h2>
     
@@ -124,12 +125,18 @@ function showBioForm(bio = null) {
   
   // Обработчики после вставки в DOM
   setTimeout(() => {
-    const formElement = document.querySelector('#modalContent form');
+    const formElement = document.getElementById('biographyForm');
     const photoInput = document.getElementById('photoInput');
+    
+    console.log('[Biographies] Form element:', formElement);
     
     if (formElement) {
       formElement.onsubmit = async (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('[Biographies] Form submit triggered');
+        
         const data = Object.fromEntries(new FormData(formElement));
         
         try {

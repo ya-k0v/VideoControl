@@ -32,8 +32,7 @@ import { createAuthRouter } from './src/routes/auth.js';
 import { createDeduplicationRouter } from './src/routes/deduplication.js';
 import fileResolverRouter from './src/routes/file-resolver.js';
 import { createUploadMiddleware } from './src/middleware/multer-config.js';
-import { createBiographiesRouter } from './src/modules/biographies/index.js';
-import { requireAuth, requireAdmin, requireSpeaker } from './src/middleware/auth.js';
+import { requireAuth, requireAdmin } from './src/middleware/auth.js';
 import { globalLimiter, apiSpeedLimiter } from './src/middleware/rate-limit.js';
 import { setupExpressMiddleware, setupStaticFiles } from './src/middleware/express-config.js';
 import { setupSocketHandlers } from './src/socket/index.js';
@@ -132,10 +131,6 @@ app.use('/api/files', fileResolverRouter);
 // Auth router (БЕЗ защиты - для login)
 const authRouter = createAuthRouter();
 app.use('/api/auth', authRouter);
-
-// Biography module (независимый, отдельная БД)
-const biographiesRouter = createBiographiesRouter({ requireAdmin });
-app.use('/api/biographies', biographiesRouter);
 
 // Подключаем роутеры с зависимостями
 const devicesRouter = createDevicesRouter({ 
